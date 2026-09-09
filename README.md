@@ -11,6 +11,8 @@ co-occurrence, and — unusually for a hobby project — **evaluates every ranki
 leave-one-artist-out harness. Zero running cost, no LLM in the core, no proprietary APIs.
 Code and comments are in Turkish.*</sub>
 
+![Öneri ekranı](docs/gorseller/oneriler.png)
+
 ---
 
 ## Neden
@@ -113,7 +115,13 @@ bunu korur.
 
 **2. Tür etiketi zorunlu değil: ses kendi türünü söyler.** CLAP gömü uzayında PCA-16 sonrası
 k-ortalamalar, hiçbir tür etiketi kullanmadan kümeler bulur. Küme adları uydurulmaz; merkeze en
-yakın sanatçılarla ifade edilir (*"Casiopea · Takanaka · Plini gibi"*), isimlendirme kullanıcınındır.
+yakın sanatçılarla ifade edilir, isimlendirme kullanıcınındır. Kredi ve tür temelli kümelerle
+uyumu ARI 0,073 — yani başka bir şey görüyor, ve bu bir çelişki değil iki ayrı bakış.
+
+![Ses kümeleri](docs/gorseller/ses-kumeleri.png)
+
+<sub>Hiçbir tür etiketi kullanılmadan bulundu: Kendrick Lamar · Eminem · Madvillain bir arada,
+Masayoshi Takanaka · Casiopea · Plini bir arada, Slash · W.A.S.P. · Opeth bir arada.</sub>
 
 **3. Sıfır maliyet, çekirdekte LLM yok.** MusicBrainz, Discogs (ücretsiz token), Deezer, ListenBrainz,
 FMA meta verisi (CC BY 4.0). Kümeleme ve öneri her koşulda istatistikseldir; sonuç tekrarlanabilir.
