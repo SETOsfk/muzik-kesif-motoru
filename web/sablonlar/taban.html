@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block baslik %}Müzik Keşif Motoru{% endblock %}</title>
+<link rel="stylesheet" href="/statik/stil.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎧</text></svg>">
+</head>
+<body>
+<div class="kabuk">
+
+  <aside class="yan">
+    <div class="marka"><span>🎧</span><b>Keşif Motoru</b></div>
+
+    {# Dokuz düz bağlantı fazlaydı. Üç öbek: ne yapmak istediğine göre.
+       Keşfet = yeni bir şey bul · Kütüphanen = kendine bak · Bakım = veriyi düzelt. #}
+    {% set obekler = [
+      ('Keşfet', [('/oneriler','Öneriler','◆'),
+                  ('/ses-kumeleri','Ses kümeleri','◎'),
+                  ('/etiketler','Etiketler','⌗')]),
+      ('Kütüphanen', [('/profil','Profilin','◍'), ('/muzisyenler','Müzisyenler','♪'),
+                      ('/kumeler','Kümeler','⬡')]),
+      ('Bakım', [('/ogrenme','Ne öğrendik','↺'), ('/veri','Veri seti','▤'),
+                 ('/eslestirme','Eşleştirme','⇄')]),
+    ] %}
+    {% for obek_adi, sayfalar in obekler %}
+      <p class="yan-baslik">{{ obek_adi }}</p>
+      <nav class="gezinti">
+        {% for adres, ad, simge in sayfalar %}
+          <a href="{{ adres }}{% if calisma_id %}?calisma={{ calisma_id }}{% endif %}"
+             class="{{ 'etkin' if yol == adres else '' }}"><i>{{ simge }}</i>{{ ad }}</a>
+        {% endfor %}
+      </nav>
+    {% endfor %}
+    <nav class="gezinti">
+      <a href="/sozluk" class="{{ 'etkin' if yol == '/sozluk' else '' }}"
+         style="font-size:.83rem"><i>?</i>Sözlük — terimler ne demek</a>
+    </nav>
+
+    {% if calismalar %}
+    <p class="yan-baslik">Çalışma</p>
+    <form method="get" action="{{ yol }}">
+      <div class="alan">
+        <select name="calisma" onchange="this.form.submit()" style="min-width:0;width:100%">
+          {% for c in calismalar %}
+            <option value="{{ c.calisma_id }}" {{ 'selected' if c.calisma_id == calisma_id }}>
+              {{ c.calisma_id[:13] }} · {{ c.stabil or 0 }}/{{ c.kume }} stabil
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+    {% endif %}
+
+    {% if boru %}
+    <details style="margin-top:var(--b4)">
+      <summary style="font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;
+                      color:var(--metin-3);font-weight:600;padding-left:var(--b3)">
+        Veri durumu</summary>
+      <dl style="margin:var(--b2) 0 0">
+        {% for s in boru %}
+        <div style="display:flex;justify-content:space-between;padding:4px var(--b3);
+                    font-size:.82rem;color:var(--metin-2)">
+          <span>{{ s.ad }}</span>
+          <b style="color:var(--metin);font-variant-numeric:tabular-nums">
+            {{ '{:,}'.format(s.deger).replace(',', '.') }}</b>
+        </div>
+        {% endfor %}
+      </dl>
+    </details>
+    {% endif %}
+  </aside>
+
+  <main class="govde">
+    {% block govde %}{% endblock %}
+  </main>
+</div>
+<script src="/statik/uygulama.js"></script>
+</body>
+</html>

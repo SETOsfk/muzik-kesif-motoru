@@ -1,0 +1,30 @@
+{% extends "taban.html" %}
+{% block baslik %}Sözlük — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+<div class="sayfa-basi">
+  <h1>Sözlük</h1>
+  <p>Ekranlardaki her sayının ne olduğu, nasıl ölçüldüğü ve <strong>bu
+     kütüphanede</strong> hangi uçlara denk geldiği. Referanslar uydurma değil,
+     ölçülmüş örnekler.</p>
+</div>
+
+{% for baslik, anahtarlar in gruplar.items() %}
+<section class="bolum">
+  <h2>{{ baslik }}</h2>
+  {% for a in anahtarlar %}{% set t = sozluk.get(a) %}{% if t %}
+  <div class="kart" style="margin-bottom:var(--b3)">
+    <div style="display:flex;align-items:baseline;gap:var(--b2);flex-wrap:wrap">
+      <h3>{{ t.ad }}</h3><code style="color:var(--metin-3)">{{ a }}</code>
+    </div>
+    <p style="margin:var(--b2) 0 0">{{ t.kisa }}</p>
+    {% if t.nasil %}<p class="aciklama" style="margin:var(--b2) 0 0">
+      <strong>Nasıl ölçülüyor:</strong> {{ t.nasil }}</p>{% endif %}
+    {% if t.capalar %}<p class="aciklama" style="margin:6px 0 0">
+      <strong>Bu kütüphanede:</strong> {{ t.capalar }}</p>{% endif %}
+    {% if t.uyari %}<p class="aciklama" style="margin:6px 0 0;color:#e8cfa4">
+      <strong>Sınırı:</strong> {{ t.uyari }}</p>{% endif %}
+  </div>
+  {% endif %}{% endfor %}
+</section>
+{% endfor %}
+{% endblock %}

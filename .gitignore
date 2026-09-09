@@ -1,0 +1,35 @@
+# --- Yerel veri: ASLA git'e girmez ---------------------------------------
+# Kütüphane taraması, önbellek, gömüler, veritabanı, dış veri kümeleri.
+# ~3 GB ve tamamı yeniden üretilebilir (K5: her dış çağrı önbelleklenir).
+data/
+
+# --- Sırlar ---------------------------------------------------------------
+.env
+.Renviron
+
+# --- Ortam ----------------------------------------------------------------
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# --- Üretilen ikili dosyalar ----------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.parquet
+*.npy
+*.joblib
+
+# --- İşletim sistemi / editör ---------------------------------------------
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+
+# --- R kalıntısı ----------------------------------------------------------
+.Rhistory
+.RData

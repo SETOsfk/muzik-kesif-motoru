@@ -1,0 +1,69 @@
+{% extends "taban.html" %}
+{% block baslik %}Etiketler — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+<div class="sayfa-basi">
+  <h1>Etiketler ve tarifler</h1>
+  <p>12 kaba küme yerine okunabilir tarifler. Netflix'in ~76 bin kategorisi de
+     kümelemeyle <em>bulunmadı</em> — insan etiketçilerin verdiği etiketlerin
+     <strong>kombinasyonuydu</strong>. Buradaki üç eksen MTG-Jamendo'nun
+     yapısını izliyor: <b>tür</b> (ne tarz) · <b>enstrüman</b> (nasıl çalınmış)
+     · <b>doku</b> (nasıl seslenmiş).</p>
+</div>
+
+<div class="bilgi">
+  Bir albüm bir eksende etiket <strong>ancak kuyruktaysa</strong> alır (üst ya
+  da alt %20). Eşikler kütüphaneden hesaplanıyor, elle yazılmıyor: "zil
+  ağırlıklı" demek ancak geri kalanına göre anlamlı. Ortadaki albümler o
+  eksende etiket almaz — her albüme her etiketi yapıştırmak etiketi
+  bilgisizleştirirdi.
+</div>
+
+{% if not tarif.empty %}
+<section class="bolum">
+  <h2>Tarifler</h2>
+  <p class="aciklama">Üç eksenden birer etiketin birleşimi. En az iki albüm
+     taşıyanlar — tek albümlük bir tarif kategori değil, o albümün tarifidir.</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>tarif</th><th class="sayi">albüm</th>
+      <th>tür</th><th>enstrüman</th><th>doku</th></tr></thead>
+    <tbody>{% for _, r in tarif.iterrows() %}
+      <tr><td><strong>{{ r.tarif }}</strong></td><td class="sayi">{{ r.albüm }}</td>
+        <td>{{ r.tur }}</td><td>{{ r.enstruman }}</td><td>{{ r.doku }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+{% for eksen, baslik in [('tur','Tür'), ('enstruman','Enstrüman'), ('doku','Doku')] %}
+{% set satirlar = etiket[etiket.eksen == eksen] %}
+{% if not satirlar.empty %}
+<section class="bolum">
+  <h2>{{ baslik }}</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:var(--b2)">
+    {% for _, r in satirlar.head(40).iterrows() %}
+      <a href="/etiketler?etiket={{ r.etiket|urlencode }}&calisma={{ calisma_id }}"
+         class="rozet {{ 'turuncu' if r.etiket == secili else 'gri' }}"
+         title="{{ aciklamalar.get(r.etiket, '') }}"
+         style="text-decoration:none">{{ r.etiket }}
+        <em style="opacity:.65;font-style:normal">{{ r.albüm }}</em></a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endfor %}
+
+{% if secili %}
+<section class="bolum">
+  <h2>«{{ secili }}» etiketli albümler</h2>
+  {% if aciklamalar.get(secili) %}
+    <p class="aciklama">{{ aciklamalar[secili] }}</p>{% endif %}
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>sanatçı</th><th>albüm</th><th class="sayi">yıl</th></tr></thead>
+    <tbody>{% for _, a in albumler.iterrows() %}
+      <tr><td>{{ a.artist }}</td><td>{{ a.title }}</td>
+        <td class="sayi">{{ a.year|int if a.year == a.year else '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}

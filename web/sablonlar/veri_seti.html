@@ -1,0 +1,34 @@
+{% extends "taban.html" %}
+{% block baslik %}Veri seti — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+<div class="sayfa-basi">
+  <h1>Veri seti</h1>
+  <p>Kümelemenin girdisini kendi gözünle denetle. Bir kümenin neden öyle çıktığı
+     çoğu zaman burada görünür: hangi albümün etiketi yok, hangisi eşleşmemiş.</p>
+</div>
+
+<form class="denetim" method="get" action="/veri">
+  <input type="hidden" name="calisma" value="{{ calisma_id }}">
+  <div class="alan"><label for="ara">Ara</label>
+    <input type="text" id="ara" name="ara" value="{{ arama }}"
+           placeholder="sanatçı ya da albüm" style="min-width:280px"></div>
+  <button type="submit">Süz</button>
+</form>
+
+<p class="aciklama">{{ toplam }} albüm{% if toplam > 400 %} — ilk 400 gösteriliyor{% endif %}.</p>
+
+<div class="tablo-sarmal"><table>
+  <thead><tr><th>sanatçı</th><th>albüm</th><th class="sayi">yıl</th><th>ülke</th>
+    <th class="sayi">kredi</th><th class="sayi">etiket</th><th class="sayi">stem</th>
+    <th>MBID</th></tr></thead>
+  <tbody>{% for _, a in albumler.iterrows() %}
+    <tr><td>{{ a.artist }}</td><td>{{ a.title }}</td>
+      <td class="sayi">{{ a.year|int if a.year == a.year else '—' }}</td>
+      <td>{{ a.country or '—' }}</td>
+      <td class="sayi">{{ a.kredi }}</td><td class="sayi">{{ a.etiket }}</td>
+      <td class="sayi">{{ a.stem }}</td>
+      <td>{% if a.mbid_var %}<span class="rozet yesil">var</span>
+          {% else %}<span class="rozet gri">yok</span>{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% endblock %}

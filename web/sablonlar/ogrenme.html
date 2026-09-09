@@ -1,0 +1,75 @@
+{% extends "taban.html" %}
+{% block baslik %}Ne öğrendik — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+
+<div class="sayfa-basi">
+  <h1>Ne öğrendik</h1>
+  <p>{{ karar_sayisi }} aday hakkında {{ satir }} karar-strateji eşleşmesi.
+     <strong>«Zaten biliyorum» bir zevk kararı değildir</strong> — zevk isabetinin
+     paydasına girmez, keşif oranının paydasına girer. Bir strateji zevkte
+     mükemmel olup keşifte tamamen başarısız olabilir.</p>
+</div>
+
+<ul class="madde">
+  {% for c in cumleler %}<li>{{ c|replace('**','')|safe }}</li>{% endfor %}
+</ul>
+
+<section class="bolum">
+  <h2>Keşif oranı</h2>
+  <p class="aciklama">Önerilen şey senin için <em>yeni</em> miydi?
+     Aralıklar Wilson skor aralığı (%90) — ham oran bu boyutta yanıltıcı:
+     1/1 = %100 ile 80/80 = %100 aynı şey değil. Aralık genişse sonuç henüz yok.</p>
+  <div class="kart">{{ g_kesif }}</div>
+</section>
+
+{% if g_zevk %}
+<section class="bolum">
+  <h2>Zevk isabeti</h2>
+  <p class="aciklama">Yeni olanların içinde beğendiklerinin payı.
+     «Zaten biliyorum» bu hesaba girmiyor — o albümü beğenip beğenmediğini
+     söylemedin.</p>
+  <div class="kart">{{ g_zevk }}</div>
+</section>
+{% endif %}
+
+<section class="bolum">
+  <div class="tablo-sarmal">
+    <table>
+      <thead><tr><th>strateji</th><th class="sayi">toplam</th>
+        <th class="sayi">beğendim</th><th class="sayi">tutmadı</th>
+        <th class="sayi">zaten biliyorum</th><th class="sayi">zevk isabeti</th>
+        <th class="sayi">keşif oranı</th></tr></thead>
+      <tbody>
+      {% for _, r in isabet.iterrows() %}
+        <tr><td>{{ r.strateji.replace('_',' ') }}</td>
+          <td class="sayi">{{ r.toplam }}</td><td class="sayi">{{ r.begendim }}</td>
+          <td class="sayi">{{ r.tutmadi }}</td><td class="sayi">{{ r.zaten_biliyorum }}</td>
+          <td class="sayi">{{ '%.0f%%'|format(r.zevk_isabeti * 100) if r.zevk_isabeti is not none else '—' }}</td>
+          <td class="sayi">{{ '%.0f%%'|format(r.kesif_orani * 100) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if not uzaklik.empty %}
+<section class="bolum">
+  <h2>Ne kadar uzağa gitmeye hazırsın?</h2>
+  <p class="aciklama">Beğendiğin adayların ses uzaklığı, tutmayanlarınkinden
+     yüksekse daha uzağa gidilebilir demektir. Karar başına en az 3 ölçüm arıyor.</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>karar</th><th class="sayi">ölçüm</th><th class="sayi">medyan uzaklık</th></tr></thead>
+    <tbody>{% for _, r in uzaklik.iterrows() %}
+      <tr><td>{{ r.karar.replace('_',' ') }}</td><td class="sayi">{{ r['count'] }}</td>
+        <td class="sayi">{{ '%.2f'|format(r['median']) }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+<div class="bilgi">
+  Bu ölçümler sıralamayı <strong>otomatik değiştirmiyor</strong>. Değiştirdiği tek
+  şey Öneriler sayfasındaki «bildiklerimi geri at» seçeneği — ölçülebilir bir
+  sinyali ölçülebilir biçimde kullanmak, bulanık bir ağırlık çarpanından dürüst.
+</div>
+{% endblock %}

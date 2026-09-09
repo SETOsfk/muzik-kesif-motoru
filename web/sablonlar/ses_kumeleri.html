@@ -1,0 +1,83 @@
+{% extends "taban.html" %}
+{% block baslik %}Ses kümeleri — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+
+<div class="sayfa-basi">
+  <h1>Ses kümeleri</h1>
+  <p>Bunlar tür etiketinden gelmiyor. Kütüphanenin <strong>sesi</strong>
+     kümelendi — hangi tür yazıyor, kim çalmış, ne zaman çıkmış hiç
+     bakılmadan. Bir kümeyi seç, o sese en yakın ama <em>sende olmayan</em>
+     kayıtları getireyim.</p>
+</div>
+
+<div class="bilgi">
+  Kümeler CLAP gömü uzayında bulundu (630 bin ses–metin çiftiyle eğitilmiş bir
+  model). <strong>Kredi ve tür temelli kümelerinle aynı şeyi görmüyorlar</strong> —
+  ikisinin uyumu ARI 0.073, yani neredeyse ilgisiz. Bu bir çelişki değil, iki
+  ayrı bakış: biri «kim çalmış», bu «kulağa nasıl geliyor».
+</div>
+
+<div class="izgara iki bolum">
+  {% for k in kumeler %}
+  <a href="/ses-kumeleri?kume={{ k.kume }}&calisma={{ calisma_id }}"
+     class="kart" style="text-decoration:none;color:inherit;display:block;
+     {{ 'border-color:var(--vurgu)' if k.kume == secili }}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <strong style="font-size:1rem">{{ k.kullanici_adi or k.ad }}</strong>
+      <span class="rozet gri">{{ k.sayi }} albüm</span>
+    </div>
+    {% if k.kullanici_adi %}
+      <p class="aciklama" style="margin:2px 0 0">{{ k.ad }} gibi</p>{% endif %}
+    <p class="aciklama" style="margin:var(--b2) 0 0">
+      {{ k.uyeler[:4]|join(' · ') }}</p>
+  </a>
+  {% endfor %}
+</div>
+
+{% if secili is not none %}
+<section class="bolum">
+  <h2>Bu sese yakın, sende olmayanlar</h2>
+  <p class="aciklama">Sıralama, kaydın kütüphanenin GENELİNE benzerliği
+     çıkarılarak yapıldı — yoksa her şeye benzeyen kayıtlar başa geçiyordu.
+     «Benzediği» sütunu senin hangi albümüne yakın olduğunu söylüyor;
+     ikisini arka arkaya dinleyip yargılayabilirsin.</p>
+
+  {% if not oneriler %}
+    <div class="bos">Bu küme için havuzda henüz yeterli ölçüm yok.</div>
+  {% else %}
+  <div style="display:flex;justify-content:space-between;align-items:center;
+              gap:var(--b3);margin-bottom:var(--b3);flex-wrap:wrap">
+    <input type="text" class="ses-kume-adi" data-kume="{{ secili }}"
+           value="{{ secili_ad or '' }}"
+           placeholder="Bu sese bir isim ver — «j-fusion» gibi"
+           style="flex:1;min-width:260px;font-size:.95rem">
+    <span class="durum aciklama"></span>
+  </div>
+
+  {% for o in oneriler %}
+  <article class="aday" style="padding:var(--b3) var(--b4)">
+    <div class="aday-bas" style="margin-bottom:6px">
+      <div class="aday-ad" style="font-size:.98rem">{{ o.sanatci }}
+        <span class="yil">{{ o.ad }}</span></div>
+      <div class="aday-sag">
+        <span class="rozet {{ 'mavi' if o.tur == 'parca' else 'gri' }}">
+          {{ 'parça' if o.tur == 'parca' else 'albüm' }}</span>
+      </div>
+    </div>
+    <p class="aciklama" style="margin:0 0 6px">
+      senin <strong style="color:var(--metin-2)">{{ o.benzedigi }}</strong>
+      albümüne benziyor · yakınlık {{ '%.3f'|format(o.skor) }}</p>
+    {% if o.tur == 'parca' %}
+      <button class="cal" data-parca="{{ o.kimlik }}">▶ dinle</button>
+      <span class="calar"></span>
+    {% elif o.onizleme %}
+      <audio controls preload="none" src="{{ o.onizleme }}"></audio>
+    {% else %}
+      <p class="aciklama" style="margin:0">önizleme yok</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

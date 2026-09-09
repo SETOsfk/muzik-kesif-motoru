@@ -1,0 +1,121 @@
+{% extends "taban.html" %}
+{% block baslik %}Müzisyenler — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+
+<div class="sayfa-basi">
+  <h1>Müzisyenler</h1>
+  <p>Bu ekran albüm kümelemesinden bağımsız: kişiler kendi icra profilleriyle
+     kıyaslanıyor. Ölçüm tüm miksten değil, Demucs ile
+     <strong>ayrılmış <code>{{ stem }}</code> kanalından</strong> geliyor —
+     tür ya da prodüksiyon değil, ne çalındığı ölçülüyor.</p>
+</div>
+
+<form class="denetim" method="get" action="/muzisyenler">
+  <input type="hidden" name="calisma" value="{{ calisma_id }}">
+  <div class="alan">
+    <label for="rol">Rol</label>
+    <select id="rol" name="rol" onchange="this.form.submit()">
+      {% for r in roller %}<option value="{{ r }}" {{ 'selected' if r == rol }}>{{ r }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="alan">
+    <label for="kisi">Kişi ({{ liste|length }} gösteriliyor)</label>
+    <select id="kisi" name="kisi" onchange="this.form.submit()" style="min-width:320px">
+      {% for anahtar, r in liste.iterrows() %}
+        <option value="{{ anahtar }}" {{ 'selected' if anahtar == secim }}>
+          {{ r.kisi }} — {{ r.bu_rolde_album }} albüm ({{ r.sanatcilar }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="alan">
+    <label for="agirlik">İcra ağırlığı: {{ '%.2f'|format(agirlik) }}</label>
+    <input type="range" id="agirlik" name="agirlik" min="0" max="1" step="0.05"
+           value="{{ agirlik }}" onchange="this.form.submit()" style="width:180px">
+  </div>
+</form>
+
+{% if secim %}
+<h2>{{ kisi_adi }}</h2>
+
+{% if profil is not none %}
+<div class="izgara bes" style="margin:var(--b4) 0">
+  <dl class="olcu"><dt>albüm</dt><dd>{{ profil.album|int }}</dd></dl>
+  <dl class="olcu"><dt>roller</dt><dd style="font-size:.95rem;font-weight:500">{{ profil.roller }}</dd></dl>
+  <dl class="olcu"><dt>kaynak</dt><dd style="font-size:.95rem;font-weight:500">{{ profil.kaynak }}</dd></dl>
+</div>
+{% endif %}
+
+{% if kendi is not none %}
+<section class="bolum">
+  <h3>İcra profili</h3>
+  <div class="izgara bes" style="margin-top:var(--b3)">
+    {% for s in sutunlar %}
+      {% if s in kendi.index and kendi[s] == kendi[s] %}
+      <dl class="olcu"><dt>{{ s.replace('_',' ') }}</dt>
+        <dd>{{ '%.2f'|format(kendi[s]) }}</dd></dl>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {# `kendi.get(x) == kendi.get(x)` NaN kontrolü DEĞİL: eksik sütunda
+     ikisi de None döner ve None == None doğrudur. Sütun stem'den
+     gelen profillerde hiç yok — indekste aramak gerekiyor. #}
+  {% if 'rol_sayisi' in kendi.index and kendi['rol_sayisi'] == kendi['rol_sayisi'] %}
+    <p class="aciklama" style="margin-top:var(--b3)">
+      Kredi tanısı: {{ kendi.rol_sayisi|int }} farklı rol, bu roldeki kredi payı
+      %{{ '%.0f'|format(kendi.rol_kredi_payi * 100) }}.
+      {% if kendi.rol_sayisi >= 8 and kendi.rol_kredi_payi < 0.25 %}
+        <span class="rozet turuncu">dikkat</span>
+        Çok rollü ve bu roldeki payı düşük — asıl işi stüdyo olabilir.
+      {% endif %}
+    </p>
+  {% endif %}
+  {% if 'ornek_onizleme' in kendi.index and kendi['ornek_onizleme'] %}
+    <audio controls preload="none" src="{{ kendi.ornek_onizleme }}"></audio>
+  {% endif %}
+</section>
+
+{% if not benzer.empty %}
+<section class="bolum">
+  <h3>Benzer icracılar — dinleyerek karşılaştır</h3>
+  <p class="aciklama">Dayanak: {{ temel }}</p>
+  <div class="izgara iki">
+    {% for anahtar, r in benzer.iterrows() %}
+    <div class="kart">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <strong>{{ r.kisi_adi }}</strong>
+        <span class="rozet mavi">{{ '%+.2f'|format(r.benzerlik) }}</span>
+      </div>
+      <p class="aciklama" style="margin:var(--b2) 0">
+        {% for s in sutunlar[:4] %}{% if s in r.index and r[s] == r[s] %}
+          {{ s.replace('_',' ') }} {{ '%.2f'|format(r[s]) }}{{ ' · ' if not loop.last }}
+        {% endif %}{% endfor %}
+      </p>
+      {% if 'ornek_onizleme' in r.index and r['ornek_onizleme'] %}
+        <audio controls preload="none" src="{{ r.ornek_onizleme }}"></audio>
+      {% else %}<p class="aciklama">örnek klip yok</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% else %}
+  <div class="bilgi"><strong>{{ kisi_adi }}</strong> için <code>{{ stem }}</code>
+    stem profili yok. Üretmek için:
+    <code>python -m python.enrich.icra_profili --rol {{ rol }} --limit 30</code></div>
+{% endif %}
+
+{% if not albumleri.empty %}
+<section class="bolum">
+  <h3>Çaldığı albümler</h3>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>sanatçı</th><th>albüm</th><th class="sayi">yıl</th><th>roller</th></tr></thead>
+    <tbody>{% for _, r in albumleri.iterrows() %}
+      <tr><td>{{ r.artist }}</td><td>{{ r.title }}</td>
+        <td class="sayi">{{ r.year|int if r.year == r.year else '—' }}</td>
+        <td>{{ r.role }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

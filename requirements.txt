@@ -1,0 +1,19 @@
+mutagen>=1.47
+requests>=2.31
+# musicbrainzngs kaldırıldı: MB de Discogs de python/onbellek.py üzerinden
+# çağrılıyor — tek önbellek + tek rate limit katmanı (bkz. karar günlüğü).
+pandas>=2.2
+numpy>=1.26
+pyarrow>=15.0
+# Arayüz: Starlette + Jinja2 + uvicorn (K15). Streamlit kaldırıldı —
+# her etkileşimde betiği yeniden çalıştırıp çalan önizlemeyi kesiyordu.
+starlette>=0.37
+jinja2>=3.1
+uvicorn>=0.27
+librosa>=0.10
+python-dotenv>=1.0
+tqdm>=4.66
+# umap-learn>=0.5   # opsiyonel: --yontem umap için (varsayılan PCA, bağımlılıksız)
+
+# test
+pytest>=8.0

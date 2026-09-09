@@ -1,0 +1,119 @@
+{% extends "taban.html" %}
+{% block baslik %}Dinleyici profili — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+
+<div class="sayfa-basi">
+  <h1>Dinleyici profili</h1>
+  <p>{{ albom_sayisi }} albümün ayrılmış stem'lerinden ölçüldü.
+     <strong>Uydurma bir "ortalama dinleyici" normuyla kıyaslanmıyor</strong> —
+     öyle bir veri yok. Konum, bu kütüphanede gerçekten ölçülmüş uçlara göre
+     veriliyor (Eminem'in programlanmış beat'i, Meshuggah'ın ride ağırlığı gibi).</p>
+</div>
+
+<ul class="madde">
+  {% for c in cumleler %}<li>{{ c|replace('**','')|safe }}</li>{% endfor %}
+</ul>
+
+<div class="izgara iki bolum">
+  <section class="kart">
+    <h3>Enstrüman dengesi</h3>
+    <p class="aciklama">Stem'in mikste kapladığı yer (medyan). Dördü 1'e toplanmaz —
+       Demucs artığı ve örtüşme var; okunacak şey stem'ler arası denge.</p>
+    {{ g_denge }}
+    <p class="aciklama" style="margin:var(--b2) 0 0">
+      Kapsama:
+      {% for _, r in denge.iterrows() %}<code>{{ r.stem }}</code>
+        %{{ '%.0f'|format(r.kapsama * 100) }}{{ ' · ' if not loop.last }}{% endfor %}
+      — ölçülemeyen stem o albümde yok ya da çok kısık demek.
+    </p>
+  </section>
+
+  <section class="kart">
+    <h3>Hangi eksende geniş bir dinleyicisin</h3>
+    <p class="aciklama">Yayılım = (p95−p5)/medyan. Geniş = o boyutta her şeyi
+       dinliyorsun; dar = belirli bir zevkin var, ve dar eksende sapan bir aday
+       riskli demektir.</p>
+    {{ g_cesit }}
+  </section>
+</div>
+
+{% if g_davul %}
+<section class="bolum">
+  <h2>Davul haritası</h2>
+  <p class="aciklama">Yatay: tekme ağırlığı · Dikey: zil ağırlığı. Sol üst =
+     Meshuggah tarzı ride ağırlıklı ama ayak cimri; sağ alt = tok, ayak yüklü.
+     <strong>Aşağı inen genel eğilim kısmen aritmetik</strong> — tekme/trampet/zil
+     payları 1'e toplanıyor, biri artınca diğeri düşmek zorunda. Okunacak şey
+     eğilimin kendisi değil, ona göre nerede durdukların ve dikey saçılım.</p>
+  <div class="kart">{{ g_davul }}<div style="margin-top:var(--b3)">{{ efsane|safe }}</div></div>
+</section>
+{% endif %}
+
+{% if g_imza %}
+<section class="bolum">
+  <h2>Kümelerinin ses imzası</h2>
+  <p class="aciklama">Kümeleri kredi ve tür verisinden çıkıp sen isimlendirdin;
+     burada <em>nasıl seslendikleri</em> görünüyor. Mavi = kütüphane medyanının
+     üstünde, turuncu = altında. Hücrenin üstüne gel, sayılar çıksın.</p>
+  <div class="kart">{{ g_imza }}</div>
+</section>
+{% endif %}
+
+{% if uclar %}
+<section class="bolum">
+  <h2>Uçları dinle</h2>
+  <p class="aciklama">Her albüm için <strong>tek bir 30 sn klip</strong> ölçülüyor.
+     Klip albümün atipik bir yerine denk gelirse sayı albümü temsil etmez. Uç
+     değerler bu yüzden en şüpheli olanlar — dinleyip kendin karar ver.</p>
+
+  <form method="get" action="/profil" class="denetim" style="border:none;padding:0">
+    <input type="hidden" name="calisma" value="{{ calisma_id }}">
+    <div class="alan">
+      <label for="uc">Eksen</label>
+      <select id="uc" name="uc" onchange="this.form.submit()">
+        {% for e in eksen_listesi %}
+          <option value="{{ e }}" {{ 'selected' if e == uclar.eksen }}>{{ e }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+
+  <div class="izgara iki">
+    <div class="kart">
+      <h4>{{ uclar.dusuk_anlam }}</h4>
+      <p style="margin:var(--b2) 0"><strong>{{ uclar.en_dusuk }}</strong>
+        <span style="color:var(--metin-3)">— {{ '%.3f'|format(uclar.en_dusuk_deger) }}</span></p>
+      {% if uclar.dusuk_klip %}<audio controls preload="none" src="{{ uclar.dusuk_klip }}"></audio>
+      {% else %}<p class="aciklama">klip yok</p>{% endif %}
+    </div>
+    <div class="kart">
+      <h4>{{ uclar.yuksek_anlam }}</h4>
+      <p style="margin:var(--b2) 0"><strong>{{ uclar.en_yuksek }}</strong>
+        <span style="color:var(--metin-3)">— {{ '%.3f'|format(uclar.en_yuksek_deger) }}</span></p>
+      {% if uclar.yuksek_klip %}<audio controls preload="none" src="{{ uclar.yuksek_klip }}"></audio>
+      {% else %}<p class="aciklama">klip yok</p>{% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="bolum">
+  <h2>Bütün eksenler</h2>
+  <div class="tablo-sarmal">
+    <table>
+      <thead><tr><th>eksen</th><th class="sayi">n</th><th class="sayi">p5</th>
+        <th class="sayi">medyan</th><th class="sayi">p95</th>
+        <th>en düşük</th><th>en yüksek</th></tr></thead>
+      <tbody>
+      {% for _, r in ozet.iterrows() %}
+        <tr><td>{{ r.eksen }}</td><td class="sayi">{{ r.n }}</td>
+          <td class="sayi">{{ '%.2f'|format(r.p5) }}</td>
+          <td class="sayi">{{ '%.2f'|format(r.medyan) }}</td>
+          <td class="sayi">{{ '%.2f'|format(r.p95) }}</td>
+          <td>{{ r.en_dusuk }}</td><td>{{ r.en_yuksek }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

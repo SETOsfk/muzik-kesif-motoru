@@ -1,0 +1,66 @@
+{% extends "taban.html" %}
+{% block baslik %}Eşleştirme — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+
+<div class="sayfa-basi">
+  <h1>MusicBrainz eşleştirme</h1>
+  <p><strong>Otomatikleştirilmiyor.</strong> Yanlış release-group'a bağlamak, o
+     albüme başka bir kaydın kredilerini yazmak demek — kredi grafiği bu projenin
+     çekirdeği. Ekran yalnız adayları getiriyor, kararı sen veriyorsun.</p>
+</div>
+
+<div class="izgara uc" style="margin-bottom:var(--b5)">
+  <dl class="olcu"><dt>bağlı</dt><dd>{{ bagli }} <span class="alt">/ {{ toplam }}</span></dd></dl>
+  <dl class="olcu"><dt>bekleyen</dt><dd>{{ bekleyen }}</dd></dl>
+  <dl class="olcu"><dt>karşılığı yok</dt><dd>{{ yok }}</dd></dl>
+</div>
+
+{% if bekleyen == 0 %}
+  <div class="bilgi">Bekleyen albüm yok. Kümelemeyi yeniden çalıştırabilirsin.</div>
+{% else %}
+
+<form class="denetim" method="get" action="/eslestirme">
+  <input type="hidden" name="calisma" value="{{ calisma_id }}">
+  <label class="onay"><input type="checkbox" name="canli" value="1"
+    {{ 'checked' if canli }} onchange="this.form.submit()">
+    ağdan ara <span style="color:var(--metin-3)">(yavaş — MusicBrainz saniyede 1 istek)</span></label>
+  <div class="alan"><label for="sayfa">Sayfa</label>
+    <select id="sayfa" name="sayfa" onchange="this.form.submit()">
+      {% for s in range(1, son_sayfa + 1) %}
+        <option value="{{ s }}" {{ 'selected' if s == sayfa }}>{{ s }} / {{ son_sayfa }}</option>
+      {% endfor %}
+    </select></div>
+</form>
+
+{% for a in satirlar %}
+<article class="aday" id="alb-{{ a.album_id }}">
+  <div class="aday-bas">
+    <div class="aday-ad">{{ a.artist }} — {{ a.title }}
+      <span class="yil">{{ a.year or '?' }} · {{ a.parca }} parça</span></div>
+  </div>
+
+  {% if a.hata %}<p class="aciklama">{{ a.hata }}</p>{% endif %}
+
+  {% if a.adaylar %}
+  <div class="tablo-sarmal" style="margin-top:var(--b2)"><table>
+    <thead><tr><th>MusicBrainz adayı</th><th>sanatçı</th><th class="sayi">yıl</th>
+      <th>tür</th><th class="sayi">skor</th><th></th></tr></thead>
+    <tbody>{% for c in a.adaylar %}
+      <tr><td>{{ c.baslik }}</td><td>{{ c.sanatci }}</td>
+        <td class="sayi">{{ c.yil or '—' }}</td><td>{{ c.tur }}</td>
+        <td class="sayi">{{ c.skor or '—' }}</td>
+        <td><button class="esle" data-album="{{ a.album_id }}"
+                    data-mbid="{{ c.mbid }}">bu</button></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+
+  <div class="kararlar">
+    <button class="esle" data-album="{{ a.album_id }}" data-mbid="__yok__">
+      MusicBrainz karşılığı yok</button>
+    <span class="durum aciklama" style="align-self:center"></span>
+  </div>
+</article>
+{% endfor %}
+{% endif %}
+{% endblock %}
