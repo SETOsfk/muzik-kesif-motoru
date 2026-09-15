@@ -124,6 +124,80 @@ def test_hesap_tablosu_paylasimli():
     assert "oturum" in ORTAK_TABLOLAR
 
 
+def test_web_onbellekleri_kullaniciya_gore_anahtarlanir():
+    """`lru_cache` kullanıcıya özel veri önbelleklerse A'nın verisi B'ye gider.
+
+    GERÇEK HATA (2026-09-15). Çok kiracılıktan önce tek kullanıcı vardı ve
+    anahtarsız `lru_cache` doğruydu. Sonra aynı kod iki şeyi birden bozdu:
+    sunucu ilk isteği OTURUMSUZ karşılayınca boş sonuç önbelleğe girdi ve
+    ondan sonra herkes "hiç kümeleme çalışması yok" gördü — ve daha kötüsü,
+    bir kullanıcının küme adları ile sayaçları başka kullanıcıya servis
+    edilebilir hâle geldi.
+
+    Test, önbellekli işlevlerin İLK PARAMETRESİNİN kullanıcı olmasını
+    koruyor. Yeni bir önbellekli işlev eklenirse ve kullanıcıya özel veri
+    okuyorsa, buraya eklenmesi gerekir.
+    """
+    import inspect
+
+    from web import sunucu
+
+    onbellekli = {
+        "_calismalar_onbellek": 0,
+        "_eksen_adlari_onbellek": 0,
+        "_boru_hatti_onbellek": 0,
+    }
+    for ad, konum in onbellekli.items():
+        fn = getattr(sunucu, ad, None)
+        assert fn is not None, f"{ad} kayboldu — önbellek anahtarı gözden geçirilmeli"
+        parametreler = list(inspect.signature(fn).parameters)
+        assert parametreler[konum] == "kullanici_id", \
+            f"{ad} kullanıcıya göre anahtarlanmıyor: {parametreler}"
+
+    # İcra eşleşmesi kullanıcıyı ikinci parametrede taşıyor.
+    icra = list(inspect.signature(sunucu._icra_eslesmesi_onbellek).parameters)
+    assert "kullanici_id" in icra, icra
+
+
+def test_kullanici_verisi_sizmaz():
+    """Bir kullanıcının adayları başka kullanıcının sayfasında GÖRÜNMEMELİ.
+
+    Yalıtımın uçtan uca kanıtı: aynı sunucu, iki oturum, iki sonuç.
+    """
+    import tempfile
+
+    from starlette.testclient import TestClient
+
+    import python.db as D
+    from python.hesap import CEREZ_ADI, kullanici_olustur, oturum_ac
+    from web.sunucu import uygulama
+
+    with tempfile.TemporaryDirectory() as tmp:
+        D = _ortam(tmp)
+        ortak = D.baglan_ortak()
+        a = kullanici_olustur(ortak, "A", eposta="a@a.a", parola="parola123")
+        b = kullanici_olustur(ortak, "B", eposta="b@b.b", parola="parola123")
+        jeton_a, jeton_b = oturum_ac(ortak, a), oturum_ac(ortak, b)
+        ortak.close()
+
+        # A'nın kütüphanesine bir albüm koy
+        ca = D.baglan_kullanici(a)
+        with ca:
+            ca.execute("INSERT INTO albums (album_id, artist, title) "
+                       "VALUES ('x','GizliSanatci','Album')")
+        ca.close()
+
+        # Önbellekler istekler arasında paylaşılıyor; A önce baksın.
+        istemci = TestClient(uygulama)
+        istemci.cookies.set(CEREZ_ADI, jeton_a)
+        istemci.get("/veri")
+
+        istemci.cookies.set(CEREZ_ADI, jeton_b)
+        yanit = istemci.get("/veri", follow_redirects=True)
+        assert "GizliSanatci" not in yanit.text, \
+            "A'nın sanatçısı B'nin sayfasında göründü — önbellek sızıntısı"
+
+
 for _ad, _fn in sorted(list(globals().items())):
     if _ad.startswith("test_") and callable(_fn):
         _kosul(_ad, _fn)

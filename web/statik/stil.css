@@ -341,7 +341,11 @@ ul.madde strong { color: var(--metin); }
 /* Oturum öncesi sayfalar — giriş, üyelik                                 */
 /* Yan menü yok: henüz gidilecek bir yer yok. Tek sütun, ortalanmış.       */
 .kapi-govde { display: grid; place-items: center; min-height: 100vh; padding: 2rem 1rem; }
-.kapi { width: min(24rem, 100%); }
+/* `width: min(24rem, 100%)` telefonda taşıyordu (390px'te ölçüldü): ızgara
+   öğesi `place-items:center` altında içeriğine göre genişliyor ve yüzde
+   beklenen kutuya çözülmüyor. Açık genişlik + üst sınır bunu kesin çözer. */
+.kapi { width: 100%; max-width: 24rem; }
+.kapi * { max-width: 100%; }
 .kapi h1 { font-size: 1.7rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
 .kapi-alt { color: var(--metin-2); margin: 0 0 1.6rem; line-height: 1.5; }
 .kapi-alt2 { color: var(--metin-3); margin-top: 1.6rem; text-align: center; font-size: .92em; }

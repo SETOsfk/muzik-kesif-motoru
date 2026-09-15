@@ -114,11 +114,21 @@ def _oturum_baglantisi() -> sqlite3.Connection:
 # Ortak veri
 # --------------------------------------------------------------------------- #
 
-@lru_cache(maxsize=1)
-def _calismalar() -> list[dict]:
+# ÖNBELLEK ANAHTARINA KULLANICI GİRMEK ZORUNDA (2026-09-15).
+# Bu işlevler kullanıcıya ÖZEL veri okuyor. Çok kiracılıktan önce tek
+# kullanıcı vardı ve anahtarsız `lru_cache` doğruydu; şimdi aynı kod A
+# kullanıcısının küme adlarını ve sayaçlarını B'ye servis eder. Ölçüldü:
+# sunucu ilk isteği oturumsuz karşılayınca boş sonuç önbelleğe giriyor ve
+# ondan sonra HERKES "hiç kümeleme çalışması yok" görüyor.
+#
+# Çözüm, çağrı yerlerini değiştirmeden sarmalamak: önbellekli iç işlev
+# kullanıcıyı parametre olarak alır, dış kabuk bağlam değişkeninden okur.
+
+@lru_cache(maxsize=32)
+def _calismalar_onbellek(kullanici_id: int | None) -> tuple[dict, ...]:
     conn = _baglanti()
     try:
-        return [
+        return tuple(
             dict(r) for r in conn.execute(
                 """
                 SELECT calisma_id, COUNT(*) kume, SUM(stabil_mi) stabil,
@@ -126,9 +136,13 @@ def _calismalar() -> list[dict]:
                   FROM clusters GROUP BY calisma_id ORDER BY calisma_id DESC
                 """
             )
-        ]
+        )
     finally:
         conn.close()
+
+
+def _calismalar() -> list[dict]:
+    return list(_calismalar_onbellek(AKTIF_KULLANICI.get()))
 
 
 def _son_calisma() -> str | None:
@@ -136,8 +150,9 @@ def _son_calisma() -> str | None:
     return calismalar[0]["calisma_id"] if calismalar else None
 
 
-@lru_cache(maxsize=8)
-def _eksen_adlari(calisma_id: str) -> dict[int, str]:
+@lru_cache(maxsize=64)
+def _eksen_adlari_onbellek(kullanici_id: int | None,
+                           calisma_id: str) -> dict[int, str]:
     conn = _baglanti()
     try:
         return {
@@ -151,8 +166,12 @@ def _eksen_adlari(calisma_id: str) -> dict[int, str]:
         conn.close()
 
 
-@lru_cache(maxsize=1)
-def _boru_hatti() -> list[dict]:
+def _eksen_adlari(calisma_id: str) -> dict[int, str]:
+    return _eksen_adlari_onbellek(AKTIF_KULLANICI.get(), calisma_id)
+
+
+@lru_cache(maxsize=32)
+def _boru_hatti_onbellek(kullanici_id: int | None) -> tuple[dict, ...]:
     """Üst şeritteki sayaçlar — hangi aşama beslenmiş."""
     conn = _baglanti()
     try:
@@ -162,7 +181,7 @@ def _boru_hatti() -> list[dict]:
             except sqlite3.Error:
                 return 0
 
-        return [
+        return (
             {"ad": "albüm", "deger": say("SELECT COUNT(*) FROM albums"),
              "alt": "kütüphanende"},
             {"ad": "müzisyen", "deger": say(
@@ -175,9 +194,13 @@ def _boru_hatti() -> list[dict]:
                 "SELECT COUNT(DISTINCT aday_id) FROM adaylar"), "alt": "üretilmiş öneri"},
             {"ad": "kararın", "deger": say("SELECT COUNT(*) FROM feedback"),
              "alt": "geri bildirim"},
-        ]
+        )
     finally:
         conn.close()
+
+
+def _boru_hatti() -> list[dict]:
+    return list(_boru_hatti_onbellek(AKTIF_KULLANICI.get()))
 
 
 def _ortam(istek, **fazladan) -> dict:
@@ -396,7 +419,8 @@ async def oneriler(istek):
                 "kapak": ilk.get("kapak") if pd.notna(ilk.get("kapak")) else None,
                 # İcra eşleşmesi sanatçı düzeyinde bir kez: aynı sanatçının dört
                 # albümü için dört kez hesaplamak hem yavaş hem gereksiz.
-                "icra": _icra_eslesmesi_onbellek(albumler[0]["aday_id"]),
+                "icra": _icra_eslesmesi_onbellek(albumler[0]["aday_id"],
+                                             AKTIF_KULLANICI.get()),
             })
 
         # GERİ BİLDİRİM DÖNGÜSÜ. Kararlar artık yalnız kaydedilmiyor,
@@ -457,7 +481,7 @@ def _dayanak_metni(ham) -> str:
 
 
 @lru_cache(maxsize=512)
-def _icra_eslesmesi_onbellek(aday_id: str) -> tuple:
+def _icra_eslesmesi_onbellek(aday_id: str, kullanici_id: int | None = None) -> tuple:
     """Adayın stem'ine en yakın kütüphane icracıları, rol rol.
 
     Önbellekli: dört rol × kosinüs hesabı, kırk kartlık bir sayfada dört yüz
