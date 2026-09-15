@@ -242,6 +242,56 @@ def _oturumlu_istemci(tmp):
     return istemci
 
 
+def test_pwa_varliklari_sunuluyor():
+    """Manifest, ikonlar ve servis çalışanı OTURUMSUZ erişilebilir olmalı.
+
+    Servis çalışanı ara katmanın arkasında kalırsa tarayıcı onu hiç alamaz ve
+    uygulama ana ekrana kurulamaz — hata mesajı da "unknown error" gibi
+    anlaşılmaz bir şey olur.
+    """
+    import json
+
+    from starlette.testclient import TestClient
+
+    from web.sunucu import uygulama
+
+    istemci = TestClient(uygulama)
+    for yol in ("/statik/manifest.webmanifest", "/statik/ikon-192.png",
+                "/statik/ikon-512.png", "/statik/ikon-180.png"):
+        assert istemci.get(yol).status_code == 200, yol
+
+    yanit = istemci.get("/sw.js")
+    assert yanit.status_code == 200
+    assert "javascript" in yanit.headers["content-type"]
+    # KAPSAM BAŞLIĞI ŞART: servis çalışanı bulunduğu dizinle sınırlıdır.
+    # Kökten sunulup bu başlık verilmezse yalnız kendi dizinini kapsar.
+    assert yanit.headers.get("service-worker-allowed") == "/"
+
+    man = json.loads(istemci.get("/statik/manifest.webmanifest").text)
+    assert man["display"] == "standalone", man["display"]
+    assert man["start_url"].startswith("/"), man["start_url"]
+    assert any(i.get("purpose") == "maskable" for i in man["icons"]), \
+        "Android maskeli ikon yok — köşeler kırpılır"
+
+
+def test_servis_calisani_sayfa_onbelleklemez():
+    """Sayfalar KULLANICIYA ÖZEL; önbelleğe alınırsa aynı cihazda başka biri
+    giriş yaptığında başkasının kütüphanesini görür.
+
+    Bu, web katmanındaki `lru_cache` sızıntısının tarayıcı tarafındaki eşi.
+    Strateji "önce ağ" olmalı ve yalnız /statik/* önbelleklenmeli.
+    """
+    from pathlib import Path as _P
+
+    kaynak = (_P(__file__).resolve().parents[1] / "web" / "statik" / "sw.js").read_text()
+    assert 'url.pathname.startsWith("/statik/")' in kaynak, \
+        "önbellek statik dosyalarla sınırlı değil"
+    # Sayfa yanıtını önbelleğe koyan bir yol olmamalı.
+    statik_disi = kaynak.split('url.pathname.startsWith("/statik/")')[1]
+    assert "caches.open" not in statik_disi.split("// Sayfalar")[1], \
+        "sayfa yanıtı önbelleğe alınıyor — kullanıcı verisi sızabilir"
+
+
 for _ad, _fn in sorted(list(globals().items())):
     if _ad.startswith("test_") and callable(_fn):
         _kosul(_ad, _fn)

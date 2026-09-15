@@ -77,7 +77,7 @@ AKTIF_KULLANICI: ContextVar[int | None] = ContextVar("aktif_kullanici",
                                                     default=None)
 
 #: Oturum gerektirmeyen yollar. Geri kalan her şey girişe yönlendirilir.
-ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik")
+ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik", "/sw.js")
 
 #: Spotify Development Mode uygulaması en fazla beş yetkili hesap taşıyor
 #: (Şubat 2026). Panele eklenmeyen hesap Spotify tarafında zaten giriş
@@ -1189,6 +1189,13 @@ async def saglik(istek):
     return JSONResponse({"durum": "ayakta"})
 
 
+async def servis_calisani(istek):
+    from starlette.responses import FileResponse
+    return FileResponse(KOK / "statik" / "sw.js",
+                        media_type="application/javascript",
+                        headers={"Service-Worker-Allowed": "/"})
+
+
 def _spotify_hazir() -> bool:
     """Spotify düğmesi ancak yapılandırılmışsa gösterilir.
 
@@ -1242,6 +1249,10 @@ ROTALAR = [
     Route("/uyelik", uyelik_gonder, methods=["POST"]),
     Route("/cikis", cikis, methods=["GET", "POST"]),
     Route("/saglik", saglik),
+    # Servis çalışanının KAPSAMI bulunduğu dizinle sınırlı. `/statik/sw.js`
+    # yalnız `/statik/*` isteklerini görebilirdi; uygulamanın tamamını
+    # kapsaması için kökten sunuluyor.
+    Route("/sw.js", servis_calisani),
     Route("/sozluk", sozluk_sayfasi),
     Route("/api/eslestir", eslestir_kaydet, methods=["POST"]),
     Route("/api/karar", karar_ver, methods=["POST"]),

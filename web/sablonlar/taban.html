@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block baslik %}Müzik Keşif Motoru{% endblock %}</title>
 <link rel="stylesheet" href="/statik/stil.css">
+<link rel="manifest" href="/statik/manifest.webmanifest">
+<meta name="theme-color" content="#0e0f12">
+{# iOS ana ekrana eklendiğinde tam ekran açılsın ve durum çubuğu koyu olsun.
+   Apple `beforeinstallprompt` desteklemiyor; kurulum elle yapılıyor. #}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Keşif">
+<link rel="apple-touch-icon" href="/statik/ikon-180.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎧</text></svg>">
 </head>
 <body>
@@ -77,5 +85,34 @@
   </main>
 </div>
 <script src="/statik/uygulama.js"></script>
+
+  {# TELEFON ALT ŞERİDİ. Ölçüldü (375px): yan menü ilk ekranın ~%60'ını
+     yiyordu ve içerik katlamanın altında kalıyordu. Telefonda gezinti
+     parmağın olduğu yere, alta iner; yan menü gizlenir.
+
+     Sekiz sayfanın hepsi alta sığmaz ve sığdırmaya çalışmak dokunma
+     hedeflerini küçültür. En sık kullanılan dört tanesi burada; geri kalanı
+     "Daha" altında. Sıralama keşif akışına göre: öneri → ses → profil. #}
+  <nav class="alt-serit" aria-label="Telefon gezintisi">
+    {% set alt = [('/oneriler','Öneriler','◆'), ('/ses-kumeleri','Ses','◎'),
+                  ('/profil','Profilin','◍'), ('/ogrenme','Öğrenilen','↺')] %}
+    {% for adres, ad, simge in alt %}
+      <a href="{{ adres }}{% if calisma_id %}?calisma={{ calisma_id }}{% endif %}"
+         class="{{ 'etkin' if yol == adres else '' }}">
+        <i>{{ simge }}</i><span>{{ ad }}</span></a>
+    {% endfor %}
+    <details class="alt-daha">
+      <summary><i>⋯</i><span>Daha</span></summary>
+      <div class="alt-daha-govde">
+        {% for adres, ad in [('/etiketler','Etiketler'), ('/muzisyenler','Müzisyenler'),
+                             ('/kumeler','Kümeler'), ('/veri','Veri seti'),
+                             ('/eslestirme','Eşleştirme'), ('/sozluk','Sözlük')] %}
+          <a href="{{ adres }}{% if calisma_id %}?calisma={{ calisma_id }}{% endif %}">{{ ad }}</a>
+        {% endfor %}
+        <a href="/cikis" class="cikis-bag">Çıkış</a>
+      </div>
+    </details>
+  </nav>
+
 </body>
 </html>

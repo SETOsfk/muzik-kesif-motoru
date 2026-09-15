@@ -388,3 +388,67 @@ ul.madde strong { color: var(--metin); }
 .adim p { margin: 0 0 .7rem; color: var(--metin-2); line-height: 1.55; }
 .adim pre { background: var(--yuzey-2); padding: .6rem .8rem; border-radius: 6px; overflow-x: auto; font-size: .85em; margin: 0; }
 .adim .spotify-dugme { display: inline-flex; }
+
+/* --------------------------------------------------------------------- */
+/* TELEFON — alt şerit gezinti                                            */
+/* Ölçüldü (375px): yan menü ilk ekranın ~%60'ını yiyordu, içerik          */
+/* katlamanın altında kalıyordu. Telefonda gezinti parmağın olduğu yere    */
+/* iner; yan menü tamamen gizlenir. 900px üstünde alt şerit yok.          */
+.alt-serit { display: none; }
+
+@media (max-width: 900px) {
+  .yan { display: none; }
+  .kabuk { flex-direction: column; }
+  /* Alt şerit sabit; içeriğin altına onun yüksekliği kadar boşluk gerekiyor,
+     yoksa son kart şeridin altında kalıyor. iPhone'un ev çubuğu için
+     `safe-area-inset-bottom` ekleniyor. */
+  .govde { padding: var(--b4) var(--b4)
+           calc(4.6rem + env(safe-area-inset-bottom, 0px)); }
+
+  .alt-serit {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: color-mix(in srgb, var(--zemin-2) 92%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--kenar);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .alt-serit > a, .alt-daha > summary {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: .15rem;
+    /* 48px: dokunma hedefi için asgari ölçü. Altına inince parmak ıskalıyor. */
+    min-height: 3.2rem; padding: .45rem .2rem;
+    color: var(--metin-3); text-decoration: none; font-size: .68rem;
+    list-style: none; cursor: pointer;
+  }
+  .alt-serit > a i, .alt-daha > summary i { font-style: normal; font-size: 1.15rem; }
+  .alt-serit > a.etkin { color: var(--vurgu); }
+  .alt-daha > summary::-webkit-details-marker { display: none; }
+
+  /* "Daha": alta sığmayan sayfalar. Sekizini birden sığdırmak dokunma
+     hedeflerini 30px'in altına düşürürdü. */
+  .alt-daha { flex: 1; display: flex; }
+  .alt-daha[open] > summary { color: var(--vurgu); }
+  /* `position: fixed` DEĞİL, `absolute`. Üstteki `.alt-serit` üzerinde
+     `backdrop-filter` var ve o özellik — `filter` ve `transform` gibi —
+     sabit konumlu torunlar için KAPSAYICI BLOK yaratıyor. Ölçüldü: panel
+     16px genişliğinde bir kutuya hapsoluyor ve bağlantıları 571px'e taşıyordu
+     (görünüm alanı 375px). `absolute` zaten `.alt-serit`e göre konumlanıyor,
+     o da tam genişlikte. */
+  .alt-daha-govde {
+    position: absolute; left: 0; right: 0; bottom: 100%;
+    background: var(--zemin-2); border-top: 1px solid var(--kenar);
+    display: grid; grid-template-columns: 1fr 1fr; gap: .1rem; padding: .5rem;
+  }
+  .alt-daha-govde a {
+    padding: .8rem .6rem; border-radius: 8px; text-decoration: none;
+    color: var(--metin-2); font-size: .9rem; background: var(--zemin);
+  }
+  .alt-daha-govde .cikis-bag { color: var(--vurgu); }
+
+  /* Telefonda kart içleri: yan yana duran şeyler alt alta insin. */
+  .denetim { flex-direction: column; align-items: stretch; }
+  .denetim .alan select { width: 100%; }
+  .aday-bas { flex-direction: column; align-items: flex-start; gap: .4rem; }
+  .kararlar { flex-wrap: wrap; }
+  .kararlar button { flex: 1 1 auto; min-height: 2.75rem; }
+}

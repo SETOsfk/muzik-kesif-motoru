@@ -125,3 +125,12 @@ document.addEventListener('input', (olay) => {
     setTimeout(() => { durum.textContent = ''; }, 1800);
   }, 600);
 });
+
+/* Servis çalışanını kaydet — PWA'nın ana ekrana kurulabilmesi için gerekli.
+ * Başarısız olursa sessizce geçiyoruz: servis çalışanı bir iyileştirme,
+ * uygulamanın çalışması ona bağlı değil. */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

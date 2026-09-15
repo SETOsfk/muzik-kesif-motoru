@@ -1,0 +1,22 @@
+{
+  "name": "Müzik Keşif Motoru",
+  "short_name": "Keşif",
+  "description": "Kütüphaneni tanıyan, sana sende olmayanı öneren motor.",
+  "lang": "tr",
+  "start_url": "/oneriler",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e0f12",
+  "theme_color": "#0e0f12",
+  "icons": [
+    { "src": "/statik/ikon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/statik/ikon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/statik/ikon-512.png", "sizes": "512x512", "type": "image/png",
+      "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Öneriler", "url": "/oneriler" },
+    { "name": "Ses kümeleri", "url": "/ses-kumeleri" }
+  ]
+}

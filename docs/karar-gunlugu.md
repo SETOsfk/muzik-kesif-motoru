@@ -1570,3 +1570,65 @@ yerine anlaşılır bir mesaj vermeyi sağlıyor.
 
 Uçtan uca doğrulandı: üyelik → çerez → korumalı sayfa → **yeni kullanıcının
 kütüphanesi boş** (yalıtım kanıtı) → çıkış → erişim kapanıyor. 197 test geçiyor.
+
+## 2026-09-15 (2) — Telefon: PWA yolu
+
+Kullanıcı sorusu: "Bu uygulamayı büyütüp bir telefon uygulaması haline
+getirebilir miyiz? Android-iOS için."
+
+**Cevabı belirleyen gerçek: motor telefona sığmaz.** `.venv` 1,5 GB (torch,
+demucs, transformers), gömü havuzu 1,4 GB, CLAP çıkarımı gerçek işlemci
+istiyor. Her yol aynı yere çıkıyor — telefon bir İSTEMCİ, hesap bir sunucuda.
+Soru "uygulama yapılabilir mi" değil, "sunucu nerede duracak".
+
+Doğrulanan maliyetler: Apple Developer Program 99 $/yıl (yinelenen, üyelik
+biterse uygulama mağazadan iniyor); Google Play 25 $ bir kez — ama Eylül
+2026'dan itibaren sertifikalı cihazlara yükleme için de kimlik doğrulama +
+25 $ isteniyor, yani ücretsiz APK dağıtımı da kapanıyor.
+
+**Mağaza şu an anlamsız ve sebebi Spotify:** Development Mode tavanı BEŞ
+kullanıcı. App Store'a 99 $/yıl ödeyip beş kişinin kullanabildiği bir uygulama
+dağıtmak, kullanılamayacak bir dağıtıma para vermek olur.
+
+**Seçilen yol: PWA.** Gerekçesi yalnız ucuzluk değil — bu uygulama bir ÇALAR
+değil, bir KEŞİF ALETİ. Çekirdek eylem "30 saniye dinle, karar ver" ve bunu
+tarayıcı zaten yapıyor. Yerel uygulamanın kazandırdıkları (tam şarkı çalma,
+arka planda ses) ancak Spotify'ın yerini almaya kalkarsan değerli.
+
+### Yapılanlar
+
+**Telefon alt şeridi.** Ölçüldü (375px): yan menü ilk ekranın ~%60'ını yiyor,
+ilk kart katlamanın altında kalıyordu. Gezinti parmağın olduğu yere indi; dört
+sık sayfa + "Daha". Sekizini birden sığdırmak dokunma hedeflerini 30px'in
+altına düşürürdü, o yüzden bölündü.
+
+**Manifest + ikonlar + iOS meta'ları.** `display: standalone`, maskeli ikon
+(Android köşeleri kırpıyor), `apple-touch-icon` ve `apple-mobile-web-app-*`
+(Apple `beforeinstallprompt` desteklemiyor, kurulum elle).
+
+**Servis çalışanı — ama yalnız KABUK önbellekleniyor, sayfa asla.** Sayfalar
+kullanıcıya özel; bir yanıtı önbelleğe koymak, aynı cihazda başka biri giriş
+yaptığında ona başkasının kütüphanesini göstermek olurdu — bugün düzeltilen
+`lru_cache` sızıntısının tarayıcı tarafındaki eşi. Strateji "önce ağ", ve bunu
+bir test koruyor. Kökten sunuluyor (`/sw.js` + `Service-Worker-Allowed: /`),
+çünkü servis çalışanının kapsamı bulunduğu dizinle sınırlı.
+
+### İki hata ölçümle bulundu
+
+1. **`backdrop-filter` kapsayıcı blok yaratıyor.** "Daha" paneli `position:
+   fixed` idi ama üstteki şeritte `backdrop-filter` var ve o özellik —
+   `filter`/`transform` gibi — sabit konumlu torunlar için kapsayıcı blok
+   kuruyor. Panel 16px'lik bir kutuya hapsolup bağlantıları 571px'e taşıyordu
+   (görünüm alanı 375). `absolute`e çevrildi; taşma sıfırlandı.
+2. **Kendi ölçümüm yanlıştı ve düzeltildi.** "Arayüz telefonda bozuk" demiştim;
+   headless Chrome'un `--window-size` bayrağı CSS görünüm alanını taklit
+   etmiyormuş. Tarayıcıda gerçekten ölçünce taşma yoktu. Ekran görüntüsüyle
+   ölçmek yerine `getBoundingClientRect` ile ölçmek gerekiyor.
+
+**Doğrulanamayan:** servis çalışanı kaydı bu gömülü tarayıcı panelinde
+başarısız oluyor ("unknown error when fetching the script"). Sunucu tarafı
+doğru — sayfadan `fetch('/sw.js')` 200 ve doğru MIME dönüyor, kapsam başlığı
+yerinde. Panelin kısıtı olduğu kanısındayım ama GERÇEK CİHAZDA sınanmadan
+"çalışıyor" denemez.
+
+201 test geçiyor.
