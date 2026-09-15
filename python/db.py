@@ -435,6 +435,24 @@ def _sema_bolumu(ortak: bool) -> tuple[str, ...]:
     return tuple(secilen)
 
 
+def baglan_ortak(ortak_yolu: Path | str | None = None) -> sqlite3.Connection:
+    """YALNIZ paylaşımlı veritabanı — kimlik doğrulama için.
+
+    Giriş anında hangi kullanıcı olduğumuzu henüz bilmiyoruz, dolayısıyla bir
+    kullanıcı veritabanı açamayız. `kullanici` ve `oturum` tabloları bu yüzden
+    ortakta duruyor: oturum çözülene kadar tek erişilebilir yer orası.
+    """
+    yol = Path(ortak_yolu if ortak_yolu is not None else VARSAYILAN_ORTAK)
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(yol)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
+    with conn:
+        for ddl in _sema_bolumu(ortak=True):
+            conn.execute(ddl)
+    return conn
+
+
 def kullanici_db(kullanici_id: int | str) -> Path:
     return KULLANICI_KOK / f"{kullanici_id}.sqlite"
 

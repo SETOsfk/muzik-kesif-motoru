@@ -1,0 +1,42 @@
+{% extends "taban.html" %}
+{% block baslik %}Başla — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+<div class="sayfa-basi">
+  <h1>Hoş geldin{% if ad %}, {{ ad }}{% endif %}</h1>
+  <p>Kütüphanen henüz boş. Motorun çalışabilmesi için önce neyi sevdiğini
+     bilmesi gerekiyor — aşağıdaki yollardan biri yeter.</p>
+</div>
+
+<div class="baslangic">
+  {% if spotify_hazir and not spotify_bagli %}
+  <article class="adim">
+    <h2>Spotify hesabını bağla <span class="rozet yesil">en kolay</span></h2>
+    <p>Kayıtlı albümlerini, en çok dinlediğin sanatçıları ve son çaldıklarını
+       okurum; eksenlerini kendim çıkarırım. Dosya yüklemen gerekmez.</p>
+    <a class="spotify-dugme" href="/giris/spotify">Spotify ile bağlan</a>
+  </article>
+  {% elif spotify_bagli %}
+  <article class="adim">
+    <h2>Spotify bağlı ✓</h2>
+    <p>Kütüphaneni okuyorum. Bu birkaç dakika sürebilir — önizlemelerden
+       ses profili çıkarmak zaman alıyor.</p>
+  </article>
+  {% endif %}
+
+  <article class="adim">
+    <h2>Yerel kütüphaneni tara</h2>
+    <p>FLAC/MP3 klasörün varsa en zengin sonucu o verir: etiketlerden
+       başlayıp kredilere, oradan ayrılmış stem ölçümüne kadar iniyoruz.</p>
+    <pre>python -m python.ingest.kutuphane_tara --kaynak /yol/muzik</pre>
+  </article>
+
+  <article class="adim">
+    <h2>Nasıl çalışıyor</h2>
+    <p>Kütüphanen <b>pozitif sinyal</b> sayılıyor: sahip olduğun her albüm bir
+       "evet". Motor onları bulanık kümelerle zevk eksenlerine ayırıyor, sonra
+       her eksen için <i>sende olmayan</i> ama o sese yakın kayıtları getiriyor.
+       Tür etiketine değil, sesin kendisine ve insanların çalma listelerine bakıyor.</p>
+    <p><a href="/sozluk">Terimler ne demek?</a></p>
+  </article>
+</div>
+{% endblock %}

@@ -336,3 +336,51 @@ ul.madde strong { color: var(--metin); }
   .govde { padding: var(--b5) var(--b4) var(--b7); }
   .gezinti { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* --------------------------------------------------------------------- */
+/* Oturum öncesi sayfalar — giriş, üyelik                                 */
+/* Yan menü yok: henüz gidilecek bir yer yok. Tek sütun, ortalanmış.       */
+.kapi-govde { display: grid; place-items: center; min-height: 100vh; padding: 2rem 1rem; }
+.kapi { width: min(24rem, 100%); }
+.kapi h1 { font-size: 1.7rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
+.kapi-alt { color: var(--metin-2); margin: 0 0 1.6rem; line-height: 1.5; }
+.kapi-alt2 { color: var(--metin-3); margin-top: 1.6rem; text-align: center; font-size: .92em; }
+.kapi-kucuk { color: var(--metin-3); font-weight: 400; font-size: .85em; }
+.kapi-form { display: grid; gap: .9rem; }
+.kapi-form label { display: grid; gap: .35rem; font-size: .88em; color: var(--metin-2); }
+.kapi-form input {
+  padding: .6rem .7rem; border-radius: 8px; font-size: 1rem;
+  border: 1px solid var(--kenar); background: var(--yuzey-2); color: var(--metin);
+}
+.kapi-form input:focus { outline: 2px solid var(--vurgu); outline-offset: 1px; }
+.kapi-form .birincil {
+  margin-top: .4rem; padding: .65rem; border: 0; border-radius: 8px;
+  background: var(--vurgu); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
+}
+.kapi-form .birincil:hover { filter: brightness(1.1); }
+.kapi-hata {
+  border-left: 3px solid var(--vurgu); background: var(--yuzey-2);
+  padding: .7rem .9rem; border-radius: 6px; margin-bottom: 1.2rem;
+  font-size: .9em; line-height: 1.5;
+}
+.kapi-not {
+  border-left: 3px solid var(--kenar); background: var(--yuzey-2);
+  padding: .7rem .9rem; border-radius: 6px; margin-bottom: 1.2rem; font-size: .9em;
+}
+.kapi-ayrac { display: flex; align-items: center; gap: .8rem; margin: 1.4rem 0; color: var(--metin-3); font-size: .85em; }
+.kapi-ayrac::before, .kapi-ayrac::after { content: ""; flex: 1; height: 1px; background: var(--kenar); }
+.spotify-dugme {
+  display: flex; align-items: center; justify-content: center; gap: .55rem;
+  padding: .65rem; border-radius: 8px; text-decoration: none; font-weight: 600;
+  background: #1DB954; color: #06240f;
+}
+.spotify-dugme:hover { filter: brightness(1.08); }
+.kapi-ipucu { color: var(--metin-3); font-size: .85em; line-height: 1.5; margin: .7rem 0 0; }
+
+/* Karşılama ekranı — hesabı yeni, kütüphanesi boş kullanıcı için. */
+.baslangic { display: grid; gap: 1rem; max-width: 46rem; }
+.adim { background: var(--yuzey); border: 1px solid var(--kenar); border-radius: 10px; padding: 1.1rem 1.3rem; }
+.adim h2 { font-size: 1.05rem; margin: 0 0 .5rem; display: flex; align-items: center; gap: .6rem; }
+.adim p { margin: 0 0 .7rem; color: var(--metin-2); line-height: 1.55; }
+.adim pre { background: var(--yuzey-2); padding: .6rem .8rem; border-radius: 6px; overflow-x: auto; font-size: .85em; margin: 0; }
+.adim .spotify-dugme { display: inline-flex; }

@@ -1,0 +1,32 @@
+{% extends "kabuk.html" %}
+{% block baslik %}Üye ol — Müzik Keşif Motoru{% endblock %}
+{% block govde %}
+<div class="kapi">
+  <h1>Üye ol</h1>
+  <p class="kapi-alt">Kütüphaneni tanıyan bir motor için bir hesap.</p>
+
+  {% if hata == 'dolu' %}
+    <div class="kapi-hata">
+      <b>Kontenjan dolu.</b> Bu uygulama en fazla beş hesap taşıyabiliyor —
+      sınır bizim değil, Spotify'ın geliştirici kuralı (Şubat 2026).
+    </div>
+  {% elif hata == 'kayitli' %}
+    <div class="kapi-hata">Bu e-posta zaten kayıtlı. <a href="/giris">Giriş yap</a></div>
+  {% elif hata == 'eksik' %}
+    <div class="kapi-hata">Ad, e-posta ve en az 8 karakterli bir parola gerekiyor.</div>
+  {% endif %}
+
+  <form method="post" action="/uyelik" class="kapi-form">
+    <label>Adın
+      <input type="text" name="ad" required autofocus placeholder="Sertan"></label>
+    <label>E-posta
+      <input type="email" name="eposta" required autocomplete="username"></label>
+    <label>Parola <span class="kapi-kucuk">en az 8 karakter</span>
+      <input type="password" name="parola" required minlength="8"
+             autocomplete="new-password"></label>
+    <button type="submit" class="birincil">Hesabı aç</button>
+  </form>
+
+  <p class="kapi-alt2">Hesabın var mı? <a href="/giris">Giriş yap</a></p>
+</div>
+{% endblock %}

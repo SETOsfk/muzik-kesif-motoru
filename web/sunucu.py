@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 
@@ -41,7 +42,21 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from python.db import baglan
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from python.db import baglan, baglan_kullanici, baglan_ortak
+from python.hesap import (
+    CEREZ_ADI,
+    OTURUM_GUN,
+    giris_dogrula,
+    kullanici_bul,
+    kullanici_olustur,
+    kullanici_sayisi,
+    oturum_ac,
+    oturum_coz,
+    oturum_kapat,
+)
 
 KOK = Path(__file__).resolve().parent
 # Starlette 1.3 imzası: TemplateResponse(request, ad, bağlam). Eski
@@ -53,15 +68,46 @@ SABLONLAR = Jinja2Templates(directory=str(KOK / "sablonlar"))
 #: birçok istek görüyor, her istekte argüman taşımak gereksiz.
 DB_YOLU = "data/db/kesif.sqlite"
 
+#: İSTEK BAŞINA AKTİF KULLANICI. `_baglanti()` on ayrı yerden ARGÜMANSIZ
+#: çağrılıyor; imzasını değiştirmek her çağrı yerine istek nesnesi taşımak
+#: demekti. Bağlam değişkeni bunu çözüyor ve Starlette'in görev bağlamında
+#: doğru çalışıyor: her istek kendi kopyasını görür, eşzamanlı istekler
+#: birbirinin kullanıcısını okuyamaz.
+AKTIF_KULLANICI: ContextVar[int | None] = ContextVar("aktif_kullanici",
+                                                    default=None)
+
+#: Oturum gerektirmeyen yollar. Geri kalan her şey girişe yönlendirilir.
+ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik")
+
+#: Spotify Development Mode uygulaması en fazla beş yetkili hesap taşıyor
+#: (Şubat 2026). Panele eklenmeyen hesap Spotify tarafında zaten giriş
+#: yapamaz; sınırı burada da uygulamak anlaşılır bir mesaj vermeyi sağlıyor.
+AZAMI_KULLANICI = 5
+
 
 def _baglanti() -> sqlite3.Connection:
-    """İstek başına yeni bağlantı.
+    """İstek başına yeni bağlantı — AKTİF KULLANICININ veritabanı.
 
     SQLite bağlantıları iş parçacıkları arasında paylaşılmaz; Starlette
     eşzamanlı istek görebildiği için tek bir küresel bağlantı yanlış olurdu.
     Açılış maliyeti mikrosaniyeler.
+
+    Kullanıcı bağlam değişkeninden geliyor (ara katman yerleştiriyor). Böyle
+    olması, bu işlevi çağıran on ayrı yerin hiç değişmemesini sağlıyor:
+    `albums` aktif kullanıcının dosyasından, `liste_parca` ortaktan gelir —
+    ayrımı SQLite'ın ad çözümlemesi yapar (bkz. python/db.py).
     """
-    return baglan(DB_YOLU)
+    kullanici_id = AKTIF_KULLANICI.get()
+    if kullanici_id is None:
+        # Oturum yokken de bazı sayfalar (giriş ekranı) şablon bağlamı için
+        # bağlantı isteyebilir; ortak veritabanı yeterli ve kütüphane boştur.
+        return baglan_ortak()
+    return baglan_kullanici(kullanici_id)
+
+
+def _oturum_baglantisi() -> sqlite3.Connection:
+    """Kimlik doğrulama için ortak veritabanı — kullanıcı henüz bilinmiyor."""
+    return baglan_ortak()
 
 
 # --------------------------------------------------------------------------- #
@@ -159,7 +205,8 @@ def _sayi(deger, basamak: int = 2) -> str:
 # Sayfalar
 # --------------------------------------------------------------------------- #
 
-async def giris(istek):
+async def anasayfa(istek):
+    """Giriş yapılmışsa önerilere, yapılmamışsa ara katman girişe yollar."""
     return RedirectResponse("/oneriler")
 
 
@@ -993,9 +1040,166 @@ async def ses_kume_adlandir(istek):
         conn.close()
     return JSONResponse({"tamam": True})
 
+# --------------------------------------------------------------------------- #
+# Oturum — ara katman ve giriş yolları
+# --------------------------------------------------------------------------- #
+
+class OturumAraKatmani(BaseHTTPMiddleware):
+    """Çerezden oturumu çöz, kullanıcıyı bağlam değişkenine koy.
+
+    Ara katman olmasının sebebi: yetki denetimi her rotada tekrarlanırsa bir
+    gün biri unutulur ve o sayfa sessizce herkese açık kalır. Tek kapı, açık
+    yollar listesi (`ACIK_YOLLAR`) ve geri kalan her şey kapalı.
+    """
+
+    async def dispatch(self, istek, sonraki):
+        jeton = istek.cookies.get(CEREZ_ADI)
+        conn = _oturum_baglantisi()
+        try:
+            kullanici_id = oturum_coz(conn, jeton)
+        finally:
+            conn.close()
+
+        belirtec = AKTIF_KULLANICI.set(kullanici_id)
+        try:
+            yol = istek.url.path
+            acik = any(yol == a or yol.startswith(a + "/") for a in ACIK_YOLLAR)
+            if kullanici_id is None and not acik:
+                return RedirectResponse("/giris", status_code=303)
+            return await sonraki(istek)
+        finally:
+            AKTIF_KULLANICI.reset(belirtec)
+
+
+def _cerez_koy(yanit, jeton: str):
+    """Oturum çerezi. `httponly` betiklerden okunmasını engeller; `samesite`
+    başka sitelerin bu uygulamaya kimlikli istek attırmasını (CSRF) zorlaştırır.
+    `secure` YOK çünkü uygulama yerelde http üzerinden çalışıyor; https'e
+    taşınırsa eklenmeli."""
+    yanit.set_cookie(CEREZ_ADI, jeton, max_age=OTURUM_GUN * 86400,
+                     httponly=True, samesite="lax", path="/")
+    return yanit
+
+
+async def giris(istek):
+    if AKTIF_KULLANICI.get() is not None:
+        return RedirectResponse("/oneriler", status_code=303)
+    conn = _oturum_baglantisi()
+    try:
+        ilk_kurulum = kullanici_sayisi(conn) == 0
+    finally:
+        conn.close()
+    return SABLONLAR.TemplateResponse(istek, "giris.html", {
+        "request": istek, "hata": istek.query_params.get("hata"),
+        "ilk_kurulum": ilk_kurulum, "yol": "/giris",
+        "spotify_hazir": _spotify_hazir(),
+    })
+
+
+async def giris_gonder(istek):
+    veri = await istek.form()
+    eposta = (veri.get("eposta") or "").strip().lower()
+    parola = veri.get("parola") or ""
+    conn = _oturum_baglantisi()
+    try:
+        kullanici_id = giris_dogrula(conn, eposta, parola)
+        if kullanici_id is None:
+            # Tek mesaj: "kullanıcı yok" ile "parola yanlış" ayrımı hangi
+            # e-postaların kayıtlı olduğunu ele verir.
+            return RedirectResponse("/giris?hata=1", status_code=303)
+        jeton = oturum_ac(conn, kullanici_id)
+    finally:
+        conn.close()
+    return _cerez_koy(RedirectResponse("/oneriler", status_code=303), jeton)
+
+
+async def uyelik(istek):
+    if AKTIF_KULLANICI.get() is not None:
+        return RedirectResponse("/oneriler", status_code=303)
+    return SABLONLAR.TemplateResponse(istek, "uyelik.html", {
+        "request": istek, "hata": istek.query_params.get("hata"),
+        "yol": "/uyelik",
+    })
+
+
+async def uyelik_gonder(istek):
+    veri = await istek.form()
+    ad = (veri.get("ad") or "").strip()
+    eposta = (veri.get("eposta") or "").strip().lower()
+    parola = veri.get("parola") or ""
+    if not ad or not eposta or len(parola) < 8:
+        return RedirectResponse("/uyelik?hata=eksik", status_code=303)
+
+    conn = _oturum_baglantisi()
+    try:
+        # BEŞ KULLANICI SINIRI. Spotify Development Mode uygulaması en fazla
+        # beş yetkili hesap taşıyabiliyor (Şubat 2026 kuralı) ve panele elle
+        # eklenmeyen hesap zaten giriş yapamaz. Sınırı burada da uygulamak,
+        # kullanıcının Spotify tarafında anlaşılmaz bir hatayla karşılaşması
+        # yerine anlaşılır bir mesaj görmesini sağlıyor.
+        if kullanici_sayisi(conn) >= AZAMI_KULLANICI:
+            return RedirectResponse("/uyelik?hata=dolu", status_code=303)
+        if kullanici_bul(conn, eposta=eposta) is not None:
+            return RedirectResponse("/uyelik?hata=kayitli", status_code=303)
+        kullanici_id = kullanici_olustur(conn, ad, eposta=eposta, parola=parola)
+        jeton = oturum_ac(conn, kullanici_id)
+    finally:
+        conn.close()
+    # Yeni hesabın kütüphanesi boş; doğrudan karşılama akışına.
+    return _cerez_koy(RedirectResponse("/basla", status_code=303), jeton)
+
+
+async def cikis(istek):
+    jeton = istek.cookies.get(CEREZ_ADI)
+    conn = _oturum_baglantisi()
+    try:
+        oturum_kapat(conn, jeton)
+    finally:
+        conn.close()
+    yanit = RedirectResponse("/giris", status_code=303)
+    yanit.delete_cookie(CEREZ_ADI, path="/")
+    return yanit
+
+
+async def saglik(istek):
+    return JSONResponse({"durum": "ayakta"})
+
+
+def _spotify_hazir() -> bool:
+    """Spotify düğmesi ancak yapılandırılmışsa gösterilir.
+
+    Yapılandırılmadan gösterilirse kullanıcı tıklar ve hata görür; düğmenin
+    varlığı bir söz veriyor, tutulamayacak söz verilmemeli.
+    """
+    from python.onbellek import _env
+    return bool(_env("SPOTIFY_CLIENT_ID") and _env("SPOTIFY_CLIENT_SECRET"))
+
+
+async def basla(istek):
+    """Karşılama — hesabı yeni açılmış, kütüphanesi boş kullanıcı için.
+
+    Boş bir öneri sayfasına düşmek "uygulama bozuk" hissi veriyor. Burada ne
+    olduğu ve sıradaki adımın ne olduğu yazılı.
+    """
+    conn = _baglanti()
+    try:
+        albom = conn.execute("SELECT COUNT(*) FROM albums").fetchone()[0]
+        kullanici = conn.execute(
+            "SELECT ad, spotify_id FROM kullanici WHERE kullanici_id = ?",
+            (AKTIF_KULLANICI.get(),)).fetchone()
+    finally:
+        conn.close()
+    if albom:
+        return RedirectResponse("/oneriler", status_code=303)
+    return SABLONLAR.TemplateResponse(istek, "basla.html", {
+        "request": istek, "yol": "/basla",
+        "ad": kullanici["ad"] if kullanici else "",
+        "spotify_bagli": bool(kullanici and kullanici["spotify_id"]),
+        "spotify_hazir": _spotify_hazir(),
+    })
 
 ROTALAR = [
-    Route("/", giris),
+    Route("/", anasayfa),
     Route("/oneriler", oneriler),
     Route("/profil", profil),
     Route("/ogrenme", ogrenme),
@@ -1007,6 +1211,13 @@ ROTALAR = [
     Route("/ses-kumeleri", ses_kumeleri),
     Route("/api/onizleme/{parca_id}", taze_onizleme),
     Route("/api/ses-kume-adi", ses_kume_adlandir, methods=["POST"]),
+    Route("/basla", basla),
+    Route("/giris", giris),
+    Route("/giris", giris_gonder, methods=["POST"]),
+    Route("/uyelik", uyelik),
+    Route("/uyelik", uyelik_gonder, methods=["POST"]),
+    Route("/cikis", cikis, methods=["GET", "POST"]),
+    Route("/saglik", saglik),
     Route("/sozluk", sozluk_sayfasi),
     Route("/api/eslestir", eslestir_kaydet, methods=["POST"]),
     Route("/api/karar", karar_ver, methods=["POST"]),
@@ -1014,7 +1225,10 @@ ROTALAR = [
     Mount("/statik", StaticFiles(directory=str(KOK / "statik")), name="statik"),
 ]
 
-uygulama = Starlette(routes=ROTALAR)
+uygulama = Starlette(
+    routes=ROTALAR,
+    middleware=[Middleware(OturumAraKatmani)],
+)
 
 SABLONLAR.env.filters["sayi"] = _sayi
 

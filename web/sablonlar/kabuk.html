@@ -1,0 +1,16 @@
+{# Yan menüsüz, tek sütunlu kabuk: giriş ve üyelik gibi oturum ÖNCESİ sayfalar
+   için. Uygulamanın gezinme menüsü burada olmamalı — henüz bir kütüphane, bir
+   kullanıcı ve dolayısıyla gidilecek bir yer yok. #}
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block baslik %}Müzik Keşif Motoru{% endblock %}</title>
+<link rel="stylesheet" href="/statik/stil.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎧</text></svg>">
+</head>
+<body class="kapi-govde">
+{% block govde %}{% endblock %}
+</body>
+</html>

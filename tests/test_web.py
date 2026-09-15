@@ -106,12 +106,20 @@ def test_tum_sayfalar_acilir():
 
 
 def test_kok_yonlendirir():
+    """Oturumsuz kök girişe, oturumlu kök önerilere gider."""
+    import tempfile
+
     from starlette.testclient import TestClient
 
     from web.sunucu import uygulama
 
     yanit = TestClient(uygulama).get("/", follow_redirects=False)
-    assert yanit.status_code in (302, 307), yanit.status_code
+    assert yanit.status_code in (302, 303, 307), yanit.status_code
+    assert yanit.headers["location"].endswith("/giris"), yanit.headers["location"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        yanit = _oturumlu_istemci(tmp).get("/", follow_redirects=False)
+        assert yanit.headers["location"].endswith("/oneriler"), yanit.headers
 
 
 def test_gecersiz_karar_reddedilir():
@@ -119,9 +127,12 @@ def test_gecersiz_karar_reddedilir():
 
     from web.sunucu import uygulama
 
-    yanit = TestClient(uygulama).post(
-        "/api/karar", json={"aday_id": "x", "karar": "sacmalik"})
-    assert yanit.status_code == 400
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        yanit = _oturumlu_istemci(tmp).post(
+            "/api/karar", json={"aday_id": "x", "karar": "sacmalik"})
+    assert yanit.status_code == 400, yanit.status_code
 
 
 def test_onizleme_onbellegi_atlar():
@@ -148,10 +159,13 @@ def test_onizleme_onbellegi_atlar():
             cagrilar.append((yol, yenile))
             return {"preview": "https://ornek/taze.mp3"}
 
+    import tempfile
+
     eski = CL.deezer_listesi
     CL.deezer_listesi = lambda **k: SahteIstemci()
     try:
-        yanit = TestClient(uygulama).get("/api/onizleme/123")
+        with tempfile.TemporaryDirectory() as tmp:
+            yanit = _oturumlu_istemci(tmp).get("/api/onizleme/123")
     finally:
         CL.deezer_listesi = eski
 
@@ -176,6 +190,56 @@ def test_hepsi_nis_stratejileri_almaz():
     assert "melez" in ANA_STRATEJILER
     for st in ("kredi_sicramasi", "sahne_komsulugu", "bilincli_uzaklik"):
         assert st in NIS_STRATEJILER, st
+
+
+def test_oturumsuz_erisim_engellenir():
+    """Ara katman TEK KAPI olmalı — rota bazında denetim bir gün unutulur.
+
+    Yeni bir sayfa eklendiğinde yazarın yetki denetimini hatırlaması
+    gerekmiyor; kapalı olmak varsayılan, açık olmak istisna (`ACIK_YOLLAR`).
+    """
+    from starlette.testclient import TestClient
+
+    from web.sunucu import uygulama
+
+    istemci = TestClient(uygulama)
+    for yol in ("/oneriler", "/profil", "/ses-kumeleri", "/kumeler",
+                "/muzisyenler", "/etiketler", "/veri", "/ogrenme"):
+        yanit = istemci.get(yol, follow_redirects=False)
+        assert yanit.status_code == 303, f"{yol}: {yanit.status_code}"
+        assert yanit.headers["location"].endswith("/giris"), yol
+
+    for yol in ("/giris", "/uyelik", "/saglik"):
+        assert istemci.get(yol).status_code == 200, yol
+
+
+def _oturumlu_istemci(tmp):
+    """Oturum açmış TestClient + geçici, BOŞ bir kullanıcı veritabanı.
+
+    Ara katman (2026-09-15) artık her yolu koruyor; oturumsuz istek girişe
+    yönlenir. Testlerin gerçek kullanıcı verisine dokunmaması için hem hesap
+    hem kütüphane geçici dizinde kuruluyor.
+    """
+    from pathlib import Path as _P
+
+    from starlette.testclient import TestClient
+
+    import python.db as D
+    from python.hesap import kullanici_olustur, oturum_ac, CEREZ_ADI
+
+    kok = _P(tmp)
+    D.KULLANICI_KOK = kok / "kullanici"
+    D.VARSAYILAN_ORTAK = kok / "ortak.sqlite"
+
+    conn = D.baglan_ortak()
+    kid = kullanici_olustur(conn, "Test", eposta="t@t.t", parola="parola123")
+    jeton = oturum_ac(conn, kid)
+    conn.close()
+
+    from web.sunucu import uygulama
+    istemci = TestClient(uygulama)
+    istemci.cookies.set(CEREZ_ADI, jeton)
+    return istemci
 
 
 for _ad, _fn in sorted(list(globals().items())):

@@ -1490,3 +1490,83 @@ kaydırıyor. Ölçülebilir hâle gelince katsayı süpürülecek.
 **Etki görünür.** Kart üzerinde «👍 dediğin «Issei Noro» ile aynı sesten»
 yazıyor. Kullanıcı bir şeyin neden yukarı çıktığını göremezse sistemin
 öğrendiğine güvenemez.
+
+## 2026-09-15 — Çok kiracılık ve oturum katmanı
+
+Kullanıcı isteği: "Kullanıcılar Spotify hesapları ile bağlanıp bu uygulamayı
+kullanabilsin. 5 kullanıcıya izin verebiliyordun galiba." Ve ayrıca: "uygulama
+tam son formuna ulaşmış gibi hissettirmiyordu, güzelce cilala."
+
+**Spotify kısıtları yeniden doğrulandı (Şubat 2026 kuralları bugün geçerli):**
+ihtiyacımız olan uçların hepsi açık — `/me`, `/me/top/artists`, `/me/top/tracks`,
+`/me/albums`, `/me/tracks`, `/me/player/recently-played`, `/me/playlists`,
+`/me/following`. Kapalı olanlar başkasının profili/listesi, toplu getirme ve
+browse; hiçbiri bize lazım değil. Tavan beş kullanıcı, uygulama sahibinin
+aktif Premium'u zorunlu, geliştirici başına tek Client ID.
+
+### Şema ikiye ayrıldı — ve 262 sorgu yerinin hiçbiri değişmedi
+
+Etki alanı önce ölçüldü: kütüphaneyi okuyan 145, paylaşımlı tabloları okuyan
+117 sorgu yeri. `kullanici_id` sütunu eklemek de, sorguları elle niteleme de
+yüzlerce dokunuş demekti.
+
+Üçüncü yol SQLite'ın ad çözümlemesi: niteliksiz tablo adı önce `main`de,
+bulunamazsa ATTACH edilmiş veritabanında aranıyor. Bir tablo yalnız birinde
+varsa mevcut sorgular DEĞİŞMEDEN doğru yere gidiyor. Kurmadan önce ölçüldü —
+okuma, yazma ve iki veritabanı arası JOIN çalışıyor.
+
+    data/db/kullanici/<id>.sqlite   albums, clusters, memberships, temsilciler,
+                                    adaylar, feedback, album_etiket, ses_kumesi,
+                                    ses_kume_adi, liste_birlikteligi, plays, dosyalar
+    data/db/ortak.sqlite            credits, tags, audio_features, stem_profili,
+                                    davul_profili, kisi_eslesme, calma_listesi,
+                                    liste_parca, kullanici, oturum
+
+Ayrım ölçütü: kayıt ALBÜMÜ ya da KİŞİYİ tarif ediyorsa paylaşımlı (bir kez
+hesaplanır, herkes yararlanır); KULLANICININ kütüphanesini ya da tercihini
+tarif ediyorsa ona özel. `liste_birlikteligi` ve `album_etiket` paylaşımlı
+DEĞİL — ikisi de kütüphaneye görelidir (PMI kütüphane sanatçısı × dışarıdaki
+bağıdır, etiket eşikleri kütüphanenin kendi dağılımının kuyruğundan gelir).
+
+**Üç kusur kurulum sırasında yakalandı, üçü de sessizce bozacaktı:**
+1. Veritabanları arası yabancı anahtar yok sayılmıyor, PATLIYOR
+   ("no such table: ortak.albums"). Paylaşımlı DDL'lerden `REFERENCES albums`
+   otomatik sökülüyor. Kaybedilen CASCADE semantik olarak zaten yanlış olurdu:
+   bir kullanıcının albümü silinince krediler silinmemeli, başkası ona sahip olabilir.
+2. `CREATE UNIQUE INDEX` ve `CREATE INDEX ... ON tablo` sınıflandırılamıyordu;
+   indeksler iki tarafa da yazılmaya çalışılıp olmayan tabloda patlıyordu.
+3. `ortak_yolu` varsayılan argümanı TANIMLAMA ANINDA bağlanıyordu, dolayısıyla
+   test gerçek paylaşımlı veritabanına yazdı. Artık çağrı anında okunuyor.
+
+98.894 satır göç etti (`python -m python.goc_cokkullanici`); özgün
+`kesif.sqlite` yerinde bırakıldı, geri dönüş onu kullanmaktan ibaret.
+
+### Oturum katmanı
+
+`python/hesap.py`: scrypt parola özeti (standart kütüphane, yeni bağımlılık
+yok), sabit zamanlı karşılaştırma, `secrets` jetonu, 30 günlük çerez.
+
+Parola ZORUNLU DEĞİL: Spotify ile bağlanan hesabın parolası olmaz
+(`parola_ozeti` NULL) ve o hesaba yalnız Spotify'la girilir. `parola_tutuyor_mu`
+None gördüğünde False döner — aksi hâlde boş parolayla girilebilirdi.
+
+Giriş başarısızlığında TEK MESAJ dönüyor: "kullanıcı yok" ile "parola yanlış"
+ayrımı hangi e-postaların kayıtlı olduğunu ele verir. Kullanıcı bulunamadığında
+da kukla bir özet hesaplanıyor, çünkü yanıt süresi farkı aynı bilgiyi sızdırır.
+
+**Yetki denetimi ARA KATMANDA, rota bazında değil.** Rota bazında olsaydı bir
+gün biri unutulur ve o sayfa sessizce herkese açık kalırdı. Kapalı olmak
+varsayılan, açık olmak istisna (`ACIK_YOLLAR`). Regresyon testi sekiz sayfanın
+oturumsuz erişimde girişe yönlendiğini doğruluyor.
+
+**Aktif kullanıcı bağlam değişkeninde.** `_baglanti()` on ayrı yerden
+argümansız çağrılıyordu; imzasını değiştirmek her çağrı yerine istek nesnesi
+taşımak demekti. `ContextVar` Starlette'in görev bağlamında doğru çalışıyor:
+her istek kendi kopyasını görür.
+
+Beş kullanıcı sınırı üyelik akışında da uygulanıyor — panele eklenmeyen hesap
+Spotify tarafında zaten giremez; sınırı burada uygulamak anlaşılmaz bir hata
+yerine anlaşılır bir mesaj vermeyi sağlıyor.
+
+Uçtan uca doğrulandı: üyelik → çerez → korumalı sayfa → **yeni kullanıcının
+kütüphanesi boş** (yalıtım kanıtı) → çıkış → erişim kapanıyor. 197 test geçiyor.
