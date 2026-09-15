@@ -215,6 +215,11 @@ def main(argv: list[str] | None = None) -> int:
     parola.add_argument("--id", type=int, help="hedef hesap (kullanici_id)")
     parola.set_defaults(fn="parola")
 
+    eposta_k = alt.add_parser("eposta", help="hesabın e-postasını belirle/değiştir")
+    eposta_k.add_argument("--id", type=int, required=True)
+    eposta_k.add_argument("adres")
+    eposta_k.set_defaults(fn="eposta")
+
     sil = alt.add_parser("sil", help="hesabı ve verisini sil")
     sil.add_argument("--id", type=int, required=True)
     sil.set_defaults(fn="sil")
@@ -259,6 +264,28 @@ def main(argv: list[str] | None = None) -> int:
                     "UPDATE kullanici SET parola_ozeti = ? WHERE kullanici_id = ?",
                     (parola_ozetle(yeni), kayit["kullanici_id"]))
             print(f"parola belirlendi: {kayit['ad']}")
+            return 0
+
+        if args.fn == "eposta":
+            kayit = kullanici_bul(conn, kullanici_id=args.id)
+            if kayit is None:
+                print("hesap bulunamadı"); return 1
+            adres = args.adres.strip().lower()
+            if "@" not in adres or "." not in adres.split("@")[-1]:
+                print("geçerli bir e-posta adresi değil"); return 1
+            # Tekillik kısıtı var; çakışmada anlaşılır mesaj ver.
+            baskasi = kullanici_bul(conn, eposta=adres)
+            if baskasi is not None and baskasi["kullanici_id"] != args.id:
+                print(f"bu e-posta zaten {baskasi['ad']} hesabında kayıtlı")
+                return 1
+            with conn:
+                conn.execute(
+                    "UPDATE kullanici SET eposta = ? WHERE kullanici_id = ?",
+                    (adres, args.id))
+            print(f"e-posta belirlendi: {kayit['ad']} → {adres}")
+            if not kayit["parola_ozeti"]:
+                print("NOT: bu hesabın parolası yok. "
+                      f"`python -m python.hesap parola --id {args.id}`")
             return 0
 
         if args.fn == "sil":
