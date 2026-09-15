@@ -1632,3 +1632,60 @@ yerinde. Panelin kısıtı olduğu kanısındayım ama GERÇEK CİHAZDA sınanma
 "çalışıyor" denemez.
 
 201 test geçiyor.
+
+## 2026-09-15 (3) — Profil odakları: uygulama "davulcu uygulaması" gibi hissettiriyordu
+
+Kullanıcı geri bildirimi, iki aşamada: önce "çok davulcu özel bir uygulama
+olmuş gibi hissettiriyor", sonra asıl mesele: **"ben dinleyici profiline
+girince sadece davul görüyorum; ancak X bir kullanıcı da mı bunu görecek?
+Belki adam gitar, vokal istiyor ya da hiçbirini istemiyor, düz bir dinleyici
+profili görmek istiyor."**
+
+**Sebep ölçüldü ve sanıldığından derindi.** Profil sayfasının 8 ekseninden 4'ü
+davuldu — ama asıl sorun oydu değil: **ÇAPALARIN %75'i davuldaydı, bas ve
+vokalde hiç yoktu.** K13 gereği çapası olmayan eksende konum cümlesi
+kurulmuyor, dolayısıyla o eksenler SESSİZ kalıyordu. Kullanıcı gerçekten
+yalnız davul hakkında cümle görüyordu. Üstüne sayfada sabit bir "Davul
+haritası" vardı.
+
+### Çapalar ölçüldü, uydurulmadı
+
+Dört stem'in tamamı için gerçek uç değerler `stem_profili`'nden çıkarıldı
+(uçtan ÜÇÜNCÜ albüm — tek bir aykırıya yaslanmamak için). Müzikal olarak
+tutuyorlar: gitarda en geniş gezinen **Joe Satriani** (42,4) ↔ en sabit riff
+**TOOL** (5,2); vokalde en yoğun heceli **MF DOOM** (2,66) ↔ en seyrek; vokal
+dokusunda en gürültülü **Eminem** (0,12, rap) ↔ en temiz **Joji** (0,98);
+en enstrümantal **Takanaka** ↔ vokal en önde **Françoise Hardy**.
+
+Eksen sayısı 8 → 18 ve dengeli: davul 5, bas 3, gitar/klavye 5, vokal 5.
+**Her eksenin ölçülmüş çapası var** — bir test bunu koruyor, çünkü çapası
+unutulan yeni bir eksen aynı sessizliği geri getirir.
+
+### Asıl çözüm: odak seçimi
+
+Denge tek başına yetmezdi; kullanıcının dediği gibi biri hiçbirini
+istemeyebilir. `ODAKLAR`: **genel** (varsayılan), davul, bas, gitar, vokal,
+hepsi.
+
+**Varsayılan «genel» ve teknik terim İÇERMİYOR** — tempo, dinamik aralık, ton
+dokusu, nota uzunluğu, vokal ağırlığı. «Zil payı» bilmek gerekmiyor. Saçılım
+haritası da odağa göre değişiyor; sabit "Davul haritası" kalktı.
+
+Test yazarken kendi ölçütüm fazla sıkı çıktı: «genel» odakta enstrüman ADI
+yasaklanmıştı ve "vokal ağırlığı" takılıyordu. Ama "vokal önde mi" gündelik
+bir ifade, düz bir dinleyici profiline ait. Yasak listesi teknik terimlere
+daraltıldı (zil, tekme, ızgara, perde, register, entropi).
+
+### İki cilalama
+
+**Sayı biçimi.** «medyanın 117.454» hem okunmuyor hem olmayan bir kesinlik
+iddia ediyordu — ölçüm tek bir 30 sn klipten geliyor. Büyüklüğe göre basamak:
+tempo 117, oran 0,88.
+
+**Türkçe ek.** «Skepta'e», «TOOL'e» bozuktu. Ünlü uyumuyla düzeltmeyi denedim
+ama yabancı adlarda ek YAZILIŞA değil OKUNUŞA göre alınıyor: «Death» yazılışta
+son ünlüsü «a», okunuşu «Deth», doğrusu «Death'e». Her grup adının okunuşunu
+tahmin etmek kaçınılmaz olarak yanlış üretir — ek yerine «... tarafında»
+kurgusuna geçildi, ad ek almıyor ve sonuç hep doğru.
+
+203 test geçiyor.

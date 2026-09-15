@@ -71,9 +71,60 @@ def test_uclar_gercek_album_adi_tasir():
 
 
 def test_capa_uydurmaz():
-    """Çapası olmayan eksende konum cümlesi kurulmamalı."""
-    assert _capa_cumlesi("tempo", "drums", 120.0) is None
+    """Çapası olmayan eksende konum cümlesi kurulmamalı (K13).
+
+    Somut bir eksen adı yerine VAR OLMAYAN bir (sütun, stem) çifti
+    kullanılıyor: 2026-09-15'te her eksene ölçülmüş çapa eklendi ve test
+    «tempo çapasızdır» varsayımına dayandığı için kırıldı. Kural eksen
+    listesinden bağımsız olmalı.
+    """
+    assert _capa_cumlesi("boyle_bir_olcut_yok", "drums", 0.5) is None
     assert _capa_cumlesi("izgara_entropi", "drums", 0.5) is not None
+
+
+def test_her_eksenin_capasi_var():
+    """Çapasız eksen SESSİZ kalır — kullanıcı onu hiç görmez.
+
+    Gerçek şikâyet (2026-09-15): "dinleyici profiline girince sadece davul
+    görüyorum." Sebebi buydu — çapaların %75'i davuldaydı, bas ve vokalde hiç
+    yoktu, dolayısıyla o eksenler hakkında cümle kurulmuyordu. Yeni bir eksen
+    eklenip çapası unutulursa aynı sessizlik geri gelir.
+    """
+    from python.profil import CAPALAR, EKSENLER
+
+    capasiz = [(s, st) for s, st, *_ in EKSENLER if (s, st) not in CAPALAR]
+    assert not capasiz, f"çapasız eksen: {capasiz}"
+
+
+def test_odaklar_dengeli_ve_genel_jargonsuz():
+    """Varsayılan odak enstrüman bilgisi gerektirmemeli.
+
+    Kullanıcının isteği: "belki adam gitar, vocal istiyor ya da hiçbirini
+    istemiyor, düz bir dinleyici profili görmek istiyor."
+    """
+    from collections import Counter
+
+    from python.profil import EKSENLER, ODAKLAR, odak_eksenleri
+
+    # Dört stem de temsil edilmeli; hiçbiri yarıyı geçmemeli.
+    sayim = Counter(st for _, st, *_ in EKSENLER)
+    for stem in ("drums", "bass", "other", "vocals"):
+        assert sayim[stem] >= 3, f"{stem} yetersiz: {sayim[stem]}"
+    assert max(sayim.values()) <= len(EKSENLER) / 2, sayim
+
+    # «genel» odakta TEKNİK terim olmamalı. Yasak olan enstrüman ADI değil
+    # — "vokal önde mi" gündelik bir ifade ve düz bir dinleyici profiline
+    # ait. Yasak olan, o enstrümanı bilmeden okunamayan ölçüt adları:
+    # zil payı, tekme payı, ızgara entropisi, perde aralığı gibi.
+    yasak = ("zil", "tekme", "ızgara", "perde", "register", "stem", "entropi")
+    for _, _, ad, *_ in odak_eksenleri("genel"):
+        assert not any(y in ad.lower() for y in yasak), \
+            f"genel odakta teknik terim: {ad}"
+
+    # Her enstrüman için ayrı bir odak bulunmalı.
+    for anahtar in ("genel", "davul", "bas", "gitar", "vokal", "hepsi"):
+        assert anahtar in ODAKLAR, anahtar
+        assert odak_eksenleri(anahtar), f"{anahtar} boş"
 
 
 def test_capa_uclari_dogru_tarafa_koyar():

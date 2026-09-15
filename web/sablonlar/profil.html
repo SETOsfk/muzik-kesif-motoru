@@ -4,6 +4,17 @@
 
 <div class="sayfa-basi">
   <h1>Dinleyici profili</h1>
+
+  {# ODAK SEÇİCİ. Aynı ekran herkese aynı şeyi göstermemeli. Varsayılan
+     «Genel» ve enstrüman jargonu içermiyor — «zil payı» bilmek gerekmiyor.
+     İsteyen davula, basa, gitara ya da vokale iniyor. #}
+  <nav class="odaklar" aria-label="Profil odağı">
+    {% for anahtar, (ad, _aciklama, _e) in odaklar.items() %}
+      <a href="/profil?odak={{ anahtar }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}"
+         class="{{ 'etkin' if odak == anahtar }}">{{ ad }}</a>
+    {% endfor %}
+  </nav>
+  <p class="aciklama">{{ odaklar[odak][1] }}</p>
   <p>{{ albom_sayisi }} albümün ayrılmış stem'lerinden ölçüldü.
      <strong>Uydurma bir "ortalama dinleyici" normuyla kıyaslanmıyor</strong> —
      öyle bir veri yok. Konum, bu kütüphanede gerçekten ölçülmüş uçlara göre
@@ -39,12 +50,8 @@
 
 {% if g_davul %}
 <section class="bolum">
-  <h2>Davul haritası</h2>
-  <p class="aciklama">Yatay: tekme ağırlığı · Dikey: zil ağırlığı. Sol üst =
-     Meshuggah tarzı ride ağırlıklı ama ayak cimri; sağ alt = tok, ayak yüklü.
-     <strong>Aşağı inen genel eğilim kısmen aritmetik</strong> — tekme/trampet/zil
-     payları 1'e toplanıyor, biri artınca diğeri düşmek zorunda. Okunacak şey
-     eğilimin kendisi değil, ona göre nerede durdukların ve dikey saçılım.</p>
+  <h2>{{ harita_basligi }}</h2>
+  <p class="aciklama">{{ harita_aciklama }}</p>
   <div class="kart">{{ g_davul }}<div style="margin-top:var(--b3)">{{ efsane|safe }}</div></div>
 </section>
 {% endif %}

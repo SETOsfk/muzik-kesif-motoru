@@ -452,3 +452,13 @@ ul.madde strong { color: var(--metin); }
   .kararlar { flex-wrap: wrap; }
   .kararlar button { flex: 1 1 auto; min-height: 2.75rem; }
 }
+
+/* Profil odak seçici — enstrüman ayrıntısı OPT-IN. */
+.odaklar { display: flex; flex-wrap: wrap; gap: .35rem; margin: .2rem 0 .7rem; }
+.odaklar a {
+  padding: .35rem .75rem; border-radius: 999px; text-decoration: none;
+  font-size: .86rem; color: var(--metin-2);
+  background: var(--yuzey-2); border: 1px solid var(--kenar);
+}
+.odaklar a:hover { color: var(--metin); }
+.odaklar a.etkin { background: var(--vurgu); color: #fff; border-color: transparent; }

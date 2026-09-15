@@ -583,6 +583,7 @@ async def karar_ver(istek):
 
 async def profil(istek):
     from python.profil import (
+        ODAKLAR, ODAK_HARITASI,
         cesitlilik, eksen_ozeti, enstruman_dengesi, kume_ses_imzasi,
         profil_cumleleri, stem_verisi,
     )
@@ -597,8 +598,15 @@ async def profil(istek):
                 istek, mesaj="Stem ölçümü yok. "
                 "<code>python -m python.enrich.icra_profili --tum</code>"))
 
+        # ODAK. Aynı ekran herkese aynı şeyi göstermemeli: biri gitara,
+        # biri vokale bakmak ister, biri hiçbirine — düz bir profil ister.
+        # Varsayılan «genel» ve enstrüman jargonu içermiyor.
+        odak = istek.query_params.get("odak", "genel")
+        if odak not in ODAKLAR:
+            odak = "genel"
+
         denge = enstruman_dengesi(veri)
-        ozet = eksen_ozeti(veri)
+        ozet = eksen_ozeti(veri, odak)
         cesit = cesitlilik(ozet)
 
         uyelik = pd.read_sql_query(
@@ -618,15 +626,30 @@ async def profil(istek):
             [(r["eksen"], r["yayilim"]) for _, r in cesit.iterrows()],
             basamak=2, renk=grafik.PALET["mor"])
 
-        davul = veri[(veri["stem"] == "drums") & veri["zil_payi"].notna()].copy()
+        # HARİTA ODAĞA GÖRE. Eskiden sabit bir "Davul haritası" vardı; vokale
+        # bakan kullanıcı yine davul görüyordu.
+        h = ODAK_HARITASI.get(odak, ODAK_HARITASI["genel"])
+        x_sutun, x_stem, y_sutun, y_stem, harita_aciklama = h
+        harita_basligi = ODAKLAR[odak][0] + " haritası"
+
+        if x_stem == y_stem:
+            kaynak = veri[veri["stem"] == x_stem]
+        else:  # farklı stem'lerden eksen: albüm bazında birleştir
+            kaynak = veri[veri["stem"] == x_stem].merge(
+                veri[veri["stem"] == y_stem][["album_id", y_sutun]],
+                on="album_id", suffixes=("", "_y"))
+        y_ad = y_sutun + "_y" if (x_stem != y_stem and y_sutun in
+                                  veri.columns) else y_sutun
+        davul = kaynak[kaynak[x_sutun].notna() & kaynak[y_ad].notna()].copy() \
+            if x_sutun in kaynak.columns and y_ad in kaynak.columns else pd.DataFrame()
         g_davul = efsane = None
         if not davul.empty and not U.empty:
             keskin = U.idxmax(axis=1)
             davul["kume"] = davul["album_id"].map(keskin).map(adlar).fillna("—")
             g_davul = grafik.sacilim(
-                [(float(r["tekme_payi"]), float(r["zil_payi"]), str(r["kume"]),
-                  f"{r['artist']} — {r['title']}  ·  tekme {r['tekme_payi']:.2f} / "
-                  f"zil {r['zil_payi']:.2f}  ·  {r['kume']}")
+                [(float(r[x_sutun]), float(r[y_ad]), str(r["kume"]),
+                  f"{r['artist']} — {r['title']}  ·  {r[x_sutun]:.2f} / "
+                  f"{r[y_ad]:.2f}  ·  {r['kume']}")
                  for _, r in davul.iterrows()],
                 x_baslik="tekme payı", y_baslik="zil payı")
             efsane = grafik.sacilim_efsanesi(sorted(davul["kume"].unique()))
@@ -661,6 +684,8 @@ async def profil(istek):
             istek, cumleler=profil_cumleleri(ozet, denge), denge=denge,
             g_denge=g_denge, g_cesit=g_cesit, g_davul=g_davul, efsane=efsane,
             g_imza=g_imza, ozet=ozet, uclar=uclar,
+            odak=odak, odaklar=ODAKLAR,
+            harita_basligi=harita_basligi, harita_aciklama=harita_aciklama,
             eksen_listesi=list(ozet["eksen"]), albom_sayisi=veri["album_id"].nunique(),
         ))
     finally:
