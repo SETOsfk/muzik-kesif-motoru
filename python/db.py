@@ -6,6 +6,7 @@ o dosya güncellenir — tersi değil.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -309,8 +310,168 @@ SEMA: tuple[str, ...] = (
         PRIMARY KEY (kutuphane_anahtar, aday_anahtar)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS kullanici (
+        kullanici_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+        eposta          TEXT UNIQUE,        -- e-posta ile üyelikte
+        ad              TEXT NOT NULL,      -- gösterilecek ad
+        spotify_id      TEXT UNIQUE,        -- Spotify ile bağlanmışsa
+        spotify_yenile  TEXT,               -- refresh token (yerelde kalır)
+        parola_ozeti    TEXT,               -- e-posta ile üyelikte (scrypt)
+        olusturma       TEXT NOT NULL,
+        son_giris       TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS oturum (
+        jeton         TEXT PRIMARY KEY,     -- rastgele, çerezde taşınır
+        kullanici_id  INTEGER NOT NULL,
+        olusturma     TEXT NOT NULL,
+        son_gorulme   TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS ix_oturum_kullanici ON oturum(kullanici_id)
+    """,
 )
 
+
+# --------------------------------------------------------------------------- #
+# Çok kiracılık — kullanıcı veritabanı + paylaşımlı veritabanı
+# --------------------------------------------------------------------------- #
+#
+# NEDEN İKİ DOSYA, TEK DOSYA + `kullanici_id` SÜTUNU DEĞİL
+# Kütüphaneyi okuyan 145, paylaşımlı tabloları okuyan 117 sorgu yeri var
+# (ölçüldü). Her birine kullanıcı süzgeci eklemek yüzlerce dokunuş ve yüzlerce
+# hata fırsatı demekti.
+#
+# SQLite'ın ad çözümlemesi bunu bedavaya çözüyor: NİTELİKSİZ bir tablo adı
+# önce `main`de, bulunamazsa ATTACH edilmiş veritabanlarında aranır. Bir tablo
+# ikisinden yalnız BİRİNDE varsa, mevcut sorguların tamamı hiç değişmeden
+# doğru yere gider. Ölçüldü: okuma, yazma ve iki veritabanı arası JOIN çalışıyor.
+#
+# BEDELİ: veritabanları arası yabancı anahtar YOK. Ölçüldü ve sessizce
+# yok sayılmıyor, gürültülü patlıyor ("no such table: ortak.albums"). Bu
+# yüzden paylaşımlı tablolardaki `REFERENCES albums(...)` kısıtları
+# otomatik sökülüyor (`_fk_sok`). Kaybedilen CASCADE semantik olarak zaten
+# YANLIŞ olurdu: bir kullanıcının albümü silindiğinde o albümün kredileri
+# silinmemeli, başka kullanıcı ona sahip olabilir.
+
+#: Paylaşımlı veritabanına giden tablolar. Ölçüt: kayıt ALBÜMÜ ya da KİŞİYİ
+#: tarif ediyorsa paylaşımlı (bir kez hesaplanır, herkes yararlanır);
+#: KULLANICININ tercihini/kütüphanesini tarif ediyorsa kullanıcıya özel.
+ORTAK_TABLOLAR: frozenset[str] = frozenset({
+    "credits",          # albüm → kim çalmış
+    "tags",             # albüm → tür etiketi (MusicBrainz)
+    "audio_features",   # albüm → ses ölçümü
+    "stem_profili",     # albüm → ayrılmış stem ölçümü
+    "davul_profili",    # kişi → icra karakteri
+    "kisi_eslesme",     # takma ad → kanonik ad
+    "calma_listesi",    # havuz
+    "liste_parca",      # havuz
+    "kullanici",        # hesaplar
+    "oturum",           # oturum jetonları
+})
+
+#: Kullanıcıya özel kalanlar (belge amaçlı; kod `ORTAK_TABLOLAR` dışını kullanır):
+#: albums, dosyalar, plays, memberships, temsilciler, clusters, adaylar,
+#: feedback, album_etiket, ses_kumesi, ses_kume_adi, liste_birlikteligi.
+#:
+#: `liste_birlikteligi` ve `album_etiket` paylaşımlı DEĞİL çünkü ikisi de
+#: kütüphaneye görelidir: PMI "kütüphane sanatçısı × dışarıdaki" bağıdır,
+#: etiket eşikleri kütüphanenin kendi dağılımının kuyruğundan gelir.
+
+VARSAYILAN_ORTAK = Path("data/db/ortak.sqlite")
+KULLANICI_KOK = Path("data/db/kullanici")
+
+_TABLO_ADI = re.compile(r"CREATE TABLE(?: IF NOT EXISTS)? (\w+)", re.IGNORECASE)
+#: İndeks de bir tabloya aittir ve o tablonun veritabanında oluşturulmalı.
+#: Sınıflandırılmazsa her iki tarafa da yazılmaya çalışılır ve olmayan tabloda
+#: patlar ("no such table: main.credits").
+#: UNIQUE ve çok satıra yayılan "ON tablo" biçimleri de yakalanmalı:
+#: `ix_credits_tekil` ile `ix_plays_tekil` böyle yazılmış ve ilk sürümde
+#: sınıflandırılamayıp iki tarafa da yazılmaya çalışıldı.
+_INDEKS_TABLOSU = re.compile(
+    r"CREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+\w+\s+ON\s+(\w+)",
+    re.IGNORECASE | re.DOTALL,
+)
+_FK = re.compile(r"\s+REFERENCES albums\(album_id\)(?:\s+ON DELETE CASCADE)?", re.IGNORECASE)
+
+
+def _tablo_adi(ddl: str) -> str | None:
+    """DDL'in ait olduğu tablo — CREATE TABLE ya da CREATE INDEX ... ON."""
+    eslesme = _TABLO_ADI.search(ddl) or _INDEKS_TABLOSU.search(ddl)
+    return eslesme.group(1) if eslesme else None
+
+
+def _fk_sok(ddl: str) -> str:
+    """`albums`a giden yabancı anahtarı söker — veritabanları arası FK çalışmaz."""
+    return _FK.sub("", ddl)
+
+
+#: Oluşturulan nesnenin adını `ortak.` ile niteler. Dizi değiştirmeyle
+#: yapılırsa `CREATE UNIQUE INDEX` gibi biçimler kaçar ve indeks main'de
+#: oluşturulmaya çalışılıp "no such table: main.credits" verir (ölçüldü).
+_NITELE = re.compile(
+    r"(CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX)(?:\s+IF\s+NOT\s+EXISTS)?\s+)(\w+)",
+    re.IGNORECASE,
+)
+
+
+def _ortak_nitele(ddl: str) -> str:
+    """`CREATE TABLE x` → `CREATE TABLE ortak.x` (indeksler ve UNIQUE dahil)."""
+    return _NITELE.sub(r"\1ortak.\2", ddl, count=1)
+
+
+def _sema_bolumu(ortak: bool) -> tuple[str, ...]:
+    """SEMA'yı hedef veritabanına göre süz. Tek şema kaynağı korunur."""
+    secilen = []
+    for ddl in SEMA:
+        ad = _tablo_adi(ddl)
+        if ad is None:
+            secilen.append(ddl)          # indeksler; ait oldukları yerde çalışır
+        elif (ad in ORTAK_TABLOLAR) == ortak:
+            secilen.append(_fk_sok(ddl) if ortak else ddl)
+    return tuple(secilen)
+
+
+def kullanici_db(kullanici_id: int | str) -> Path:
+    return KULLANICI_KOK / f"{kullanici_id}.sqlite"
+
+
+def baglan_kullanici(
+    kullanici_id: int | str, *, ortak_yolu: Path | str | None = None,
+    sema: bool = True,
+) -> sqlite3.Connection:
+    """Kullanıcının veritabanını aç, paylaşımlı olanı `ortak` adıyla ekle.
+
+    Dönen bağlantıda mevcut sorguların tamamı DEĞİŞMEDEN çalışır: `albums`
+    kullanıcıdan, `liste_parca` ortaktan gelir; niteliksiz adları SQLite
+    kendisi çözer.
+    """
+    kul_yolu = kullanici_db(kullanici_id)
+    kul_yolu.parent.mkdir(parents=True, exist_ok=True)
+    # Modül genelini ÇAĞRI ANINDA oku, varsayılan argüman olarak DEĞİL:
+    # varsayılan argüman tanımlama anında bağlanır ve testler yolu
+    # yönlendiremez — ilk sürümde test gerçek ortak veritabanına yazdı.
+    ortak_yolu = Path(ortak_yolu if ortak_yolu is not None else VARSAYILAN_ORTAK)
+    ortak_yolu.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(kul_yolu)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("ATTACH DATABASE ? AS ortak", (str(ortak_yolu),))
+    # FK'ler ancak TEK veritabanı içinde çalışır; ATTACH'li bağlantıda açık
+    # bırakmak paylaşımlı tablolara yazarken patlıyor (ölçüldü).
+    conn.execute("PRAGMA foreign_keys = OFF")
+    if sema:
+        with conn:
+            for ddl in _sema_bolumu(ortak=False):
+                conn.execute(ddl)
+            for ddl in _sema_bolumu(ortak=True):
+                conn.execute(_ortak_nitele(ddl))
+            _gocleri_uygula(conn)
+    return conn
 
 def baglan(db_yolu: Path | str = VARSAYILAN_DB, *, sema: bool = True) -> sqlite3.Connection:
     """Veritabanını aç (yoksa oluştur) ve şemayı garanti et."""
@@ -448,13 +609,28 @@ def _audio_features_gocu(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE audio_features_eski")
 
 
+def _gocleri_uygula(conn: sqlite3.Connection) -> None:
+    """Eksik sütunları ekle. Tablo hangi veritabanındaysa oraya işler."""
+    for tablo, sutun, ddl in GOC:
+        try:
+            mevcut = {s[1] for s in conn.execute(f"PRAGMA table_info({tablo})")}
+        except sqlite3.Error:
+            continue
+        if not mevcut:
+            # PRAGMA table_info niteliksiz adı çözemediyse ortak'ta ara.
+            mevcut = {s[1] for s in conn.execute(f"PRAGMA ortak.table_info({tablo})")}
+            if mevcut and sutun not in mevcut:
+                conn.execute(ddl.replace(f"ALTER TABLE {tablo}",
+                                         f"ALTER TABLE ortak.{tablo}"))
+            continue
+        if sutun not in mevcut:
+            conn.execute(ddl)
+
+
 def sema_kur(conn: sqlite3.Connection) -> None:
     with conn:
         _audio_features_gocu(conn)
         _stem_profili_gocu(conn)
         for ddl in SEMA:
             conn.execute(ddl)
-        for tablo, sutun, ddl in GOC:
-            mevcut = {s[1] for s in conn.execute(f"PRAGMA table_info({tablo})")}
-            if sutun not in mevcut:
-                conn.execute(ddl)
+        _gocleri_uygula(conn)
