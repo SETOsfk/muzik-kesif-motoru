@@ -1768,3 +1768,39 @@ eski dosyada 15, kullanıcı dosyasında 32. Varsayılan kullanıcı veritabanı
 çevrildi; eski dosya `ESKI_TEK_DB` olarak yalnız göç kaynağı.
 
 İkisi için de regresyon testi var. 205 test geçiyor.
+
+## 2026-09-15 (5) — Yayın öncesi güvenlik turu
+
+Kullanıcı yayınlamak ve mobil erişim için link istedi. Kimlik doğrulama
+katmanını bu oturumda ben yazdım; internete açılmadan denetlenmesi gerekiyordu.
+
+**Temiz çıkanlar:** değer taşıyan tüm sorgular parametreli (SQL enjeksiyonu
+yok — f-string yalnız tablo/sütun adı ve yer tutucu üretiminde), hata ayıklama
+modu kapalı, hata yanıtları iz sızdırmıyor, girişte YENİ jeton üretiliyor
+(oturum sabitleme yok), `samesite=lax` çapraz site POST'ta çerezi göndermiyor
+(CSRF için yeterli).
+
+**İki eksik bulundu ve kapatıldı:**
+
+1. **Hız sınırı yoktu.** Ölçüldü: saniyede ~23 yanlış giriş denenebiliyordu.
+   `AZAMI_DENEME=8`, `PENCERE_SN=900`. Sayaç HEM IP HEM HESAP için tutuluyor —
+   yalnız IP sayılsa dağıtık deneme kaçar, yalnız hesap sayılsa saldırgan
+   hesapları sırayla deneyip her birinde sınırın altında kalır.
+
+   Bellekte tutuluyor, veritabanında değil: beş kullanıcılık tek süreçli bir
+   uygulamada kalıcılık gereksiz ve her denemede disk yazmak saldırgana ucuz
+   bir G/Ç yükü kapısı açardı. Süreç yeniden başlarsa sayaç sıfırlanır —
+   kabul edilen bedel, karşılığı basitlik.
+
+2. **Çerezde `secure` yoktu.** `KESIF_HTTPS` ortam değişkeniyle açılıyor.
+   VARSAYILAN KAPALI olmak zorunda: yerelde http kullanılıyor ve açık olsaydı
+   çerez hiç gönderilmez, giriş sessizce çalışmaz hâlde kalırdı.
+
+   Aynı değişken `X-Forwarded-For`u da denetliyor: o başlık ancak GÜVENİLİR bir
+   vekil arkasındayken anlamlı, doğrudan açık bir sunucuda istemci onu uydurup
+   hız sınırını atlar.
+
+Test ederken kullanıcının kendi hesabı kilitlendi; sınır bellekte olduğu için
+sunucu yeniden başlatılarak temizlendi ve doğrulandı.
+
+207 test geçiyor.

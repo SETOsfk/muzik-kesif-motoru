@@ -27,6 +27,7 @@ import hashlib
 import hmac
 import secrets
 import sqlite3
+import time
 from datetime import datetime, timezone
 
 #: scrypt parametreleri. n bellek maliyetini belirler; 2**14 masaüstünde
@@ -38,6 +39,53 @@ _SCRYPT = {"n": 2 ** 14, "r": 8, "p": 1, "dklen": 32}
 #: kullanıcıyı sürekli giriş yapmaya zorlamak anlamsız.
 CEREZ_ADI = "kesif_oturum"
 OTURUM_GUN = 30
+
+
+# --------------------------------------------------------------------------- #
+# Kaba kuvvet koruması
+# --------------------------------------------------------------------------- #
+#
+# Ölçüldü (2026-09-15): sınırsız hâlde saniyede ~23 yanlış giriş denenebiliyor.
+# Yerel ağda önemsiz, internete açılınca değil.
+#
+# Bellekte tutuluyor, veritabanında değil: beş kullanıcılık tek süreçli bir
+# uygulamada kalıcılık gereksiz, ve her giriş denemesinde disk yazmak
+# saldırgana ucuz bir G/Ç yükü kapısı açardı. Süreç yeniden başlarsa sayaç
+# sıfırlanır — kabul edilen bedel.
+
+#: Pencere içindeki azami başarısız deneme ve pencere uzunluğu (saniye).
+AZAMI_DENEME = 8
+PENCERE_SN = 900
+
+_denemeler: dict[str, list[float]] = {}
+
+
+def deneme_kaydet(anahtar: str) -> None:
+    """Başarısız bir girişi işaretle."""
+    simdi = time.monotonic()
+    kayit = [t for t in _denemeler.get(anahtar, []) if simdi - t < PENCERE_SN]
+    kayit.append(simdi)
+    _denemeler[anahtar] = kayit
+
+
+def kilitli_mi(anahtar: str) -> int:
+    """Kalan kilit süresi (saniye); 0 ise serbest.
+
+    Anahtar hem IP hem e-posta olabilir ve İKİSİ de sayılmalı: yalnız IP
+    sayılırsa dağıtık deneme kaçar, yalnız e-posta sayılırsa saldırgan
+    hesapları sırayla deneyip her birinde sınırın altında kalır.
+    """
+    simdi = time.monotonic()
+    kayit = [t for t in _denemeler.get(anahtar, []) if simdi - t < PENCERE_SN]
+    _denemeler[anahtar] = kayit
+    if len(kayit) < AZAMI_DENEME:
+        return 0
+    return int(PENCERE_SN - (simdi - kayit[0])) + 1
+
+
+def denemeleri_sifirla(anahtar: str) -> None:
+    """Başarılı giriş sayacı temizler."""
+    _denemeler.pop(anahtar, None)
 
 
 def _simdi() -> str:

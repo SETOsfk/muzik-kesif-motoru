@@ -292,6 +292,51 @@ def test_servis_calisani_sayfa_onbelleklemez():
         "sayfa yanıtı önbelleğe alınıyor — kullanıcı verisi sızabilir"
 
 
+def test_kaba_kuvvet_durduruluyor():
+    """Sınırsız giriş denemesi internete açık bir sistemde kabul edilemez.
+
+    Ölçüldü (2026-09-15): sınır yokken saniyede ~23 yanlış giriş
+    denenebiliyordu. Yerel ağda önemsiz, yayına çıkınca değil.
+
+    HEM IP HEM HESAP sayılmalı: yalnız IP sayılırsa dağıtık deneme kaçar,
+    yalnız hesap sayılırsa saldırgan hesapları sırayla deneyip her birinde
+    sınırın altında kalır.
+    """
+    import tempfile
+
+    import python.hesap as H
+    from python.hesap import AZAMI_DENEME
+
+    H._denemeler.clear()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            istemci = _oturumlu_istemci(tmp)
+            istemci.cookies.clear()
+            son = None
+            for _ in range(AZAMI_DENEME + 2):
+                son = istemci.post("/giris", data={"eposta": "t@t.t",
+                                                   "parola": "yanlis"},
+                                   follow_redirects=False)
+            assert "hata=kilit" in son.headers["location"], son.headers["location"]
+    finally:
+        H._denemeler.clear()
+
+
+def test_cerez_https_ardinda_secure_olur():
+    """`secure` çerez yalnız şifreli bağlantıda gönderilir.
+
+    Varsayılan KAPALI olmak zorunda: yerelde http kullanılıyor ve açık olsaydı
+    çerez hiç gönderilmez, giriş sessizce çalışmaz hâlde kalırdı.
+    """
+    from web import sunucu
+
+    assert hasattr(sunucu, "HTTPS_ARKASINDA")
+    assert sunucu.HTTPS_ARKASINDA is False, "yerelde varsayılan kapalı olmalı"
+    # X-Forwarded-For yalnız güvenilir vekil arkasında okunmalı; aksi hâlde
+    # istemci başlığı uydurup hız sınırını atlar.
+    assert sunucu.GUVENILIR_VEKIL == sunucu.HTTPS_ARKASINDA
+
+
 for _ad, _fn in sorted(list(globals().items())):
     if _ad.startswith("test_") and callable(_fn):
         _kosul(_ad, _fn)

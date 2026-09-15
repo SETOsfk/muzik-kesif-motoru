@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 from contextvars import ContextVar
 from functools import lru_cache
@@ -49,6 +50,9 @@ from python.db import baglan, baglan_kullanici, baglan_ortak
 from python.hesap import (
     CEREZ_ADI,
     OTURUM_GUN,
+    deneme_kaydet,
+    denemeleri_sifirla,
+    kilitli_mi,
     giris_dogrula,
     kullanici_bul,
     kullanici_olustur,
@@ -83,6 +87,16 @@ ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik", "/sw.js")
 #: (Şubat 2026). Panele eklenmeyen hesap Spotify tarafında zaten giriş
 #: yapamaz; sınırı burada da uygulamak anlaşılır bir mesaj vermeyi sağlıyor.
 AZAMI_KULLANICI = 5
+
+#: Uygulama https ardında mı sunuluyor? Açıksa oturum çerezi `secure` alır
+#: (yalnız şifreli bağlantıda gönderilir) ve `X-Forwarded-For` okunur.
+#: VARSAYILAN KAPALI: yerelde http kullanılıyor ve `secure` çerez hiç
+#: gönderilmezdi — giriş sessizce çalışmaz hâle gelirdi.
+HTTPS_ARKASINDA = os.environ.get("KESIF_HTTPS", "").lower() in ("1", "true", "evet")
+
+#: `X-Forwarded-For` ancak GÜVENİLİR bir vekil arkasındayken anlamlı; aksi
+#: hâlde istemci onu uydurup hız sınırını atlar.
+GUVENILIR_VEKIL = HTTPS_ARKASINDA
 
 
 def _baglanti() -> sqlite3.Connection:
@@ -1140,7 +1154,8 @@ def _cerez_koy(yanit, jeton: str):
     `secure` YOK çünkü uygulama yerelde http üzerinden çalışıyor; https'e
     taşınırsa eklenmeli."""
     yanit.set_cookie(CEREZ_ADI, jeton, max_age=OTURUM_GUN * 86400,
-                     httponly=True, samesite="lax", path="/")
+                     httponly=True, samesite="lax", path="/",
+                     secure=HTTPS_ARKASINDA)
     return yanit
 
 
@@ -1159,17 +1174,47 @@ async def giris(istek):
     })
 
 
+def _istemci_ip(istek) -> str:
+    """İstemci adresi. Ters vekil arkasındaysa X-Forwarded-For'un İLK girdisi.
+
+    Zincirin sonraki girdileri istemci tarafından uydurulabilir; yalnız en
+    soldaki, bizim vekilimizin gördüğü adrestir — ve o da ancak GÜVENDİĞİMİZ
+    bir vekil arkasındaysak anlamlı. Doğrudan açık bir sunucuda bu başlık hiç
+    okunmamalı; `GUVENILIR_VEKIL` onu denetliyor.
+    """
+    if GUVENILIR_VEKIL:
+        iletilen = istek.headers.get("x-forwarded-for", "")
+        if iletilen:
+            return iletilen.split(",")[0].strip()
+    return istek.client.host if istek.client else "?"
+
+
 async def giris_gonder(istek):
     veri = await istek.form()
     eposta = (veri.get("eposta") or "").strip().lower()
     parola = veri.get("parola") or ""
+
+    # HEM IP HEM HESAP sayılıyor: yalnız IP sayılırsa dağıtık deneme kaçar,
+    # yalnız hesap sayılırsa saldırgan hesapları sırayla deneyip her birinde
+    # sınırın altında kalır.
+    ip = _istemci_ip(istek)
+    for anahtar in (f"ip:{ip}", f"hesap:{eposta}"):
+        kalan = kilitli_mi(anahtar)
+        if kalan:
+            return RedirectResponse(f"/giris?hata=kilit&sn={kalan}",
+                                    status_code=303)
+
     conn = _oturum_baglantisi()
     try:
         kullanici_id = giris_dogrula(conn, eposta, parola)
         if kullanici_id is None:
+            deneme_kaydet(f"ip:{ip}")
+            deneme_kaydet(f"hesap:{eposta}")
             # Tek mesaj: "kullanıcı yok" ile "parola yanlış" ayrımı hangi
             # e-postaların kayıtlı olduğunu ele verir.
             return RedirectResponse("/giris?hata=1", status_code=303)
+        denemeleri_sifirla(f"ip:{ip}")
+        denemeleri_sifirla(f"hesap:{eposta}")
         jeton = oturum_ac(conn, kullanici_id)
     finally:
         conn.close()

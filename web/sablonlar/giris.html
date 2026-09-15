@@ -11,7 +11,11 @@
     </div>
   {% endif %}
 
-  {% if hata %}
+  {% if hata == 'kilit' %}
+    <div class="kapi-hata">
+      Çok fazla başarısız deneme. Birkaç dakika sonra tekrar dene.
+    </div>
+  {% elif hata %}
     <div class="kapi-hata">E-posta ya da parola tutmadı.</div>
   {% endif %}
 
