@@ -10,7 +10,15 @@ import re
 import sqlite3
 from pathlib import Path
 
-VARSAYILAN_DB = Path("data/db/kesif.sqlite")
+#: Çok kiracılıktan ÖNCEKİ tek dosya. Yalnız göç kaynağı olarak duruyor;
+#: hiçbir komut buraya yazmamalı.
+ESKI_TEK_DB = Path("data/db/kesif.sqlite")
+
+#: Komutların varsayılanı. Çok kiracılığa geçişte buraya dokunulmadığı için
+#: CLI araçları eski dosyaya, web uygulaması kullanıcı dosyasına yazıyordu ve
+#: ikisi sessizce ayrıştı (ölçüldü: geri bildirim 15'e karşı 32). `baglan()`
+#: bu yolu görünce `baglan_kullanici`ya yönlendiriyor.
+VARSAYILAN_DB = Path("data/db/kullanici/1.sqlite")
 
 SEMA: tuple[str, ...] = (
     """
@@ -492,8 +500,23 @@ def baglan_kullanici(
     return conn
 
 def baglan(db_yolu: Path | str = VARSAYILAN_DB, *, sema: bool = True) -> sqlite3.Connection:
-    """Veritabanını aç (yoksa oluştur) ve şemayı garanti et."""
+    """Veritabanını aç (yoksa oluştur) ve şemayı garanti et.
+
+    KULLANICI VERİTABANI YOLUNA YÖNLENDİRİR. Bu koruma gerçek bir hatadan
+    geliyor (2026-09-15): `--db data/db/kullanici/1.sqlite` ile çalıştırılan
+    bir komut `baglan()`a düşüyor, o da TAM şemayı kuruyordu. Sonuç,
+    kullanıcı veritabanında paylaşımlı tabloların BOŞ gölge kopyaları oldu —
+    ve SQLite niteliksiz adı önce `main`de aradığı için bütün sorgular
+    45.899 satırlık `liste_parca` yerine boş olanı okumaya başladı.
+    Sessiz ve yıkıcı: hata vermiyor, sadece her şey boş dönüyor.
+    """
     db_yolu = Path(db_yolu)
+    try:
+        kullanici_altinda = KULLANICI_KOK.resolve() in db_yolu.resolve().parents
+    except (OSError, RuntimeError):
+        kullanici_altinda = False
+    if kullanici_altinda:
+        return baglan_kullanici(db_yolu.stem, sema=sema)
     if str(db_yolu) != ":memory:":
         db_yolu.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_yolu)

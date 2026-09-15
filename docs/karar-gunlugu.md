@@ -1689,3 +1689,82 @@ tahmin etmek kaçınılmaz olarak yanlış üretir — ek yerine «... tarafınd
 kurgusuna geçildi, ad ek almıyor ve sonuç hep doğru.
 
 203 test geçiyor.
+
+## 2026-09-15 (4) — Kümeleme gücü ölçüldü; ve vekil ölçüt ters çıktı
+
+Kullanıcı: "kümeleme yöntemimizin gücü nasıl, iyi dönütler veriyor muyuz."
+
+### Kümeleme gerçekten işe yarıyor — ve bu ölçüldü
+
+Veritabanında farklı küme sayılarıyla yapılmış çalışmalar duruyordu; aynı
+havuz ve aynı sınamayla kıyaslandı (`degerlendirme --calisma`). Böylece "c kaç
+olmalı" sorusu içsel geçerlilik indeksiyle değil ÖNERİ KALİTESİYLE cevaplandı:
+
+    c    melez @50   medyan   yüzdelik
+    2         0.18      503      0.191   ← kümeleme neredeyse yok
+    6         0.29      194      0.074
+    9         0.27      246      0.093
+    12        0.29      263      0.100
+
+c=2 her ölçütte açık ara kötü: **kümeleme hakkını veriyor.** c≥6'da öneri
+kalitesi PLATOYA giriyor; 6, 9 ve 12 arasındaki farklar n=147'de gürültü
+(bir sanatçı 0,7 puan).
+
+### Üretim boru hattı c=9 seçiyor, oysa aktif çalışma c=12
+
+Gerçek c taraması (blok ağırlıklı matris, 40 bootstrap):
+
+    c    Xie-Beni   PE     stabil
+    5      1.017   0.586    5/5
+    9      0.717   0.472    9/9    ← seçilen: tüm kümeler stabil, XB minimum
+    12     1.127   0.473   10/12
+    20     0.869   0.437   12/20
+
+c=9 hem Xie-Beni'yi minimize ediyor hem TEK tam stabil aday. Aktif çalışma
+c=12 ve 12 kümenin 10'u stabil.
+
+**Uyarı, kendi ölçümüme karşı:** ilk denememde ham parquet'ten kendi PCA'mı
+alıp taradım ve her c'de 2 albümlük dejenere küme çıktı; üretimde en küçük
+küme 13. Yani o sayılar üretimin kümelemesi DEĞİLDİ ve rapor edilmedi.
+Boru hattının kendisi çalıştırıldı.
+
+### ASIL BULGU: vekil ölçüt gerçek zevkle ters düştü
+
+Kullanıcının kararları 15'ten 32'ye çıkınca "Ne öğrendik" sayfası
+çevrimdışı ölçümle ÇELİŞEN bir şey söyledi:
+
+    erişim yolu          zevk isabeti   %90 Wilson   keşif oranı
+    ses_benzerligi              %80      [44–95]          %83
+    liste_birlikteligi          %10      [ 2–35]          %71
+
+**Wilson aralıkları çakışmıyor.** Oysa leave-one-artist-out çalma listesini
+rastgeleden 5,4 kat, sesi 1,4 kat iyi bulmuştu — sıralama TERS.
+
+Çelişki değil, vekilin sınırı ve tam olarak daha önce yazılı olan risk: gizleme
+sınaması "SAHİP OLDUĞUN sanatçıyı bulabildin mi" diye soruyor, çalma listesi
+birlikteliği de buna yakın bir şey ölçüyor (senin sanatçılarının yanında
+duranlar — çoğu zaten bildiğin komşular). Kullanıcının asıl sorusu "beğeneceğim,
+HİÇ DUYMADIĞIM sanatçı" ve ses benzerliği onu buluyor. Ses her iki GERÇEK
+ölçütte de önde: hem zevk hem keşif.
+
+`MELEZ_AGIRLIK` (2,1)'den **(1,2)'ye çevrildi** — artık ses ağırlıklı. Melez
+listesi Rammstein/Megadeth yerine Primordial, Thy Catafalque, Whitechapel,
+Orbit Culture ile açılıyor. n küçük (ses 5, liste 10 zevk kararı); kararlar
+biriktikçe yeniden bakılacak.
+
+### Yol boyunca iki sessiz hata bulundu
+
+**1. Kullanıcı veritabanında GÖLGE TABLOLAR.** `--db data/db/kullanici/1.sqlite`
+ile çalıştırılan bir komut `baglan()`a düşüyor, o da TAM şemayı kuruyordu.
+Sonuç: paylaşımlı tabloların boş kopyaları. SQLite niteliksiz adı önce
+`main`de aradığı için bütün sorgular 45.899 satırlık `liste_parca` yerine boş
+olanı okumaya başladı. Hata vermiyor, sadece her şey boş dönüyor.
+`baglan()` artık kullanıcı yolunu `baglan_kullanici`ya yönlendiriyor.
+
+**2. CLI ile web AYRI veritabanlarına bakıyordu.** `VARSAYILAN_DB` çok
+kiracılığa geçişte eski tek dosyayı göstermeye devam etti: komutlar oraya
+yazıyor, web uygulaması kullanıcı dosyasını okuyordu. Ölçüldü — geri bildirim
+eski dosyada 15, kullanıcı dosyasında 32. Varsayılan kullanıcı veritabanına
+çevrildi; eski dosya `ESKI_TEK_DB` olarak yalnız göç kaynağı.
+
+İkisi için de regresyon testi var. 205 test geçiyor.

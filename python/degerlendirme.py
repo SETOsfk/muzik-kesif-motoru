@@ -493,6 +493,7 @@ def ozet(
 def calistir(
     conn: sqlite3.Connection, *, limit: int | None = None, ayrinti: bool = False,
     kapsam: str = "eksen", olcut: str = "pmi", buzulme: float = 0.0,
+    calisma: str | None = None,
     melez_agirlik: tuple[float, float] = (1.0, 1.0), ag: bool = False,
     ag_genis: bool = False,
 ) -> dict[str, dict]:
@@ -510,7 +511,11 @@ def calistir(
     print(f"{len(anahtarlar)} sanatçı gizlenecek "
           f"(kütüphanede {len(kut)} tekil sanatçı)", file=sys.stderr)
 
-    harita = eksen_haritasi(conn) if kapsam == "eksen" else {}
+    # `calisma` verilirse O kümelemeye göre ölçülür. Farklı küme sayılarıyla
+    # yapılmış çalışmalar veritabanında duruyor; aynı havuz ve aynı sınama
+    # ile kıyaslamak, "c kaç olmalı" sorusunu içsel geçerlilik indeksiyle
+    # değil ÖNERİ KALİTESİYLE cevaplamayı sağlıyor (K19).
+    harita = eksen_haritasi(conn, calisma) if kapsam == "eksen" else {}
     if kapsam == "eksen":
         kapsanan = sum(1 for a in anahtarlar if harita.get(a))
         print(f"eksen kapsamı: {kapsanan}/{len(anahtarlar)} sanatçının "
@@ -525,7 +530,7 @@ def calistir(
         satir = conn.execute(
             "SELECT calisma_id FROM clusters ORDER BY calisma_id DESC LIMIT 1"
         ).fetchone()
-        calisma_id = satir[0] if satir else ""
+        calisma_id = calisma or (satir[0] if satir else "")
         en_iyi: dict[str, tuple[int, float]] = {}
         for album_id, kume_id, uyelik in conn.execute(
             "SELECT album_id, kume_id, uyelik FROM memberships WHERE calisma_id=?",
@@ -729,6 +734,8 @@ def main(argv: list[str] | None = None) -> int:
                              help="ağ isteyen 3 stratejiyi de ölç (önbellekten)")
     ayristirici.add_argument("--melez-agirlik", default="1,1",
                              help="liste,ses ağırlığı (örn. 2,1)")
+    ayristirici.add_argument("--calisma",
+                             help="hangi kümeleme çalışmasına göre ölçülsün")
     ayristirici.add_argument("--buzulme", type=float, default=0.0,
                              help="kanıt gücü çarpanı n/(n+k); k=0 kapalı")
     ayristirici.add_argument("--olcut", choices=("pmi", "npmi"), default="pmi",
@@ -743,7 +750,7 @@ def main(argv: list[str] | None = None) -> int:
                          kapsam=args.kapsam, olcut=args.olcut,
                          melez_agirlik=tuple(
                              float(x) for x in args.melez_agirlik.split(",")),
-                         buzulme=args.buzulme,
+                         buzulme=args.buzulme, calisma=args.calisma,
                          ag=args.ag or args.ag_genis, ag_genis=args.ag_genis)
         print(rapor(sonuc))
         if args.en_kotu:

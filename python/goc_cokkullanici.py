@@ -30,7 +30,7 @@ from pathlib import Path
 from python.db import (
     KULLANICI_KOK,
     ORTAK_TABLOLAR,
-    VARSAYILAN_DB,
+    ESKI_TEK_DB,
     VARSAYILAN_ORTAK,
     baglan_kullanici,
     kullanici_db,
@@ -79,7 +79,7 @@ def satir_tasi(kaynak: sqlite3.Connection, hedef_conn: sqlite3.Connection,
 
 
 def gocur(
-    kaynak_yolu: Path = VARSAYILAN_DB, *, ad: str = "Sertan",
+    kaynak_yolu: Path = ESKI_TEK_DB, *, ad: str = "Sertan",
     eposta: str | None = None, kuru: bool = False,
 ) -> dict[str, int]:
     if not kaynak_yolu.exists():
@@ -125,7 +125,7 @@ def gocur(
 
 def main(argv: list[str] | None = None) -> int:
     a = argparse.ArgumentParser(description=__doc__)
-    a.add_argument("--kaynak", type=Path, default=VARSAYILAN_DB)
+    a.add_argument("--kaynak", type=Path, default=ESKI_TEK_DB)
     a.add_argument("--ad", default="Sertan", help="1 numaralı kullanıcının adı")
     a.add_argument("--eposta")
     a.add_argument("--yeniden", action="store_true",

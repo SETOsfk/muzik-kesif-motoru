@@ -866,11 +866,30 @@ def ses_benzerligi(
 #:
 #:     ağırlık  tavan  @5    @10   @50   MRR    medyan
 #:     1:1       123   0.02  0.05  0.12  0.022     356
-#:     2:1       123   0.03  0.04  0.16  0.025     288   ← seçilen
+#:     2:1       123   0.03  0.04  0.16  0.025     288
 #:     3:1       123   0.02  0.04  0.16  0.022     262
 #:     5:1       123   0.01  0.05  0.14  0.025     238
 #:     npmi tek  109   0.01  0.03  0.14  0.024     159
-MELEZ_AGIRLIK = (2.0, 1.0)
+#:
+#: TERSİNE ÇEVRİLDİ (2026-09-15) ve gerekçesi çevrimdışı ölçüm DEĞİL, gerçek
+#: zevk verisi. Kullanıcının kararları biriktikçe iki sinyal ayrıştı:
+#:
+#:     erişim yolu          zevk isabeti   %90 Wilson    keşif oranı
+#:     ses_benzerligi              %80      [44–95]           %83
+#:     liste_birlikteligi          %10      [ 2–35]           %71
+#:
+#: Aralıklar ÇAKIŞMIYOR. Yani gizleme sınamasının "çalma listesi 5,4 kat,
+#: ses 1,4 kat iyi" sıralaması gerçek tercihte TERSİNE dönüyor.
+#:
+#: Çelişki değil, vekilin sınırı: gizleme sınaması "SAHİP OLDUĞUN sanatçıyı
+#: bulabildin mi" diye soruyor ve çalma listesi birlikteliği ona yakın bir şey
+#: ölçüyor (senin sanatçılarının yanında duranlar). Kullanıcının asıl sorusu
+#: ise "beğeneceğim, HİÇ DUYMADIĞIM sanatçı" ve ses benzerliği onu buluyor.
+#: Ses her iki gerçek ölçütte de önde: hem zevk hem keşif.
+#:
+#: n hâlâ küçük (ses 5, liste 10 zevk kararı). Kararlar biriktikçe yeniden
+#: bakılacak; o yüzden ağırlık sabit olarak burada duruyor, gömülü değil.
+MELEZ_AGIRLIK = (1.0, 2.0)
 
 
 def melez(

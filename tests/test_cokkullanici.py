@@ -198,6 +198,51 @@ def test_kullanici_verisi_sizmaz():
             "A'nın sanatçısı B'nin sayfasında göründü — önbellek sızıntısı"
 
 
+def test_kullanici_vtsinde_golge_tablo_olusmaz():
+    """`baglan()` kullanıcı yoluna TAM ŞEMA kurmamalı.
+
+    GERÇEK HATA (2026-09-15). `--db data/db/kullanici/1.sqlite` ile
+    çalıştırılan bir komut `baglan()`a düşüyordu ve o tam şemayı kuruyordu.
+    Sonuç, kullanıcı veritabanında paylaşımlı tabloların BOŞ gölge kopyaları
+    oldu. SQLite niteliksiz adı önce `main`de aradığı için bütün sorgular
+    45.899 satırlık `liste_parca` yerine boş olanı okumaya başladı.
+
+    Sessiz ve yıkıcı: hata vermiyor, sadece her şey boş dönüyor. Öneriler
+    kaybolur, PMI sıfırlanır, kimse sebebini anlamaz.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        D = _ortam(tmp)
+        hedef = D.KULLANICI_KOK / "7.sqlite"
+        conn = D.baglan(hedef)          # düz `baglan` — yönlendirmeli
+        try:
+            tablolar = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            golge = tablolar & D.ORTAK_TABLOLAR
+            assert not golge, f"kullanıcı vt'sinde gölge tablo: {sorted(golge)}"
+            # Ve ortak tablolar yine okunabilmeli (ATTACH üzerinden).
+            conn.execute("SELECT COUNT(*) FROM liste_parca").fetchone()
+        finally:
+            conn.close()
+
+
+def test_varsayilan_db_kullaniciya_bakar():
+    """CLI araçları ile web uygulaması AYNI veritabanını görmeli.
+
+    Çok kiracılığa geçişte `VARSAYILAN_DB` eski tek dosyayı gösteriyordu:
+    komutlar oraya yazıyor, web uygulaması kullanıcı dosyasını okuyordu ve
+    ikisi sessizce ayrıştı (ölçüldü: geri bildirim 15'e karşı 32).
+    """
+    from python.db import ESKI_TEK_DB, VARSAYILAN_DB
+
+    assert VARSAYILAN_DB != ESKI_TEK_DB
+    # `KULLANICI_KOK` ile karşılaştırılmıyor: diğer testler onu geçici dizine
+    # yönlendiriyor ve sıraya bağlı bir sınama olurdu. Yapının kendisi
+    # sınanıyor.
+    assert VARSAYILAN_DB.parent.name == "kullanici", VARSAYILAN_DB
+
+
 for _ad, _fn in sorted(list(globals().items())):
     if _ad.startswith("test_") and callable(_fn):
         _kosul(_ad, _fn)
