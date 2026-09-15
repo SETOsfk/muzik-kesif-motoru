@@ -145,6 +145,14 @@ def _calismalar() -> list[dict]:
     return list(_calismalar_onbellek(AKTIF_KULLANICI.get()))
 
 
+# Sarmalayıcılar `lru_cache` nesnesi DEĞİL, dolayısıyla `cache_clear`
+# taşımıyorlar. Çağrı yerleri (karar verme, küme adlandırma) önbelleği
+# temizliyordu ve sarmalama sonrası AttributeError ile 500 veriyordu —
+# kullanıcı "geri bildirimin kaydedilemedi" uyarısı alıyordu. İç işlevin
+# temizleyicisini dışa bağlamak, çağrı yerlerini değiştirmeden çözüyor.
+_calismalar.cache_clear = _calismalar_onbellek.cache_clear
+
+
 def _son_calisma() -> str | None:
     calismalar = _calismalar()
     return calismalar[0]["calisma_id"] if calismalar else None
@@ -168,6 +176,9 @@ def _eksen_adlari_onbellek(kullanici_id: int | None,
 
 def _eksen_adlari(calisma_id: str) -> dict[int, str]:
     return _eksen_adlari_onbellek(AKTIF_KULLANICI.get(), calisma_id)
+
+
+_eksen_adlari.cache_clear = _eksen_adlari_onbellek.cache_clear
 
 
 @lru_cache(maxsize=32)
@@ -201,6 +212,9 @@ def _boru_hatti_onbellek(kullanici_id: int | None) -> tuple[dict, ...]:
 
 def _boru_hatti() -> list[dict]:
     return list(_boru_hatti_onbellek(AKTIF_KULLANICI.get()))
+
+
+_boru_hatti.cache_clear = _boru_hatti_onbellek.cache_clear
 
 
 def _ortam(istek, **fazladan) -> dict:
