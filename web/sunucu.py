@@ -1151,8 +1151,9 @@ class OturumAraKatmani(BaseHTTPMiddleware):
 def _cerez_koy(yanit, jeton: str):
     """Oturum çerezi. `httponly` betiklerden okunmasını engeller; `samesite`
     başka sitelerin bu uygulamaya kimlikli istek attırmasını (CSRF) zorlaştırır.
-    `secure` YOK çünkü uygulama yerelde http üzerinden çalışıyor; https'e
-    taşınırsa eklenmeli."""
+    `secure` bayrağı `HTTPS_ARKASINDA` (ortam: KESIF_HTTPS) ile açılıyor;
+    yerelde http olduğu için varsayılanı kapalı, açık olsaydı çerez hiç
+    gönderilmez ve giriş sessizce çalışmazdı."""
     yanit.set_cookie(CEREZ_ADI, jeton, max_age=OTURUM_GUN * 86400,
                      httponly=True, samesite="lax", path="/",
                      secure=HTTPS_ARKASINDA)
@@ -1286,8 +1287,100 @@ def _spotify_hazir() -> bool:
     Yapılandırılmadan gösterilirse kullanıcı tıklar ve hata görür; düğmenin
     varlığı bir söz veriyor, tutulamayacak söz verilmemeli.
     """
-    from python.onbellek import _env
-    return bool(_env("SPOTIFY_CLIENT_ID") and _env("SPOTIFY_CLIENT_SECRET"))
+    from python.spotify import yapilandirildi_mi
+    return yapilandirildi_mi()
+
+
+async def spotify_baslat(istek):
+    """Kullanıcıyı Spotify'ın yetki sayfasına gönder."""
+    from python.spotify import SpotifyHatasi, yetki_baslat
+    try:
+        url, _ = yetki_baslat()
+    except SpotifyHatasi:
+        return RedirectResponse("/giris?hata=spotify_yok", status_code=303)
+    # 303 değil 302: Spotify'a giden bu yönlendirme bir form sonucu değil.
+    return RedirectResponse(url, status_code=302)
+
+
+async def spotify_donus(istek):
+    """Spotify'dan dönüş — hesabı bul, bağla ya da aç, oturumu başlat.
+
+    Dört durum var ve sıralamaları önemli:
+
+    1. **Zaten girişli** → Spotify kimliğini bu hesaba bağla (`/basla`'daki
+       "Spotify hesabını bağla" düğmesi buraya düşüyor).
+    2. **Bu Spotify kimliği kayıtlı** → o hesaba gir.
+    3. **E-posta kayıtlı** → hesapları ikizlemek yerine Spotify'ı ona bağla.
+       Varsayım: Spotify e-postayı doğrulamış oluyor. Doğrulanmamış bir
+       e-posta ile hesap ele geçirilebilirdi; beş kullanıcılık kişisel bir
+       uygulamada bu kabul edilen risk, açık uçlu bir serviste olmazdı.
+    4. **Hiçbiri** → yeni hesap (beş kullanıcı sınırına takılmıyorsa).
+    """
+    from python.hesap import spotify_bagla
+    from requests import RequestException
+
+    from python.spotify import SpotifyHatasi, ben, durum_gecerli_mi, jeton_al
+
+    if istek.query_params.get("error"):
+        # Kullanıcı "Agree" yerine "Cancel" dedi — hata değil, karar.
+        return RedirectResponse("/giris?hata=spotify_iptal", status_code=303)
+
+    if not durum_gecerli_mi(istek.query_params.get("state")):
+        # CSRF ya da çok beklemiş sekme. İkisini ayırmıyoruz: saldırgana
+        # hangisine takıldığını söylemenin faydası yok.
+        return RedirectResponse("/giris?hata=spotify_durum", status_code=303)
+
+    kod = istek.query_params.get("code")
+    if not kod:
+        return RedirectResponse("/giris?hata=spotify", status_code=303)
+
+    try:
+        jetonlar = jeton_al(kod)
+        kimlik = ben(jetonlar["access_token"])
+    except (SpotifyHatasi, KeyError, RequestException) as hata:
+        # Gövde kullanıcıya GÖSTERİLMİYOR: jeton taşımasa da istemciye
+        # sunucu içi ayrıntı sızdırmanın faydası yok.
+        print(f"[spotify] {type(hata).__name__}: {hata}")
+        return RedirectResponse("/giris?hata=spotify", status_code=303)
+
+    if not kimlik["spotify_id"]:
+        return RedirectResponse("/giris?hata=spotify", status_code=303)
+
+    yenile = jetonlar.get("refresh_token")
+    mevcut = AKTIF_KULLANICI.get()
+    conn = _oturum_baglantisi()
+    try:
+        if mevcut is not None:                                  # 1
+            baskasinda = kullanici_bul(conn, spotify_id=kimlik["spotify_id"])
+            if baskasinda is not None and baskasinda["kullanici_id"] != mevcut:
+                return RedirectResponse("/basla?hata=spotify_baskasinda",
+                                        status_code=303)
+            spotify_bagla(conn, mevcut, kimlik["spotify_id"], yenile)
+            return RedirectResponse("/basla?spotify=bagli", status_code=303)
+
+        kullanici = kullanici_bul(conn, spotify_id=kimlik["spotify_id"])   # 2
+        if kullanici is None and kimlik["eposta"]:                        # 3
+            kullanici = kullanici_bul(conn, eposta=kimlik["eposta"])
+            if kullanici is not None:
+                spotify_bagla(conn, kullanici["kullanici_id"],
+                              kimlik["spotify_id"], yenile)
+
+        if kullanici is not None:
+            kullanici_id = kullanici["kullanici_id"]
+            if yenile:
+                spotify_bagla(conn, kullanici_id, kimlik["spotify_id"], yenile)
+            hedef = "/oneriler"
+        else:                                                              # 4
+            if kullanici_sayisi(conn) >= AZAMI_KULLANICI:
+                return RedirectResponse("/giris?hata=dolu", status_code=303)
+            kullanici_id = kullanici_olustur(
+                conn, kimlik["ad"], eposta=kimlik["eposta"],
+                spotify_id=kimlik["spotify_id"], spotify_yenile=yenile)
+            hedef = "/basla"
+        jeton = oturum_ac(conn, kullanici_id)
+    finally:
+        conn.close()
+    return _cerez_koy(RedirectResponse(hedef, status_code=303), jeton)
 
 
 async def basla(istek):
@@ -1311,6 +1404,8 @@ async def basla(istek):
         "ad": kullanici["ad"] if kullanici else "",
         "spotify_bagli": bool(kullanici and kullanici["spotify_id"]),
         "spotify_hazir": _spotify_hazir(),
+        "hata": istek.query_params.get("hata"),
+        "bagli_yeni": istek.query_params.get("spotify") == "bagli",
     })
 
 ROTALAR = [
@@ -1332,6 +1427,8 @@ ROTALAR = [
     Route("/uyelik", uyelik),
     Route("/uyelik", uyelik_gonder, methods=["POST"]),
     Route("/cikis", cikis, methods=["GET", "POST"]),
+    Route("/giris/spotify", spotify_baslat),
+    Route("/giris/spotify/donus", spotify_donus),
     Route("/saglik", saglik),
     # Servis çalışanının KAPSAMI bulunduğu dizinle sınırlı. `/statik/sw.js`
     # yalnız `/statik/*` isteklerini görebilirdi; uygulamanın tamamını

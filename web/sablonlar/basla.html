@@ -7,6 +7,14 @@
      bilmesi gerekiyor — aşağıdaki yollardan biri yeter.</p>
 </div>
 
+{% if hata == 'spotify_baskasinda' %}
+<div class="kapi-hata">
+  Bu Spotify hesabı başka bir kullanıcıya bağlı. Önce oradan çözülmesi gerekir.
+</div>
+{% elif bagli_yeni %}
+<div class="kapi-not">Spotify bağlandı ✓</div>
+{% endif %}
+
 <div class="baslangic">
   {% if spotify_hazir and not spotify_bagli %}
   <article class="adim">
@@ -18,8 +26,9 @@
   {% elif spotify_bagli %}
   <article class="adim">
     <h2>Spotify bağlı ✓</h2>
-    <p>Kütüphaneni okuyorum. Bu birkaç dakika sürebilir — önizlemelerden
-       ses profili çıkarmak zaman alıyor.</p>
+    <p>Hesabın bağlandı. Kütüphaneni okuyup eksenlerini çıkaran aktarım
+       henüz hazır değil — o gelene kadar aşağıdaki yollardan biriyle
+       başlayabilirsin.</p>
   </article>
   {% endif %}
 

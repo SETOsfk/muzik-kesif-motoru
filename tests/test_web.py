@@ -337,6 +337,223 @@ def test_cerez_https_ardinda_secure_olur():
     assert sunucu.GUVENILIR_VEKIL == sunucu.HTTPS_ARKASINDA
 
 
+# --------------------------------------------------------------------------- #
+# Spotify OAuth
+# --------------------------------------------------------------------------- #
+
+def _spotify_ortami(tmp):
+    """Geçici veritabanı + yapılandırılmış Spotify anahtarları."""
+    import os
+    from pathlib import Path as _P
+
+    from starlette.testclient import TestClient
+
+    import python.db as D
+
+    os.environ["SPOTIFY_CLIENT_ID"] = "sinama_kimlik"
+    os.environ["SPOTIFY_CLIENT_SECRET"] = "sinama_gizli"
+    kok = _P(tmp)
+    D.KULLANICI_KOK = kok / "kullanici"
+    D.VARSAYILAN_ORTAK = kok / "ortak.sqlite"
+    D.baglan_ortak().close()          # şema kurulsun
+    from web.sunucu import uygulama
+    return TestClient(uygulama)
+
+
+def test_spotify_dugmesi_404_vermiyor():
+    """Giriş sayfası /giris/spotify sözü veriyor; sözün karşılığı olmalı.
+
+    Bu test bir gerileme kilidi: düğme şablonda vardı ama rota YOKTU
+    (ölçüldü 2026-09-15, 404). Tutulamayacak söz verilmemeli.
+    """
+    import tempfile
+    from urllib.parse import parse_qs, urlparse
+
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci = _spotify_ortami(tmp)
+        yanit = istemci.get("/giris/spotify", follow_redirects=False)
+        assert yanit.status_code == 302, yanit.status_code
+        adres = urlparse(yanit.headers["location"])
+        assert adres.netloc == "accounts.spotify.com", adres.netloc
+        sorgu = parse_qs(adres.query)
+        assert sorgu["response_type"] == ["code"]
+        assert sorgu["state"][0], "state yok — CSRF açık"
+        assert len(sorgu["state"][0]) >= 32, "state tahmin edilebilecek kadar kısa"
+
+
+def test_spotify_yalniz_okuma_kapsami_istiyor():
+    """Kapsam genişlemesi sessizce olur. Yazma kapsamı İSTENMEMELİ.
+
+    Uygulama Spotify'da hiçbir şey değiştirmiyor; playlist-modify gibi bir
+    kapsam istenirse kullanıcı onay ekranında haklı olarak duraklar.
+    """
+    from python.spotify import KAPSAMLAR
+
+    for kapsam in KAPSAMLAR:
+        assert "modify" not in kapsam and "write" not in kapsam, kapsam
+    assert set(KAPSAMLAR) == {
+        "user-read-email", "user-library-read", "user-top-read",
+        "user-read-recently-played"}, KAPSAMLAR
+
+
+def test_spotify_durumu_tek_kullanimlik():
+    """Aynı state ikinci kez geçerse yeniden oynatma (replay) mümkün olur."""
+    import python.spotify as S
+
+    S._durumlar.clear()
+    _, durum = S.yetki_baslat()
+    assert S.durum_gecerli_mi(durum) is True
+    assert S.durum_gecerli_mi(durum) is False, "state tüketilmedi"
+    assert S.durum_gecerli_mi("uydurma") is False
+
+
+def test_spotify_durumsuz_donus_oturum_acmaz():
+    """State denetimi atlanırsa saldırgan kendi kodunu kurbanın oturumuna
+    enjekte edebilir. Dönüş kesinlikle çerez bırakmamalı."""
+    import tempfile
+
+    from python.hesap import CEREZ_ADI
+
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci = _spotify_ortami(tmp)
+        yanit = istemci.get("/giris/spotify/donus?code=abc&state=sahte",
+                            follow_redirects=False)
+        assert yanit.status_code == 303
+        assert "hata=spotify_durum" in yanit.headers["location"]
+        assert CEREZ_ADI not in yanit.cookies, "oturum açıldı — state işe yaramıyor"
+
+
+def test_spotify_iptali_hata_degil():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci = _spotify_ortami(tmp)
+        yanit = istemci.get("/giris/spotify/donus?error=access_denied&state=x",
+                            follow_redirects=False)
+        assert "hata=spotify_iptal" in yanit.headers["location"]
+
+
+def _sahte_spotify(spotify_id="sp_1", eposta="yeni@ornek.com", ad="Deneme"):
+    import python.spotify as S
+
+    S.jeton_al = lambda kod: {"access_token": "erisim",
+                              "refresh_token": "yenile"}
+    S.ben = lambda erisim: {"spotify_id": spotify_id, "ad": ad,
+                            "eposta": eposta}
+
+
+def test_spotify_ilk_girisde_hesap_aciliyor():
+    import tempfile
+
+    import python.spotify as S
+    from python.hesap import CEREZ_ADI, kullanici_bul
+
+    asil = (S.jeton_al, S.ben)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            istemci = _spotify_ortami(tmp)
+            _sahte_spotify()
+            _, durum = S.yetki_baslat()
+            yanit = istemci.get(f"/giris/spotify/donus?code=k&state={durum}",
+                                follow_redirects=False)
+            assert yanit.headers["location"] == "/basla", yanit.headers["location"]
+            assert CEREZ_ADI in yanit.cookies, "oturum açılmadı"
+
+            import python.db as D
+            conn = D.baglan_ortak()
+            try:
+                k = kullanici_bul(conn, spotify_id="sp_1")
+                assert k is not None, "hesap açılmadı"
+                assert k["eposta"] == "yeni@ornek.com"
+            finally:
+                conn.close()
+    finally:
+        S.jeton_al, S.ben = asil
+
+
+def test_spotify_ayni_epostayi_ikizlemiyor():
+    """E-postayla açılmış hesap sonradan Spotify'a bağlanırsa AYNI hesap
+    olmalı. İkizlenirse kullanıcının kütüphanesi ve geri bildirimleri iki
+    hesaba bölünür — sessiz ve geri dönüşü zahmetli bir veri kaybı."""
+    import tempfile
+
+    import python.db as D
+    import python.spotify as S
+    from python.hesap import kullanici_olustur, kullanici_sayisi
+
+    asil = (S.jeton_al, S.ben)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            istemci = _spotify_ortami(tmp)
+            conn = D.baglan_ortak()
+            kid = kullanici_olustur(conn, "Seto", eposta="ayni@ornek.com",
+                                    parola="parola123")
+            conn.close()
+
+            _sahte_spotify(spotify_id="sp_2", eposta="ayni@ornek.com")
+            _, durum = S.yetki_baslat()
+            yanit = istemci.get(f"/giris/spotify/donus?code=k&state={durum}",
+                                follow_redirects=False)
+            assert yanit.headers["location"] == "/oneriler"
+
+            conn = D.baglan_ortak()
+            try:
+                assert kullanici_sayisi(conn) == 1, "hesap ikizlendi"
+                satir = conn.execute(
+                    "SELECT spotify_id, spotify_yenile FROM kullanici "
+                    "WHERE kullanici_id = ?", (kid,)).fetchone()
+                assert satir[0] == "sp_2", "Spotify kimliği bağlanmadı"
+                assert satir[1] == "yenile", "yenileme jetonu saklanmadı"
+            finally:
+                conn.close()
+    finally:
+        S.jeton_al, S.ben = asil
+
+
+def test_spotify_bes_kullanici_sinirini_asmiyor():
+    """Spotify Development Mode beş yetkili hesap taşıyor. Altıncı hesabın
+    burada değil, Spotify tarafında anlaşılmaz bir hatayla durması kötü."""
+    import tempfile
+
+    import python.db as D
+    import python.spotify as S
+    from python.hesap import kullanici_olustur
+    from web.sunucu import AZAMI_KULLANICI
+
+    asil = (S.jeton_al, S.ben)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            istemci = _spotify_ortami(tmp)
+            conn = D.baglan_ortak()
+            for i in range(AZAMI_KULLANICI):
+                kullanici_olustur(conn, f"k{i}", eposta=f"k{i}@o.com",
+                                  parola="parola123")
+            conn.close()
+
+            _sahte_spotify(spotify_id="sp_fazla", eposta="fazla@o.com")
+            _, durum = S.yetki_baslat()
+            yanit = istemci.get(f"/giris/spotify/donus?code=k&state={durum}",
+                                follow_redirects=False)
+            assert "hata=dolu" in yanit.headers["location"], \
+                yanit.headers["location"]
+    finally:
+        S.jeton_al, S.ben = asil
+
+
+def test_spotify_paylasilan_onbellegi_kullanmiyor():
+    """`onbellek.ApiIstemci` dosyayı YOL+PARAMETRE ile adlandırıyor;
+    Authorization başlığı anahtara girmiyor. Spotify'da her istek kullanıcıya
+    özel olduğu için iki kullanıcının /v1/me çağrısı aynı dosyaya düşer ve
+    biri ötekinin kütüphanesini görür. Bu, çok kullanıcılığa geçerken dört
+    `lru_cache` işlevinde yakalanan sızıntının aynısı.
+    """
+    from pathlib import Path as _P
+
+    kaynak = (_P(__file__).resolve().parents[1] / "python" / "spotify.py").read_text()
+    assert "ApiIstemci" not in kaynak.split('"""', 2)[2], \
+        "Spotify istekleri paylaşılan disk önbelleğinden geçiyor"
+
+
 for _ad, _fn in sorted(list(globals().items())):
     if _ad.startswith("test_") and callable(_fn):
         _kosul(_ad, _fn)

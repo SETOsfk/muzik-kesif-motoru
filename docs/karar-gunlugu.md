@@ -1804,3 +1804,96 @@ Test ederken kullanıcının kendi hesabı kilitlendi; sınır bellekte olduğu 
 sunucu yeniden başlatılarak temizlendi ve doğrulandı.
 
 207 test geçiyor.
+
+---
+
+## 2026-09-15 — Dağıtım ayak izi: 1,4 GB değil, 47 MB
+
+Oracle Cloud'a geçiş "bir oturumdan fazla sürer" diye anlatılmıştı; gerekçe
+1,4 GB'lık gömü havuzunu taşımak ve ARM'de torch kurmaktı. **İkisi de
+yanlıştı.** Ölçüldü:
+
+| Klasör | Boyut | Sunumda gerekli mi |
+|---|---|---|
+| `data/cache/stemler` | 1,1 GB | hayır — demucs çıktısı, çevrimdışı hat |
+| `data/dis/fma_metadata` | 1,5 GB | hayır — çevrimdışı |
+| `ortak.sqlite` + `kullanici/` | 29 MB | evet |
+| `data/cache/clap` + `clap_parca` | 18 MB | evet |
+
+`sys.modules["torch"] = None` konup `web.sunucu` içe aktarıldı: sorunsuz
+geçti. `etiket_clap.py`'de torch içe aktarmaları işlev gövdelerinin içinde,
+yalnız gömü ÜRETİLİRKEN çalışıyor. Sunucuda yüklenen üçüncü parti: starlette,
+jinja2, numpy, pandas, pyarrow. İçe aktarma sonrası tepe bellek **108 MB**.
+
+Ders: "hangi veri üretim için, hangisi sunum için" ayrımı yapılmadan dağıtım
+maliyeti tahmin edilemiyor. Tahmin, gerçeğin ~30 katıydı.
+
+**Streamlit Cloud neden hâlâ olmaz** (soruldu, ölçüldü): (1) yalnız
+`streamlit run` çalıştırır, Starlette/uvicorn barındıramaz — dönmek arayüzü
+baştan yazmak ve çalan önizlemenin kesilmesi demek, ki Streamlit'i bırakma
+sebebi buydu; (2) dağıtım herkese açık depodan, veritabanları git'e girmiyor;
+(3) kalıcı disk yok, her yeniden başlatmada geri bildirimler uçar.
+
+**Asıl kısıt boyut değil, diskin kalıcılığı.** Ücretsiz konteyner
+platformlarının (Render free, HF Spaces free, Streamlit Cloud) diski geçici.
+Her 👍/👎 SQLite'a yazılıyor; kalıcı disk yoksa öğrenilen zevk sıfırlanır.
+Turso gibi barındırılan SQLite ise çok kiracılığın belkemiğini kırar: 262
+sorgu noktasının değişmeden çalışmasının sebebi `ATTACH` ile isim
+çözümlemesiydi.
+
+Karar: yayınlama ertelendi, motor geliştirmeye devam.
+
+---
+
+## 2026-09-15 — Spotify OAuth: verilen söz tutuldu
+
+`giris.html` ve `basla.html` "Spotify ile bağlan" düğmesi gösteriyordu ve
+`_spotify_hazir()` anahtarlar dolu olduğu için True dönüyordu. Düğme
+`/giris/spotify`'a gidiyordu — **o rota yoktu, 404** (ölçüldü). Şema
+(`kullanici.spotify_id`, `spotify_yenile`) ve `hesap.spotify_bagla` zaten
+hazırdı; eksik olan tek şey akıştı.
+
+### `onbellek.ApiIstemci` neden kullanılmadı
+
+`ApiIstemci._dosya()` önbellek adını **yol + parametre** özetinden üretiyor;
+`Authorization` başlığı anahtara girmiyor. Spotify'da her istek kullanıcıya
+özel: iki kullanıcının `/v1/me` çağrısı aynı dosyaya düşer ve biri ötekinin
+kütüphanesini görürdü. Bu, çok kullanıcılığa geçerken dört `lru_cache`
+işlevinde yakalanan sızıntının tıpatıp aynısı — aynı hata iki katmanda.
+`python/spotify.py` önbelleksiz, doğrudan `requests` kullanıyor; bir test
+kaynak koda bakıp `ApiIstemci`nin geri sızmadığını denetliyor.
+
+### PKCE değil klasik akış
+
+Sunucu gizli anahtarı saklayabiliyor, yani "confidential client"; klasik
+Authorization Code + kriptografik `state` bu durumda yeterli ve Spotify'ın en
+iyi belgelenmiş yolu. PKCE OAuth 2.1 ruhuna daha uygun olurdu ama **gerçek bir
+Spotify girişini sınayamıyorum** (kullanıcı adına parola giremem); belgelenmemiş
+bir bileşimin sınanmamış hâlde kalması, kazandıracağından fazlasını riske atar.
+
+`state` tek kullanımlık: `durum_gecerli_mi()` sözlükten `pop` ediyor. Aksi
+hâlde yeniden oynatma (replay) mümkün olurdu.
+
+### Kapsamlar
+
+`user-read-email`, `user-library-read`, `user-top-read`,
+`user-read-recently-played`. Yazma kapsamı yok ve bir test bunu kilitliyor —
+kapsam genişlemesi sessizce olur, `playlist-modify` gibi bir istek onay
+ekranında kullanıcıyı haklı olarak duraklatır.
+
+E-posta şunun için: kullanıcı önce e-postayla hesap açıp sonra Spotify'a
+bağlanırsa iki hesabı **ikizlemek yerine** aynı hesaba bağlamak gerekiyor.
+İkizlenirse kütüphane ve geri bildirimler ikiye bölünür — sessiz ve geri
+dönüşü zahmetli bir kayıp. Varsayım: Spotify e-postayı doğrulamış oluyor.
+Açık uçlu bir serviste bu varsayım kabul edilemezdi; beş kullanıcılık kişisel
+bir uygulamada kabul edilen risk.
+
+### Dürüstlük düzeltmesi
+
+`basla.html` "Kütüphaneni okuyorum. Bu birkaç dakika sürebilir" diyordu —
+aktarım hattı henüz yazılmadığı için **doğru değildi**. Metin, hesabın
+bağlandığını ve aktarımın henüz hazır olmadığını söyleyecek şekilde
+değiştirildi. Tutulamayacak söz verilmemeli; 404 veren düğme de aynı kuralın
+ihlaliydi.
+
+216 test geçiyor (9 yeni).

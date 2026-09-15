@@ -15,6 +15,20 @@
     <div class="kapi-hata">
       Çok fazla başarısız deneme. Birkaç dakika sonra tekrar dene.
     </div>
+  {% elif hata == 'dolu' %}
+    <div class="kapi-hata">
+      Beş kullanıcılık kontenjan dolu. Yeni hesap açılamıyor.
+    </div>
+  {% elif hata == 'spotify_iptal' %}
+    <div class="kapi-hata">Spotify bağlantısını sen iptal ettin. Sorun yok.</div>
+  {% elif hata == 'spotify_durum' %}
+    <div class="kapi-hata">
+      Spotify turu zaman aşımına uğradı. Düğmeye yeniden bas.
+    </div>
+  {% elif hata == 'spotify_yok' %}
+    <div class="kapi-hata">Spotify bağlantısı bu sunucuda yapılandırılmamış.</div>
+  {% elif hata == 'spotify' %}
+    <div class="kapi-hata">Spotify'a bağlanamadım. Birazdan tekrar dene.</div>
   {% elif hata %}
     <div class="kapi-hata">E-posta ya da parola tutmadı.</div>
   {% endif %}
