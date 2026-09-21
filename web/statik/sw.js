@@ -6,7 +6,11 @@
  * hatasının (2026-09-15) tarayıcı tarafındaki eşi. O yüzden strateji
  * "önce ağ", ve çevrimdışıyken yalnız statik dosyalar ile bir bilgi sayfası.
  */
-const SURUM = "kesif-v1";
+// SURUM değişince eski önbellek `activate`'te silinir. v1 statik dosyaları
+// ÖNCE ÖNBELLEKTEN veriyordu ve hiç tazelemiyordu: SW'yi bir kez kurmuş
+// telefon uygulama.js/stil.css'in eski hâlinde sonsuza dek kalıyordu
+// (2026-09-21'de aktarım ekranı ve eşleştirme denetimi eklenince fark edildi).
+const SURUM = "kesif-v2";
 const KABUK = [
   "/statik/stil.css",
   "/statik/uygulama.js",
@@ -34,14 +38,23 @@ self.addEventListener("fetch", (olay) => {
   const url = new URL(istek.url);
   if (url.origin !== self.location.origin) return;
 
-  // Yalnız statik dosyalar önbellekten karşılanabilir.
+  // Statik dosyalar: ÖNCE AĞ, bağlantı yoksa önbellek. "Önce önbellek"
+  // bayat dosyayı sonsuza dek sunuyordu; "bayatken sun, arkada tazele"
+  // ise yeni HTML'i eski JS ile eşleştirebiliyor. Dosyalar küçük ve sunucu
+  // yerel — ağ turunun bedeli önemsiz, tutarlılık önemli.
   if (url.pathname.startsWith("/statik/")) {
     olay.respondWith(
-      caches.match(istek).then((v) => v || fetch(istek).then((y) => {
-        const kopya = y.clone();
-        caches.open(SURUM).then((c) => c.put(istek, kopya));
+      fetch(istek).then((y) => {
+        if (y.ok) {
+          const kopya = y.clone();
+          caches.open(SURUM).then((c) => c.put(istek, kopya));
+        }
         return y;
-      }))
+      // Önce BİREBİR (en son ağdan alınan `?v=<mtime>` kopyası), yoksa
+      // sürümsüz kabuk. Doğrudan ignoreSearch ilk eşleşeni, yani kurulumda
+      // önbelleklenen ESKİ kabuğu döndürüyordu (sahte SW ortamında ölçüldü).
+      }).catch(() => caches.match(istek).then(
+        (v) => v || caches.match(istek, { ignoreSearch: true })))
     );
     return;
   }

@@ -266,12 +266,16 @@ def test_kaynasma_bos_listeye_dayanir():
     assert melez_sirala([[], []]) == []
 
 
-for _ad, _fn in sorted(list(globals().items())):
-    if _ad.startswith("test_") and callable(_fn):
-        _kosul(_ad, _fn)
+# Betik olarak çalıştırma (`python tests/x.py`). Koşulsuz olsaydı pytest
+# dosyayı TOPLARKEN tüm testleri fixture'sız bir kez daha koşardı —
+# 2026-09-21'de gerçek .env'ye şifre anahtarı yazdırdı.
+if __name__ == "__main__":
+    for _ad, _fn in sorted(list(globals().items())):
+        if _ad.startswith("test_") and callable(_fn):
+            _kosul(_ad, _fn)
 
-print("—" * 40)
-if _kalan:
-    print(f"{len(_kalan)} test kaldı")
-    raise SystemExit(1)
-print("tüm testler geçti")
+    print("—" * 40)
+    if _kalan:
+        print(f"{len(_kalan)} test kaldı")
+        raise SystemExit(1)
+    print("tüm testler geçti")

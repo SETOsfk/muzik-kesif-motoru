@@ -382,12 +382,23 @@ ul.madde strong { color: var(--metin); }
 .kapi-ipucu { color: var(--metin-3); font-size: .85em; line-height: 1.5; margin: .7rem 0 0; }
 
 /* Karşılama ekranı — hesabı yeni, kütüphanesi boş kullanıcı için. */
-.baslangic { display: grid; gap: 1rem; max-width: 46rem; }
+/* minmax(0, 1fr): grid öğesi varsayılan `min-width: auto` ile en geniş
+   içeriğine (uzun <pre> komutu) kadar büyüyüp 375 px'de sayfayı taşırıyordu. */
+.baslangic { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; max-width: 46rem; }
 .adim { background: var(--yuzey); border: 1px solid var(--kenar); border-radius: 10px; padding: 1.1rem 1.3rem; }
 .adim h2 { font-size: 1.05rem; margin: 0 0 .5rem; display: flex; align-items: center; gap: .6rem; }
 .adim p { margin: 0 0 .7rem; color: var(--metin-2); line-height: 1.55; }
 .adim pre { background: var(--yuzey-2); padding: .6rem .8rem; border-radius: 6px; overflow-x: auto; font-size: .85em; margin: 0; }
 .adim .spotify-dugme { display: inline-flex; }
+.adim button.spotify-dugme { border: 0; cursor: pointer; font-size: 1rem; }
+.asamalar { margin: .2rem 0 .8rem; padding-left: 1.3rem; color: var(--metin-3); line-height: 1.9; }
+.asamalar li.bitti { color: var(--metin-2); }
+.asamalar li.bitti::marker { content: "✓  "; color: var(--yesil); }
+.asamalar li.simdi { color: var(--metin); font-weight: 600; }
+.asamalar .sayac { font-weight: 400; color: var(--metin-3); margin-left: .4rem; font-variant-numeric: tabular-nums; }
+.neler-eksik { margin-top: .9rem; font-size: .9em; }
+.neler-eksik summary { cursor: pointer; color: var(--metin-2); }
+.neler-eksik p { margin: .6rem 0 0; }
 
 /* --------------------------------------------------------------------- */
 /* TELEFON — alt şerit gezinti                                            */

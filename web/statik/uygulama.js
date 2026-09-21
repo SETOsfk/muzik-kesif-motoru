@@ -76,11 +76,17 @@ document.addEventListener('click', async (olay) => {
   const kart = dugme.closest('.aday');
   const durum = kart.querySelector('.durum');
   dugme.disabled = true;
-  await fetch('/api/eslestir', {
+  const yanit = await fetch('/api/eslestir', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ album_id: dugme.dataset.album, mbid: dugme.dataset.mbid }),
   });
+  // Yanıta bakmadan «bağlandı» yazmak tutulmayan bir söz olurdu.
+  if (!yanit.ok) {
+    durum.textContent = 'kaydedilemedi';
+    dugme.disabled = false;
+    return;
+  }
   durum.textContent = dugme.dataset.mbid === '__yok__' ? 'karşılığı yok işaretlendi' : 'bağlandı';
   kart.classList.add('karar-verildi');
 });
@@ -134,3 +140,23 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   });
 }
+
+// Aktarım ilerlemesi (/basla). Sayfa sunucuda çiziliyor; burada yalnız
+// sayaç güncelleniyor, aşama değişince ya da iş bitince sayfa yeniden
+// yükleniyor ki metin sunucunun gördüğüyle aynı kalsın.
+(function () {
+  const kutu = document.getElementById("aktarim");
+  if (!kutu || kutu.dataset.calisiyor !== "evet") return;
+  let asama = null;
+  async function yokla() {
+    try {
+      const d = await (await fetch("/api/aktar/durum", { cache: "no-store" })).json();
+      if (asama === null) asama = d.asama;
+      if (!d.calisiyor || d.asama !== asama) { location.reload(); return; }
+      const sayac = document.getElementById("aktarim-sayac");
+      if (sayac && d.toplam) sayac.textContent = `${d.adim}/${d.toplam}`;
+    } catch (_) { /* ağ kesintisi: bir sonraki turda yeniden dene */ }
+    setTimeout(yokla, 4000);
+  }
+  setTimeout(yokla, 4000);
+})();

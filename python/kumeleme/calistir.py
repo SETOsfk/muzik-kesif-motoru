@@ -28,7 +28,7 @@ import pandas as pd
 from python.db import baglan
 from python.kumeleme.ayar import VARSAYILAN, Ayar
 from python.kumeleme.boyut_indirgeme import blok_ozeti, bloklari_agirlikla, boyut_indir
-from python.kumeleme.fcm import c_tara, en_iyi_c
+from python.kumeleme.fcm import c_tara, en_ince_stabil_c, en_iyi_c
 from python.kumeleme.stabilite import bootstrap_jaccard
 from python.kumeleme.temsilciler import kume_profili, ortusen_albumler, temsilci_sec
 
@@ -167,11 +167,15 @@ def calistir(ayar: Ayar, *, kuru: bool = False, sessiz: bool = False) -> dict:
             f"{int(on_stabilite.stabil_mi.sum()):>4}/{tarama.c:<4} {boyutlar.min():>9}"
         )
 
-    secilen = en_iyi_c(taramalar, stabil_oranlar)
-    yaz(
-        f"Seçilen c = {secilen.c} — tüm kümeleri stabil olan adaylar arasında "
-        f"Xie-Beni minimumu"
-    )
+    if ayar.c_secimi == "en_ince_stabil":
+        secilen = en_ince_stabil_c(taramalar, stabil_oranlar)
+        yaz(f"Seçilen c = {secilen.c} — tüm kümeleri stabil olan en ince bölme")
+    else:
+        secilen = en_iyi_c(taramalar, stabil_oranlar)
+        yaz(
+            f"Seçilen c = {secilen.c} — tüm kümeleri stabil olan adaylar arasında "
+            f"Xie-Beni minimumu"
+        )
 
     stabilite = bootstrap_jaccard(
         indirgeme.X,

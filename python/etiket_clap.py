@@ -139,6 +139,49 @@ def _yukle():
     return _MODEL, _ISLEMCI
 
 
+def klip_gomusu(y: np.ndarray) -> np.ndarray:
+    """48 kHz tek kanal sesten birim uzunluklu 512 boyutlu CLAP gömüsü.
+
+    `get_audio_features(...).pooler_output` ZATEN yansıtılmış 512 boyutlu
+    gömü — üstüne `audio_projection` uygulamak (768→512) boyut hatası veriyor.
+    """
+    model, islemci = _yukle()
+    girdi = islemci(audio=y, sampling_rate=CLAP_ORNEKLEME, return_tensors="pt")
+    e = model.get_audio_features(**girdi).pooler_output
+    e = (e / e.norm(dim=-1, keepdim=True)).squeeze(0)
+    return e.cpu().numpy().astype("float32")
+
+
+def onizleme_gomusu(url: str) -> np.ndarray | None:
+    """Bir önizleme URL'sini indirip göm. Klip bir saniyeden kısaysa None.
+
+    URL TAZE olmalı: Deezer imzaları kısa ömürlü (bkz. `PARCA_GOMU` notu).
+    Geçici dosya şart — librosa mp3'ü bellekten değil yoldan okuyor.
+    """
+    import tempfile
+
+    import librosa
+    import requests
+
+    # Tek yeniden deneme: ölçüldü, Deezer CDN'i arada bir aktarımı yarıda
+    # kesiyor (IncompleteRead). İkinci deneme de düşerse hata yukarı çıkar.
+    for deneme in (1, 2):
+        try:
+            yanit = requests.get(url, timeout=30)
+            yanit.raise_for_status()
+            break
+        except requests.RequestException:
+            if deneme == 2:
+                raise
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as gecici:
+        gecici.write(yanit.content)
+        gecici.flush()
+        y, _ = librosa.load(gecici.name, sr=CLAP_ORNEKLEME, mono=True)
+    if y.size < CLAP_ORNEKLEME:
+        return None
+    return klip_gomusu(y)
+
+
 def klip_miksi(onizleme_url: str) -> np.ndarray | None:
     """Önbellekteki dört stem'i toplayıp 48 kHz'e çıkar.
 
@@ -413,13 +456,7 @@ def parca_gomule(
     gelebilir. Sorgu sırasında sanatçının gömüleri ortalanmaz, en yakın olan
     kullanılır — "bu sanatçının şu parçası senin şuna benziyor" daha kesin.
     """
-    import requests
-    import soundfile as sf
-    import librosa
-
     PARCA_GOMU.mkdir(parents=True, exist_ok=True)
-    model, islemci = _yukle()
-    istemci = None
     from python.discover.calma_listesi import deezer_listesi
     istemci = deezer_listesi()
 
@@ -450,24 +487,18 @@ def parca_gomule(
             continue
         sayac["denenen"] += 1
         try:
-            bilgi = istemci.get_json(f"track/{parca_id}", {})
+            # yenile=True: önbellekteki yanıtın URL imzası çoktan dolmuş olur
+            # (aynı hata `web/sunucu.py:taze_onizleme`'de 2026-09-02'de düzeldi).
+            bilgi = istemci.get_json(f"track/{parca_id}", {}, yenile=True)
             url = (bilgi or {}).get("preview")
             if not url:
                 sayac["atlanan"] += 1
                 continue
-            ham = requests.get(url, timeout=30).content
-            gecici = Path("/tmp") / f"_clap_{parca_id}.mp3"
-            gecici.write_bytes(ham)
-            y, _ = librosa.load(gecici, sr=CLAP_ORNEKLEME, mono=True)
-            gecici.unlink(missing_ok=True)
-            if y.size < CLAP_ORNEKLEME:
+            gomu = onizleme_gomusu(url)
+            if gomu is None:
                 sayac["atlanan"] += 1
                 continue
-            girdi = islemci(audio=y, sampling_rate=CLAP_ORNEKLEME,
-                            return_tensors="pt")
-            e = model.get_audio_features(**girdi).pooler_output
-            e = (e / e.norm(dim=-1, keepdim=True)).squeeze(0)
-            np.save(dosya, e.cpu().numpy().astype("float32"))
+            np.save(dosya, gomu)
             sayac["gomulen"] += 1
         except Exception:
             sayac["atlanan"] += 1
@@ -504,10 +535,19 @@ def acik_havuz_adaylari(
     """
     from python.ses_kume import havuz_gomuleri
 
+    # Üyeler KESKİN atamayla (her albüm en yüksek üyelikli eksenine).
+    # Önceden `uyelik >= 0.25` idi: bulanık albüm iki eksenin de üyesi oluyor,
+    # ona yakın kayıtlar iki eksende birden çıkıyordu — ölçüldü (2026-09-21),
+    # önerilerin %34'ü (seto) ve %28'i (52 albüm) birden çok eksende. Ayrıca
+    # değerlendirme (`degerlendirme.eksen_haritasi`) ve liste stratejisi
+    # (`adaylar.eksen_sanatcilari`) zaten keskin atama kullanıyordu; ölçülen
+    # şey üretimin yaptığı şey değildi (K19).
     uyeler = [
         r[0] for r in conn.execute(
-            """SELECT album_id FROM memberships WHERE calisma_id = ?
-                AND kume_id = ? AND uyelik >= 0.25""",
+            """SELECT album_id FROM memberships m WHERE calisma_id = ?
+                AND kume_id = ? AND uyelik = (
+                  SELECT MAX(uyelik) FROM memberships
+                   WHERE calisma_id = m.calisma_id AND album_id = m.album_id)""",
             (calisma_id, eksen),
         )
     ]
@@ -537,10 +577,27 @@ def acik_havuz_adaylari(
     en_yakin = S.argmax(axis=1)
     skor = S.max(axis=1)
 
+    # EN YAKIN ALBÜM KURALI: kayıt yalnız kütüphanedeki en yakın albümü bu
+    # eksendeyse önerilir. Keskin üyelik tek başına yetmedi — seto'da ses
+    # önerilerinin %32'si hâlâ birden çok eksende çıkıyordu: birçok eksene
+    # birden yakın duran kayıtlar (hubness). Kural kartın gerekçesiyle de
+    # örtüşüyor: "senin X albümüne benziyor" diyorsak X bu eksende olmalı.
+    # Leave-one-artist-out (2026-09-21, seto / 52 albüm): recall@50 ve MRR
+    # korunuyor (ses 0,03→0,04 / 0,04→0,04; melez MRR 0,012→0,017, @50
+    # 0,10→0,09); yinelenme tanım gereği sıfır.
+    if len(k_tum) >= 10:
+        taban_tum = (A_tum @ A_tum.T).mean(axis=1, keepdims=True)
+        S_tum = A_havuz @ A_tum.T - taban_havuz - taban_tum.T
+        uye_kume = set(k_uye)
+        eksende = np.array([k in uye_kume for k in k_tum])
+        skor = np.where(eksende[S_tum.argmax(axis=1)], skor, -np.inf)
+
     # Aynı sanatçının birden çok parçası havuzda; sanatçı başına en iyisi.
     # Tekilleştirilmezse tek bir sanatçı listeyi kaplıyor.
     en_iyi: dict[str, dict] = {}
     for i in np.argsort(-skor):
+        if skor[i] == -np.inf:
+            break
         kayit = kayitlar[i]
         anahtar = normalize_esleme(kayit["sanatci"])
         if anahtar in en_iyi:

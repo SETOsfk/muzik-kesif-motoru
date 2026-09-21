@@ -19,6 +19,7 @@ Kütüphanedeki her albüm için bir satır.
 | track_count | INTEGER | |
 | eklenme_tarihi | TEXT | artımlı çalışma için |
 | mbid_yok | INTEGER | 1 = kullanıcı "MusicBrainz karşılığı yok" dedi; eşleştirme ekranında bir daha sorulmaz |
+| kaynak | TEXT | `yerel` (varsayılan, taranmış dosya) · `spotify_kayitli` · `spotify_son` · `spotify_en_cok` — bkz. `python/aktarim.py`. Spotify albümünün dosyası yok: `path` NULL, stem/librosa ölçümü uygulanmaz |
 
 `album_id` sanatçı+albüm+yıl normalize edilip hash'lenerek üretilir
 (`python/metin.py:album_kimligi`). Albümü başka klasöre taşımak kimliği değiştirmez —

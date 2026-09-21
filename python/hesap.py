@@ -132,6 +132,9 @@ def kullanici_olustur(
     spotify_yenile: str | None = None,
 ) -> int:
     """Yeni hesap; kullanici_id döner. E-posta ve spotify_id tekildir."""
+    from python.sifre import sifrele
+
+    spotify_yenile = sifrele(spotify_yenile)
     with conn:
         imlec = conn.execute(
             "INSERT INTO kullanici (ad, eposta, parola_ozeti, spotify_id, "
@@ -162,7 +165,10 @@ def spotify_bagla(
     conn: sqlite3.Connection, kullanici_id: int, spotify_id: str,
     yenile_jetonu: str | None,
 ) -> None:
-    """Var olan hesaba Spotify kimliğini bağla."""
+    """Var olan hesaba Spotify kimliğini bağla. Jeton ŞİFRELİ saklanır."""
+    from python.sifre import sifrele
+
+    yenile_jetonu = sifrele(yenile_jetonu)
     with conn:
         conn.execute(
             "UPDATE kullanici SET spotify_id = ?, spotify_yenile = COALESCE(?, "
@@ -268,6 +274,10 @@ def main(argv: list[str] | None = None) -> int:
     eposta_k.add_argument("adres")
     eposta_k.set_defaults(fn="eposta")
 
+    sifrele_k = alt.add_parser("jetonlari-sifrele",
+                               help="düz metin Spotify jetonlarını şifrele")
+    sifrele_k.set_defaults(fn="jetonlari-sifrele")
+
     sil = alt.add_parser("sil", help="hesabı ve verisini sil")
     sil.add_argument("--id", type=int, required=True)
     sil.set_defaults(fn="sil")
@@ -334,6 +344,20 @@ def main(argv: list[str] | None = None) -> int:
             if not kayit["parola_ozeti"]:
                 print("NOT: bu hesabın parolası yok. "
                       f"`python -m python.hesap parola --id {args.id}`")
+            return 0
+
+        if args.fn == "jetonlari-sifrele":
+            from python.sifre import ONEK, sifrele
+            satirlar = conn.execute(
+                "SELECT kullanici_id, spotify_yenile FROM kullanici "
+                "WHERE spotify_yenile IS NOT NULL AND spotify_yenile NOT LIKE ?",
+                (ONEK + "%",)).fetchall()
+            with conn:
+                for r in satirlar:
+                    conn.execute(
+                        "UPDATE kullanici SET spotify_yenile = ? WHERE kullanici_id = ?",
+                        (sifrele(r["spotify_yenile"]), r["kullanici_id"]))
+            print(f"{len(satirlar)} jeton şifrelendi")
             return 0
 
         if args.fn == "sil":

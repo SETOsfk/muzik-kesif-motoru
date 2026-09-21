@@ -122,9 +122,13 @@ def _karisik_mi(parcalar: list[dict]) -> bool:
 
 
 def hasat(
-    conn: sqlite3.Connection, istemci: ApiIstemci, *, limit: int | None = None
+    conn: sqlite3.Connection, istemci: ApiIstemci, *, limit: int | None = None,
+    adim=None,
 ) -> dict[str, int]:
-    """Kütüphanedeki sanatçılar için liste ara, parçalarını sakla."""
+    """Kütüphanedeki sanatçılar için liste ara, parçalarını sakla.
+
+    `adim(sira, toplam)`: isteğe bağlı ilerleme bildirimi (aktarım ekranı).
+    """
     sanatcilar = [
         r[0] for r in conn.execute(
             "SELECT DISTINCT artist FROM albums WHERE artist IS NOT NULL "
@@ -161,13 +165,17 @@ def hasat(
                 )
                 conn.executemany(
                     "INSERT OR IGNORE INTO liste_parca "
-                    "(liste_id, sira, sanatci, sanatci_anahtar, parca, onizleme) "
-                    "VALUES (?,?,?,?,?,?)",
+                    "(liste_id, sira, sanatci, sanatci_anahtar, parca, onizleme, "
+                    "parca_id) VALUES (?,?,?,?,?,?,?)",
                     [
+                        # `parca_id` ŞART: aday üretimi ve gömme yalnız kimliği
+                        # olan parçaları görüyor (imzalı URL kısa ömürlü). İlk
+                        # hasat kimliği sonradan doldurmuştu; bu satır yazmadan
+                        # yeni hasatlar havuzda görünmez kalıyordu.
                         (liste_id, i,
                          (p.get("artist") or {}).get("name", ""),
                          normalize_esleme((p.get("artist") or {}).get("name", "")),
-                         p.get("title", ""), p.get("preview"))
+                         p.get("title", ""), p.get("preview"), p.get("id"))
                         for i, p in enumerate(parcalar)
                         if (p.get("artist") or {}).get("name")
                     ],
@@ -175,6 +183,8 @@ def hasat(
             sayac["liste"] += 1
             sayac["parca"] += len(parcalar)
 
+        if adim is not None:
+            adim(sira, len(sanatcilar))
         if sira % 10 == 0:
             print(f"  {sira}/{len(sanatcilar)} sanatçı · {sayac['liste']} liste · "
                   f"{sayac['parca']} parça", file=sys.stderr)

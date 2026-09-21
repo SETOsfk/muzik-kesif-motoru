@@ -35,7 +35,12 @@ SEMA: tuple[str, ...] = (
         eklenme_tarihi  TEXT,
         -- Kullanıcı "bu albümün MusicBrainz karşılığı yok" dediğinde 1.
         -- Eşleştirme ekranında bir daha sorulmaz; boş mbid ile karıştırılmaz.
-        mbid_yok        INTEGER NOT NULL DEFAULT 0
+        mbid_yok        INTEGER NOT NULL DEFAULT 0,
+        -- Albüm kütüphaneye NEREDEN girdi. 'yerel' = diskte taranmış dosya;
+        -- 'spotify_kayitli' | 'spotify_son' | 'spotify_en_cok' = Spotify
+        -- aktarımı (`python/aktarim.py`). Spotify albümünün dosyası yok,
+        -- yani stem ölçümü ve librosa özeti ona uygulanamaz.
+        kaynak          TEXT NOT NULL DEFAULT 'yerel'
     )
     """,
     # Artımlı alımın belleği: hangi dosya ne zamandan beri hangi albüme ait.
@@ -532,6 +537,7 @@ def baglan(db_yolu: Path | str = VARSAYILAN_DB, *, sema: bool = True) -> sqlite3
 # kaynak; burası yalnızca eski dosyaları oraya taşır.
 GOC: tuple[tuple[str, str, str], ...] = (
     ("albums", "mbid_yok", "ALTER TABLE albums ADD COLUMN mbid_yok INTEGER NOT NULL DEFAULT 0"),
+    ("albums", "kaynak", "ALTER TABLE albums ADD COLUMN kaynak TEXT NOT NULL DEFAULT 'yerel'"),
     ("davul_profili", "rol_sayisi", "ALTER TABLE davul_profili ADD COLUMN rol_sayisi INTEGER"),
     ("davul_profili", "rol_kredi_payi", "ALTER TABLE davul_profili ADD COLUMN rol_kredi_payi REAL"),
     # tepe_orani, elenen `duzluk`un yerine geldi (2026-08-16). Spektral düzlük

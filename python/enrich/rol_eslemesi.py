@@ -77,6 +77,7 @@ BIREBIR: dict[str, str] = {
     "hihat": "percussion", "gong": "percussion", "chimes": "percussion",
     "bells": "percussion", "bell": "percussion", "bell tree": "percussion",
     "wind chimes": "percussion", "cowbell": "percussion", "crotales": "percussion",
+    "spoons": "percussion",
     "tubular bells": "percussion", "triangle": "percussion",
     "timpani": "percussion", "handclaps": "percussion", "claps": "percussion",
     "vibraslap": "percussion", "wind chime": "percussion", "wind chimes": "percussion",

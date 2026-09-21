@@ -49,6 +49,10 @@ class Ayar:
     # --- FCM ---
     m: float = 1.4                 # K3: 1.3–1.6 arası, m=2 kullanılmaz
     c_araligi: tuple[int, int] = (2, 12)
+    # c seçim ölçütü. "xb": tüm kümeleri stabil c'ler arasında Xie-Beni
+    # minimumu (K3, metadata matrisi). "en_ince_stabil": tüm kümeleri stabil
+    # EN BÜYÜK c — CLAP uzayında XB düz, bkz. `fcm.en_ince_stabil_c`.
+    c_secimi: str = "xb"
     yineleme: int = 300
     tolerans: float = 1e-6
     baslangic: int = 10            # rastgele başlangıç sayısı, en iyisi seçilir

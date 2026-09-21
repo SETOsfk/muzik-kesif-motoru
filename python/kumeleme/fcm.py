@@ -239,3 +239,39 @@ def en_iyi_c(
             ]
             return min(adaylar, key=lambda t: (t.xie_beni, t.partition_entropy))
     return min(taramalar, key=lambda t: (t.xie_beni, t.partition_entropy))
+
+
+def en_ince_stabil_c(
+    taramalar: list[Tarama],
+    stabil_oranlar: dict[int, float],
+    *,
+    asgari_boyut: int = 5,
+    xb_toleransi: float = 1.5,
+) -> Tarama:
+    """XB'de belirgin kötüleşmeyen, bütün kümeleri stabil EN BÜYÜK c.
+
+    "Bir standart hata" kuralının akrabası: iyi bölmeler arasından en ince
+    olanı seç. İki rejim ölçüldü (2026-09-21) ve kural ikisinde de doğru:
+
+    - **Yapılı uzay** (sentetik, 3 sıkı küme): doğru c'nin XB'si 0,0099,
+      diğerleri 0,23–1,5 — yirmi kattan fazla kötü. Tolerans dışında kalıyorlar.
+      Tolerans OLMADAN yalnız stabiliteye bakmak c=5 seçiyordu: bootstrap,
+      gürültü boyutlarındaki bölünmeyi de kararlı buluyor.
+    - **Düz uzay** (CLAP, seto'nun 288 albümü): stabil c'lerin XB'si 0,63–0,87,
+      en iyinin 1,4 katı içinde. XB minimumu c=2'yi seçiyor ve bu
+      leave-one-artist-out'ta en KÖTÜ sonuç (melez @50 0,03; c=9'da 0,09).
+      Bu kural c=9 seçiyor; melez yüzdelik 0,099 (c=2: 0,157, metadata
+      kümelemesi: 0,096).
+
+    `asgari_boyut`: keskin atamada bundan küçük küme varsa o c elenir; beş
+    albümlük bir "eksen" temsilci seçimine (K4) bile yetmez.
+    """
+    stabil = [
+        t for t in taramalar
+        if stabil_oranlar.get(t.c, 0.0) >= 1.0
+        and np.bincount(t.sonuc.keskin_atama(), minlength=t.c).min() >= asgari_boyut
+    ]
+    if not stabil:
+        return en_iyi_c(taramalar, stabil_oranlar)
+    esik = min(t.xie_beni for t in stabil) * xb_toleransi
+    return max((t for t in stabil if t.xie_beni <= esik), key=lambda t: t.c)

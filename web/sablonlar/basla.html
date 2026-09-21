@@ -3,13 +3,18 @@
 {% block govde %}
 <div class="sayfa-basi">
   <h1>Hoş geldin{% if ad %}, {{ ad }}{% endif %}</h1>
-  <p>Kütüphanen henüz boş. Motorun çalışabilmesi için önce neyi sevdiğini
-     bilmesi gerekiyor — aşağıdaki yollardan biri yeter.</p>
+  <p>Motorun çalışabilmesi için önce neyi sevdiğini bilmesi gerekiyor —
+     aşağıdaki yollardan biri yeter.</p>
 </div>
 
 {% if hata == 'spotify_baskasinda' %}
 <div class="kapi-hata">
   Bu Spotify hesabı başka bir kullanıcıya bağlı. Önce oradan çözülmesi gerekir.
+</div>
+{% elif hata == 'spotify_yok' %}
+<div class="kapi-hata">
+  Aktarım için Spotify bağlantısı gerekiyor; bu hesapta saklı bir Spotify
+  yetkisi yok. Aşağıdan yeniden bağlan.
 </div>
 {% elif bagli_yeni %}
 <div class="kapi-not">Spotify bağlandı ✓</div>
@@ -24,11 +29,56 @@
     <a class="spotify-dugme" href="/giris/spotify">Spotify ile bağlan</a>
   </article>
   {% elif spotify_bagli %}
-  <article class="adim">
-    <h2>Spotify bağlı ✓</h2>
-    <p>Hesabın bağlandı. Kütüphaneni okuyup eksenlerini çıkaran aktarım
-       henüz hazır değil — o gelene kadar aşağıdaki yollardan biriyle
-       başlayabilirsin.</p>
+  <article class="adim" id="aktarim"
+           data-calisiyor="{{ 'evet' if calisiyor else 'hayir' }}">
+    {% if calisiyor %}
+    <h2>Kütüphanen aktarılıyor <span class="rozet mavi">çalışıyor</span></h2>
+    <p>Sayfayı kapatabilirsin; aktarım arka planda sürüyor. Bitince bu
+       sayfa seni önerilere götürür.</p>
+    <ol class="asamalar">
+      {% for kod, ad_ in asamalar %}
+      <li class="{% if loop.index0 < asama_sira %}bitti{% elif loop.index0 == asama_sira %}simdi{% endif %}">
+        {{ ad_ }}
+        {% if loop.index0 == asama_sira and aktarim.toplam %}
+        <span class="sayac" id="aktarim-sayac">{{ aktarim.adim }}/{{ aktarim.toplam }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="kapi-ipucu">En uzun adım ses gömüleri: albüm başına bir 30 sn
+       önizleme indirilip dinleniyor (~2,5 sn). Ölçüldü: 52 albüm 3,5 dakika
+       sürdü; 300 albüm için 15–20 dakika bekle.</p>
+    {% else %}
+      {% if aktarim and aktarim.durum == 'hata' %}
+      <h2>Aktarım durdu</h2>
+      <div class="kapi-hata">{{ aktarim.hata }}</div>
+      {% elif albom %}
+      <h2>Spotify bağlı ✓</h2>
+      <p>Kütüphanende {{ albom }} albüm var ama henüz öneri üretilmedi.</p>
+      {% else %}
+      <h2>Spotify bağlı ✓</h2>
+      <p>Kayıtlı albümlerini, son çaldıklarını ve en çok dinlediğin
+         sanatçıları okuyup her biri için bir 30 sn önizleme dinlerim;
+         eksenlerini sesten çıkarırım.</p>
+      {% endif %}
+      <form method="post" action="/api/aktar">
+        <button class="spotify-dugme" type="submit">
+          {% if aktarim %}Aktarımı yeniden başlat{% else %}Kütüphanemi aktar{% endif %}
+        </button>
+      </form>
+    {% endif %}
+    <details class="neler-eksik">
+      <summary>Spotify'dan gelen kütüphanede neler farklı?</summary>
+      <p>Eksenlerin <b>yalnız sesten</b> çıkar: her albümün Deezer'daki
+         30 sn önizlemesi CLAP ile dinlenir. Ölçtük — senin yerine
+         geliştiricinin kütüphanesiyle: yalnız sesle kümeleme, kredi ve
+         etiketlerle yapılan kümeleme kadar iyi öneri buluyor.</p>
+      <p>Olmayanlar: <b>kredi grafiği</b> (kim çalmış) ve ondan gelen
+         «kredi sıçraması», «sahne komşuluğu», «bilinçli uzaklık» yolları;
+         icra ölçümü (davulcu, basçı profili). Bunlar dosya ve saatler
+         süren zenginleştirme istiyor. Önizlemesi bulunamayan albüm
+         kümelemeye girmez.</p>
+    </details>
   </article>
   {% endif %}
 

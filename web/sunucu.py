@@ -282,9 +282,9 @@ async def oneriler(istek):
 
     calisma_id = istek.query_params.get("calisma") or _son_calisma()
     if not calisma_id:
-        return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(istek, mesaj=(
-            "Hiç kümeleme çalışması yok. Önce <code>python -m python.enrich.matris_kur"
-            "</code> ve <code>python -m python.kumeleme.calistir</code>.")))
+        # Yeni kullanıcı komut satırı talimatıyla karşılaşmamalı: kütüphanesi
+        # ya boş ya aktarılıyor, ikisinin de anlatıldığı yer /basla.
+        return RedirectResponse("/basla", status_code=303)
 
     conn = _baglanti()
     try:
@@ -942,8 +942,18 @@ async def eslestirme(istek):
 
 
 async def eslestir_kaydet(istek):
+    """Elle MBID kararı. Değer `mbid_coz`dan geçer — barkod çözülür, bozuk
+    biçim REDDEDİLİR (bozuk MBID her kredi turunu düşürüyordu, bkz. orada)."""
+    from python.enrich.mbid_eslestir import mbid_coz
+    from python.onbellek import musicbrainz
+
     veri = await istek.json()
     album_id, mbid = veri.get("album_id"), veri.get("mbid")
+    if mbid != "__yok__":
+        mbid = mbid_coz(musicbrainz(), str(mbid or ""))
+        if mbid is None:
+            return JSONResponse({"hata": "MBID ya da çözülebilir barkod değil"},
+                                status_code=400)
     conn = _baglanti()
     try:
         with conn:
@@ -1383,22 +1393,57 @@ async def spotify_donus(istek):
     return _cerez_koy(RedirectResponse(hedef, status_code=303), jeton)
 
 
+def _aktarim_bitti_mi(kullanici_id: int | None) -> dict | None:
+    """Aktarım durumu; bittiyse kullanıcı önbelleklerini boşalt.
+
+    Aktarım AYRI BİR SÜREÇTE yazıyor, dolayısıyla sunucunun `lru_cache`'leri
+    yeni çalışmayı görmez: aktarım sürerken bir kez "çalışma yok" önbelleğe
+    girer ve sunucu yeniden başlayana kadar öyle kalırdı.
+    """
+    from python.aktarim import durum_oku
+
+    if kullanici_id is None:
+        return None
+    durum = durum_oku(kullanici_id)
+    if durum and durum.get("durum") == "bitti":
+        _calismalar.cache_clear()
+        _boru_hatti.cache_clear()
+        _eksen_adlari.cache_clear()
+    return durum
+
+
 async def basla(istek):
-    """Karşılama — hesabı yeni açılmış, kütüphanesi boş kullanıcı için.
+    """Karşılama — kütüphanesi boş ya da aktarılmakta olan kullanıcı için.
 
     Boş bir öneri sayfasına düşmek "uygulama bozuk" hissi veriyor. Burada ne
     olduğu ve sıradaki adımın ne olduğu yazılı.
+
+    Yönlendirme ölçütü ALBÜM değil ADAY: aktarım albümleri ilk dakikada
+    yazıyor ama öneri ancak son aşamada çıkıyor. Albüm sayısına bakılsaydı
+    kullanıcı yarım bir hattın boş öneri sayfasına atılırdı.
     """
+    from python.aktarim import ASAMA_ADI, ASAMALAR, calisiyor_mu
+
+    kullanici_id = AKTIF_KULLANICI.get()
+    durum = _aktarim_bitti_mi(kullanici_id)
+    calisiyor = calisiyor_mu(kullanici_id) if kullanici_id is not None else False
     conn = _baglanti()
     try:
         albom = conn.execute("SELECT COUNT(*) FROM albums").fetchone()[0]
+        aday = conn.execute("SELECT COUNT(*) FROM adaylar").fetchone()[0]
         kullanici = conn.execute(
             "SELECT ad, spotify_id FROM kullanici WHERE kullanici_id = ?",
-            (AKTIF_KULLANICI.get(),)).fetchone()
+            (kullanici_id,)).fetchone()
     finally:
         conn.close()
-    if albom:
+    if aday and not calisiyor:
         return RedirectResponse("/oneriler", status_code=303)
+
+    # Durum dosyası "çalışıyor" diyor ama süreç yok: öldürülmüş ya da çökmüş.
+    if durum and durum.get("durum") == "calisiyor" and not calisiyor:
+        durum = {**durum, "durum": "hata",
+                 "hata": "aktarım yarıda kesildi (süreç artık çalışmıyor)"}
+    asama = (durum or {}).get("asama")
     return SABLONLAR.TemplateResponse(istek, "basla.html", {
         "request": istek, "yol": "/basla",
         "ad": kullanici["ad"] if kullanici else "",
@@ -1406,6 +1451,58 @@ async def basla(istek):
         "spotify_hazir": _spotify_hazir(),
         "hata": istek.query_params.get("hata"),
         "bagli_yeni": istek.query_params.get("spotify") == "bagli",
+        "albom": albom,
+        "aktarim": durum,
+        "calisiyor": calisiyor,
+        "asamalar": [(a, ASAMA_ADI[a]) for a in ASAMALAR],
+        "asama_sira": ASAMALAR.index(asama) if asama in ASAMALAR else -1,
+    })
+
+
+async def aktar(istek):
+    """Spotify aktarımını AYRI SÜREÇTE başlat.
+
+    Ayrı süreç çünkü CLAP (torch) ~2 GB bellek istiyor ve sunucuya yüklenirse
+    her kullanıcının isteği o süreçle yarışır; ayrıca aktarım dakikalar
+    sürer ve istek zaman aşımına uğrardı. İkinci tıklama ikinci süreç
+    açmaz — `calisiyor_mu` süreç kimliğini denetliyor.
+    """
+    import subprocess
+    import sys
+
+    from python.aktarim import calisiyor_mu
+    from python.db import KULLANICI_KOK
+
+    kullanici_id = AKTIF_KULLANICI.get()
+    conn = _oturum_baglantisi()
+    try:
+        kayit = kullanici_bul(conn, kullanici_id=kullanici_id)
+    finally:
+        conn.close()
+    if kayit is None or not kayit["spotify_yenile"]:
+        return RedirectResponse("/basla?hata=spotify_yok", status_code=303)
+    if not calisiyor_mu(kullanici_id):
+        KULLANICI_KOK.mkdir(parents=True, exist_ok=True)
+        gunluk = open(KULLANICI_KOK / f"{kullanici_id}.aktarim.log", "ab")
+        subprocess.Popen(
+            [sys.executable, "-m", "python.aktarim", "--kullanici", str(kullanici_id)],
+            cwd=str(KOK.parent), stdout=gunluk, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=True,
+        )
+        gunluk.close()
+    return RedirectResponse("/basla", status_code=303)
+
+
+async def aktar_durum(istek):
+    """İlerleme çubuğunun kaynağı. Günlük satırı DEĞİL yalnız özet döner."""
+    from python.aktarim import calisiyor_mu
+
+    kullanici_id = AKTIF_KULLANICI.get()
+    durum = _aktarim_bitti_mi(kullanici_id) or {}
+    return JSONResponse({
+        "durum": durum.get("durum"), "asama": durum.get("asama"),
+        "adim": durum.get("adim", 0), "toplam": durum.get("toplam", 0),
+        "calisiyor": calisiyor_mu(kullanici_id), "hata": durum.get("hata"),
     })
 
 ROTALAR = [
@@ -1422,6 +1519,8 @@ ROTALAR = [
     Route("/api/onizleme/{parca_id}", taze_onizleme),
     Route("/api/ses-kume-adi", ses_kume_adlandir, methods=["POST"]),
     Route("/basla", basla),
+    Route("/api/aktar", aktar, methods=["POST"]),
+    Route("/api/aktar/durum", aktar_durum),
     Route("/giris", giris),
     Route("/giris", giris_gonder, methods=["POST"]),
     Route("/uyelik", uyelik),
@@ -1447,6 +1546,26 @@ uygulama = Starlette(
 )
 
 SABLONLAR.env.filters["sayi"] = _sayi
+
+
+def _statik(yol: str) -> str:
+    """`/statik/stil.css?v=<mtime>` — dosya değişince adres de değişir.
+
+    Starlette statik dosyayı yalnız ETag/Last-Modified ile sunuyor; tarayıcı
+    sezgisel tazelik süresince sunucuya hiç sormuyor ve servis çalışanının
+    "önce ağ" isteği de aynı HTTP önbelleğinden geçiyor. Ölçüldü
+    (2026-09-21): CSS düzeltmesinden sonra sayfa eski stil.css ile açıldı.
+    Sürüm damgası her istekte stat ile okunuyor — mikrosaniye, ve sunucu
+    yeniden başlatılmadan yapılan değişiklik de hemen yansıyor.
+    """
+    try:
+        damga = int((KOK / "statik" / yol).stat().st_mtime)
+    except OSError:
+        damga = 0
+    return f"/statik/{yol}?v={damga}"
+
+
+SABLONLAR.env.globals["statik"] = _statik
 
 
 def main(argv: list[str] | None = None) -> int:

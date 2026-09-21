@@ -287,7 +287,7 @@ listesinde geri plana iniyor.
 | RateYourMusic | **KULLANILMAZ** | API yok, scraping ToS'a aykırı |
 | Apple Music API | **KULLANILMAZ** | Ücretli geliştirici hesabı ($99/yıl) — K2'ye aykırı. iTunes Search zaten anahtarsız |
 | Tidal | Beklemede | Kayıt/onay gerektiriyor (401 döndü) |
-| Spotify | **Yalnız giriş + kütüphane okuma** (`python/spotify.py`) | `preview_url` 2024 sonunda kapatıldı — önizleme için KULLANILMAZ. OAuth (Authorization Code, salt-okuma kapsamı) ile kimlik ve kayıtlı albümler okunur. Geliştirme modunda en çok 5 kullanıcı, panelde e-postayla eklenmeli. `onbellek.ApiIstemci` KULLANILMAZ: önbellek anahtarı Authorization başlığını içermiyor, kullanıcılar birbirinin verisini görür |
+| Spotify | **Yalnız giriş + kütüphane okuma** (`python/spotify.py`) | `preview_url` 2024 sonunda kapatıldı — önizleme için KULLANILMAZ. OAuth (Authorization Code, salt-okuma kapsamı) ile kimlik ve kayıtlı albümler okunur. Geliştirme modunda en çok 5 kullanıcı, panelde e-postayla eklenmeli. Kütüphane `python/aktarim.py` ile öneriye dönüşür. `onbellek.ApiIstemci` KULLANILMAZ: önbellek anahtarı Authorization başlığını içermiyor, kullanıcılar birbirinin verisini görür |
 | CritiqueBrainz | CC lisanslı kullanıcı yorumları | Anahtarsız. Kapsama İNCE — 6 albümde 2 yorum (ölçüldü). Yardımcı sinyal, ana sinyal değil |
 
 ### K14 — Dış kaynak iddiası, kendi verimizde karşılığı yoksa yazılmaz
@@ -419,31 +419,46 @@ Ayrıntı: `docs/karar-gunlugu.md` 2026-09-15 bölümleri.
 
 ## Güncel durum (son güncelleme 2026-09-21)
 
-- **Testler:** `.venv/bin/python -m pytest` — 216 test geçiyor. Test gerçek
-  `ortak.sqlite`'a YAZMAMALI; `tests/test_web.py` geçici yol kullanıyor.
+- **Testler:** `.venv/bin/python -m pytest` — 235 test geçiyor. Test gerçek
+  `ortak.sqlite`'a YAZMAMALI; `tests/test_web.py` ve `tests/test_aktarim.py`
+  geçici yol kullanıyor.
 - **Sunucu:** `.venv/bin/python -m web.sunucu --port 8800` (yerel). Sağlık: `/saglik`.
+- **Yeni kullanıcı aktarımı YAZILDI** (`python/aktarim.py`, 2026-09-21):
+  Spotify → Deezer önizlemesi → CLAP → hasat + npmi → yalnız-ses FCM
+  (`c_secimi="en_ince_stabil"`) → melez/liste/ses adayları. `/basla`'daki
+  «Kütüphanemi aktar» ayrı süreç başlatır, ilerleme canlı. Yalnız-ses kümeleme
+  ölçüldü, metadata kadar iyi (karar günlüğü 2026-09-21). Kredi stratejileri
+  bu kullanıcılarda YOK — arayüzde yazılı.
+- **Seto'nun aktif çalışması `20260921T092024-c12-m1.4-pca`** (yeni kredilerle,
+  ölçülerek daha iyi; adlar ve kararlar `python/kumeleme/tasi.py` ile taşındı).
+  Yeniden kümelemede HER ZAMAN `tasi` çalıştırılır, yoksa adlar eskide kalır.
 - **Yayın:** ERTELENDİ (kullanıcı kararı). Sunmak için 47 MB yeter
   (`ortak.sqlite`, `kullanici/`, `data/cache/clap`, `clap_parca`); torch/demucs
-  yalnız çevrimdışı. Streamlit Cloud elendi (K15 + veritabanları git'te yok +
-  kalıcı disk yok). Seçenekler: Oracle Always Free, HF Spaces + DB eşitleme,
-  küçük ücretli VPS. Kısıt: SQLite geri bildirim yazıyor → kalıcı disk şart;
-  Turso ATTACH'i bozar.
+  yalnız çevrimdışı — AMA Spotify aktarımı CLAP için torch istiyor, yani
+  yayında aktarım ya sunucuda torch ister ya yerelde çalıştırılıp DB taşınır.
+  Streamlit Cloud elendi (K15 + veritabanları git'te yok + kalıcı disk yok).
+  Seçenekler: Oracle Always Free, HF Spaces + DB eşitleme, küçük ücretli VPS.
+  Kısıt: SQLite geri bildirim yazıyor → kalıcı disk şart; Turso ATTACH'i bozar.
 
-### Kullanıcının yapması gereken (Claude YAPAMAZ — hesap/parola)
+### Kullanıcının yapması gereken (Claude YAPAMAZ — hesap/parola/cihaz)
 - Spotify panelinde Redirect URI: `http://127.0.0.1:8800/giris/spotify/donus`
-- Panelde en çok 5 kullanıcıyı e-postayla ekle, gerçek bir girişle akışı doğrula.
+- Panelde en çok 5 kullanıcıyı e-postayla ekle, gerçek bir girişle akışı VE
+  «Kütüphanemi aktar»ı uçtan uca doğrula (hat `--json` ile sınandı, Spotify
+  okuması sınanamadı).
+- Telefonda SW: yalnız https ya da localhost'ta kaydolur; LAN IP'si üzerinden
+  http ile açılırsa SW ve «ana ekrana ekle» çalışmaz. Denetim listesi karar
+  günlüğünde (2026-09-21 (3)).
+- 13 albümün MBID'si `/eslestirme`'de insan kararı bekliyor (gerçek belirsizlik).
 
 ### Sıradaki işler (öncelik sırasıyla)
-1. **Yeni kullanıcı aktarım hattı:** Spotify kütüphanesi (`kayitli_albumler`,
-   `en_cok_sanatcilar`, `son_calinanlar`) → Deezer önizleme eşlemesi → CLAP gömüsü
-   → kümeleme. Bu olmadan seto dışındaki kullanıcı öneri alamıyor;
-   `web/sablonlar/basla.html` bunu dürüstçe söylüyor — hat bitince metni güncelle.
-2. 302 albümden 24'ünün MBID'si yok (`/eslestirme` ile elle ya da eşleştiriciyi iyileştir).
-3. Service worker'ı gerçek telefonda doğrula.
+1. Gerçek Spotify girişiyle aktarımı uçtan uca sınamak (yukarıda, kullanıcı).
+2. 13 albümün MBID kararı (`/eslestirme`), ardından `krediler` + `matris_kur`
+   + `kumeleme.calistir --c 12 12` + `kumeleme.tasi` (adlar/kararlar taşınır).
+3. Yayın: aktarım torch istiyor — sunucuda mı, yerelde mi çalışacağı kararı.
 
 ### Değişmez kısıtlar
 - `.env` değerleri asla yazdırılmaz; yalnız "tanımlı/değil" söylenir.
 - Reddit onaysız uç nokta yok; RYM kazıma yok; Apple Music API yok; FMA'dan ses indirilmez.
 - Kullanıcı adına hesap açılmaz, parola girilmez (Spotify, Oracle, gh, Discogs).
 - Arayüz tutulamayacak söz vermez (404 veren düğme, "okuyorum" diyen sahte metin).
-- Spotify yenileme jetonları yerel SQLite'ta düz metin duruyor — yayından önce ele alınmalı.
+- Spotify yenileme jetonları ŞİFRELİ saklanır (`python/sifre.py`); anahtar `.env`'de, veritabanında DEĞİL.

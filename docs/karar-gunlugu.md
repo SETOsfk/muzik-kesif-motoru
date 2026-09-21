@@ -1897,3 +1897,173 @@ değiştirildi. Tutulamayacak söz verilmemeli; 404 veren düğme de aynı kural
 ihlaliydi.
 
 216 test geçiyor (9 yeni).
+
+## 2026-09-21 — Yeni kullanıcı aktarım hattı: Spotify → ses → eksen → öneri
+
+`python/aktarim.py`. Seto dışındaki kullanıcı bugüne kadar öneri alamıyordu:
+yerel yol (tarama → krediler → stem → metadata matrisi) dosya istiyor.
+Hat altı aşama: Spotify (kayıtlı albümler + son çalınanların albümleri +
+albümsüz en çok dinlenen sanatçılar için Deezer'daki en popüler albüm) →
+doğrulanmış Deezer önizlemesi → CLAP gömüsü → çalma listesi hasadı + kullanıcıya
+göre npmi → yalnız-ses FCM → üç ana strateji (melez, liste, ses). Web ayrı
+SÜREÇ başlatıyor (torch ~2 GB sunucuya yüklenmesin); ilerleme
+`kullanici/{id}.aktarim.json`, `/basla` 4 sn'de bir yokluyor.
+
+Gerçek veriyle uçtan uca denendi (52 albümlük elle liste, `--json`): 3,5 dk,
+51/52 gömü, 121 yeni liste, 3 stabil eksen, 150 aday. Spotify girişinin
+kendisi SINANAMADI — kullanıcı adına parola girilmez.
+
+### Yalnız-ses kümeleme ölçüldü: metadata kadar iyi
+
+Seto'nun 288 gömülü albümü, leave-one-artist-out, npmi + büzülme 1, melez 1:2,
+aynı havuz:
+
+    kümeleme                  melez @50   MRR    yüzdelik   liste @50
+    metadata FCM, c=12          0.10     0.011    0.096       0.29
+    CLAP FCM, c=2 (XB seçimi)   0.03     0.011    0.157       0.15
+    CLAP FCM, c=5               0.08     0.019    0.116       0.23
+    CLAP FCM, c=9  (seçilen)    0.09     0.010    0.099       0.25
+    CLAP FCM, c=12              0.10     0.017    0.097       0.24
+
+### c seçimi: XB düz uzayda yapı söylemiyor → `en_ince_stabil_c`
+
+CLAP uzayında XB eğrisi düz (0,63–0,87) ve minimumu c=2 — ölçülen en kötü
+sonuç. Yalnız stabiliteye bakmak da yetmedi: yapısı bilinen sentetik veride
+(3 sıkı küme) bootstrap c=5'in gürültü bölünmesini de kararlı buldu. Kural:
+**bütün kümeleri stabil, en küçük kümesi ≥5 ve XB'si en iyinin 1,5 katını
+aşmayan en büyük c.** Üç veride de doğru: sentetik c=3, seto c=9, 52 albüm c=3
+(XB orada da c=2 verip cazı metalle, hip-hop'u folkla birleştiriyordu).
+Metadata yolu `c_secimi="xb"`de kaldı — orada XB çalışıyor, dokunulmadı.
+
+### Denenip çıkarılan: komşu gömüsü
+
+Yeni kullanıcının en güçlü 300 liste komşusunun yarısının ses gömüsü yoktu;
+447 parça gömüldü (~6 dk). Ölçüm tutarlı kazanç göstermedi (deneme melez MRR
+0,028→0,014; seto ses yüzdelik 0,347→0,330, melez 0,096→0,101) ve öneriler
+gözle de neredeyse aynıydı → hattan çıkarıldı. Asıl sorun kapsam değil:
+küçük kütüphanede ses benzerliğinde iki eksende birden çıkan «her şeye
+benzeyen» kayıtlar (hubness). Açık iş.
+
+### Yol boyunca bulunan sessiz hatalar
+
+- `calma_listesi.hasat` `parca_id` YAZMIYORDU. İlk hasat kimliği sonradan
+  doldurmuştu; bundan sonraki her hasat öneri havuzunda görünmez kalırdı.
+- `etiket_clap.parca_gomule` önizleme URL'sini önbellekten okuyordu — imzası
+  dolmuş URL, `taze_onizleme`'de 2026-09-02'de düzeltilen hatanın ikizi.
+- Paylaşımlı havuz büyüyünce seto'nun liste recall@50'si 0,27→0,29: bir
+  kullanıcının hasadı herkese yarıyor.
+
+## 2026-09-21 (2) — MBID: 24 → 14 eksik; barkod hatası
+
+Altıncı deneme `katalog_yolu`: sanatçıyı TAKMA ADIYLA bul («Masayoshi
+Takanaka» ↔ «高中正義»), kataloğunu tara. Birebir olmayan başlıkta örtüşme
+iki yönlü ≥%60 VE yıl ±1 şart — yıl şartı olmasa «Seychelles» (1976)
+«Ukulele SEYCHELLES»a (2011), ters yön olmasa «Passion & Warfare (25th)»
+«Modern Primitive / Passion and Warfare»a bağlanırdı. 10 kesin (hepsi elle
+denetlendi), 13'ü gerçek belirsizlik — `/eslestirme`de insan kararı bekliyor.
+`mbid_yok=1` albümler artık aranmıyor (makine kararı insanınkini ezmesin).
+
+İki albümün `mbid`inde BARKOD vardı (elle CSV'ye yapıştırılmış); kredi turu
+400 alıp tümden düşüyordu. `mbid_coz`: UUID olduğu gibi, barkod MB'de tek yayın
+grubuna çözülerek, ikisi de değilse ret — `/api/eslestir` ve `--uygula` dahil.
+Kredi turu yeniden: +476 MB kredisi (9.679 → 10.155), +144 etiket.
+Yedekler: `kullanici/1.sqlite.mbid-oncesi`, `ortak.sqlite.mbid-oncesi`.
+Seto'nun kümelemesi YENİDEN ÇALIŞTIRILMADI: yeni çalışma kimliği küme adlarını
+eski çalışmada bırakır; kullanıcının kararı.
+
+## 2026-09-21 (3) — Servis çalışanı: telefon güncelleme almıyordu
+
+Gerçek telefon denetimi yapılamadı (gömülü tarayıcı SW kaydına izin
+vermiyor — betik 200 dönüyor, kayıt "unknown error"). Onun yerine sw.js sahte
+bir SW ortamında sayfa içinde çalıştırıldı ve iki hata bulundu:
+
+1. Statik dosyalar ÖNCE ÖNBELLEKTEN, tazelenmeden veriliyordu ve `SURUM`
+   sabitti: SW'yi bir kez kurmuş telefon eski JS/CSS'te sonsuza dek kalırdı.
+   → önce ağ, çevrimdışıysa önbellek; `kesif-v2`.
+2. SW'siz de bayat: Starlette yalnız ETag/Last-Modified veriyor, tarayıcı
+   sezgisel tazelik süresince sormuyor (CSS düzeltmesinden sonra sayfa eski
+   stil.css ile açıldı — ölçüldü). → şablonlarda `statik()` = `?v=<mtime>`.
+   Çevrimdışı eşleşme önce birebir, sonra `ignoreSearch` (tersi kurulumdaki
+   eski kabuğu döndürüyordu).
+
+Ayrıca: `/basla` 375 px'de 155 px taşıyordu (grid öğesi uzun `<pre>` kadar
+büyüyordu) → `minmax(0, 1fr)`.
+
+**Telefonda hâlâ doğrulanması gereken ve kod değil ortam meselesi olan:**
+SW yalnız güvenli bağlamda (https ya da localhost) kaydolur. Telefon
+`http://192.168.x.x:8800` ile bağlanırsa SW ve «ana ekrana ekle» ÇALIŞMAZ.
+
+Telefonda denetim listesi (https ardında, `KESIF_HTTPS=1`):
+1. Sayfayı aç → «Ana ekrana ekle» çıkıyor mu, ikon doğru mu.
+2. Ana ekrandan aç → tam ekran (tarayıcı çubuğu yok), alt şerit görünüyor mu.
+3. Uçak modu → bir sayfaya git: «Bağlantı yok» sayfası gelmeli, eski bir
+   kütüphane sayfası GELMEMELİ (kullanıcı verisi önbelleğe girmiyor).
+4. Uçak modu kapalı → stil.css'e görünür bir değişiklik yap, sayfayı yenile:
+   değişiklik ilk yenilemede görünmeli (v1'de hiç görünmüyordu).
+5. Bir öneride «dinle» → 30 sn önizleme çalıyor, ekran kilitlenince sürüyor mu.
+
+230 test geçiyor (14 yeni).
+
+## 2026-09-21 (4) — Açık işler kapatıldı: yinelenme, yeniden kümeleme, jeton şifreleme
+
+### Ses önerisi iki eksende birden çıkıyordu — iki ayrı sebep
+
+1. **Üye tanımı tutarsızdı.** `acik_havuz_adaylari` eksen üyelerini
+   `uyelik >= 0.25` ile alıyordu; değerlendirme (`eksen_haritasi`) ve liste
+   stratejisi keskin atamayla. Ölçülen şey üretimin yaptığı şey değildi (K19)
+   ve bulanık albüm iki eksenin üyesi oluyordu. Keskin atamaya geçince
+   52 albümlük kütüphanede yinelenme %28 → %0, seto'da %34 → %32.
+2. **Gerçek hubness.** Seto'da kalan %32 birçok eksene yakın kayıtlardı. Kural:
+   kayıt yalnız kütüphanedeki EN YAKIN albümü bu eksendeyse önerilir — kartın
+   "senin X albümüne benziyor" gerekçesiyle de örtüşüyor. Değerlendirmeye aynı
+   kural eklendi (`--ses-kural`). Adil ölçütlerle (payda sabit: recall@k, MRR):
+
+       seto    ses    @50 0.03→0.04  MRR 0.005→0.005
+       seto    melez  @50 0.10→0.09  MRR 0.012→0.017
+       52 alb. melez  @50 0.10→0.10  MRR 0.014→0.014
+
+   Yinelenme %34 → %4 (kalan: aynı sanatçının farklı parçaları), eksenler
+   toplamında tekil sanatçı 88 → 106. DİKKAT: bu kıyasta `yüzdelik` YANILTICI —
+   medyan yalnız bulunanlar üzerinden, kural bazı gizlenenleri eliyor ve
+   yüzdelik yapay biçimde iyileşiyor (0,330 → 0,125). Raporlanmadı.
+
+### Seto yeniden kümelendi — adlar ve kararlar taşınarak
+
+Önce ölçüldü: `audio_features` kaynağa göre anahtarlandıktan sonra matris
+kurucu yerel + AcousticBrainz satırlarını birlikte okuyup "duplicate labels"
+ile düşüyordu (19 albüm) — yani matris BU HATA yüzünden yeniden kurulamıyordu.
+Yalnız `kaynak='yerel'` (K11). Yeni matris 1.308 öznitelik (1.234'tü); c=12
+yeni kümeleme eskiyle ARI 0,646 ve ölçülerek daha iyi:
+
+    çalışma            liste @10  MRR    melez @10  @50    MRR
+    2026-08-11 c=12      0.12    0.068     0.02    0.09   0.017
+    2026-09-21 c=12      0.16    0.080     0.04    0.11   0.020
+
+Not: varsayılan tarama (XB) yeni matriste c=5 seçiyor; kullanıcı kaba bölme
+istemediği ve eski çalışma da c=12 olduğu için c=12 sabitlendi.
+
+`python/kumeleme/tasi.py`: eski ↔ yeni eksenler keskin üyelerin Jaccard'ıyla
+bire bir eşleniyor; ad J ≥ 0,5 ise taşınıyor, kararlar her durumda. Beş adın
+beşi taşındı (istemiyen 0,78 · grunge 0,93 · metal 0,77 · jazz işi 0,56 · rush
+1,00), 32 karar taşındı. Eski çalışma yerinde; `?calisma=` ile açılabilir.
+Yedek: `kullanici/1.sqlite.yeniden-kume-oncesi`, `data/ozellikler.parquet.onceki`.
+
+### Spotify jetonu şifreli (`python/sifre.py`)
+
+Fernet (`cryptography`, yeni bağımlılık, ücretsiz). Anahtar veritabanında
+değil `.env`'de (`KESIF_JETON_ANAHTARI`) — yayında taşınan DB kopyası jetonu
+açmasın diye. Yoksa ilk ihtiyaçta üretilir, değeri yazdırılmaz. Eski düz metin
+okunur; `python -m python.hesap jetonlari-sifrele` göçü yapar. Anahtar
+kaybolursa jeton None → kullanıcı yeniden bağlanır.
+
+### Test altyapısında sessiz bir hata
+
+On bir test dosyasının sonunda modül düzeyinde "betik olarak çalıştır"
+döngüsü vardı: pytest dosyayı TOPLARKEN tüm testleri fixture'sız bir kez daha
+koşuyordu. Şifreleme eklenince bu, testlerin GERÇEK `.env`'ye anahtar yazması
+olarak ortaya çıktı (değer yazdırılmadı; satır geri alındı). Döngüler
+`if __name__ == "__main__":` altına alındı; `tests/conftest.py` anahtarı her
+test için geçici dosyaya yönlendiriyor. Yan kazanç: testler artık iki kez
+koşmuyor.
+
+235 test geçiyor.

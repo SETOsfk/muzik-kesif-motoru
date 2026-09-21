@@ -292,6 +292,18 @@ def test_servis_calisani_sayfa_onbelleklemez():
         "sayfa yanıtı önbelleğe alınıyor — kullanıcı verisi sızabilir"
 
 
+def test_servis_calisani_statigi_once_agdan_alir():
+    """v1 statik dosyayı önce önbellekten veriyor ve hiç tazelemiyordu: SW'yi
+    kurmuş telefon uygulama.js/stil.css'in eski hâlinde sonsuza dek kalıyordu.
+    Statik blokta ağ isteği önbellek okumasından ÖNCE gelmeli."""
+    from pathlib import Path as _P
+
+    kaynak = (_P(__file__).resolve().parents[1] / "web" / "statik" / "sw.js").read_text()
+    blok = kaynak.split('url.pathname.startsWith("/statik/")')[1].split("// Sayfalar")[0]
+    assert blok.index("fetch(istek)") < blok.index("caches.match"), \
+        "statik dosyalar önce önbellekten veriliyor — güncellemeler telefona ulaşmaz"
+
+
 def test_kaba_kuvvet_durduruluyor():
     """Sınırsız giriş denemesi internete açık bir sistemde kabul edilemez.
 
@@ -503,7 +515,9 @@ def test_spotify_ayni_epostayi_ikizlemiyor():
                     "SELECT spotify_id, spotify_yenile FROM kullanici "
                     "WHERE kullanici_id = ?", (kid,)).fetchone()
                 assert satir[0] == "sp_2", "Spotify kimliği bağlanmadı"
-                assert satir[1] == "yenile", "yenileme jetonu saklanmadı"
+                from python.sifre import coz
+                assert satir[1] != "yenile", "yenileme jetonu DÜZ METİN saklandı"
+                assert coz(satir[1]) == "yenile", "yenileme jetonu saklanmadı"
             finally:
                 conn.close()
     finally:
@@ -554,12 +568,16 @@ def test_spotify_paylasilan_onbellegi_kullanmiyor():
         "Spotify istekleri paylaşılan disk önbelleğinden geçiyor"
 
 
-for _ad, _fn in sorted(list(globals().items())):
-    if _ad.startswith("test_") and callable(_fn):
-        _kosul(_ad, _fn)
+# Betik olarak çalıştırma (`python tests/x.py`). Koşulsuz olsaydı pytest
+# dosyayı TOPLARKEN tüm testleri fixture'sız bir kez daha koşardı —
+# 2026-09-21'de gerçek .env'ye şifre anahtarı yazdırdı.
+if __name__ == "__main__":
+    for _ad, _fn in sorted(list(globals().items())):
+        if _ad.startswith("test_") and callable(_fn):
+            _kosul(_ad, _fn)
 
-print("—" * 40)
-if _kalan:
-    print(f"{len(_kalan)} test kaldı")
-    raise SystemExit(1)
-print("tüm testler geçti")
+    print("—" * 40)
+    if _kalan:
+        print(f"{len(_kalan)} test kaldı")
+        raise SystemExit(1)
+    print("tüm testler geçti")

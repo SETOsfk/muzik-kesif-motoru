@@ -163,9 +163,17 @@ def etiket_blogu(conn: sqlite3.Connection, albumler: pd.Index, min_album: int) -
 
 
 def ses_blogu(conn: sqlite3.Connection, albumler: pd.Index) -> tuple[pd.DataFrame, int]:
-    """Robust z (medyan/IQR). Eksik albümler 0 = medyan ile doldurulur."""
+    """Robust z (medyan/IQR). Eksik albümler 0 = medyan ile doldurulur.
+
+    YALNIZ `kaynak='yerel'`. `audio_features` kaynağa göre anahtarlandıktan
+    sonra aynı albümün hem yerel hem AcousticBrainz satırı olabiliyor ve
+    süzülmeyince `reindex` "duplicate labels" ile düşüyordu (ölçüldü,
+    2026-09-21: 19 albüm). K11 zaten kaynakların karıştırılmamasını istiyor —
+    önizleme/AB ölçümü AAC'li ve seviye normalize, yerel dosyayla kıyaslanamaz.
+    """
     ses = pd.read_sql_query(
-        f"SELECT album_id, {', '.join(SES_SUTUNLARI)} FROM audio_features", conn
+        f"SELECT album_id, {', '.join(SES_SUTUNLARI)} FROM audio_features "
+        "WHERE kaynak = 'yerel'", conn
     )
     if ses.empty:
         return pd.DataFrame(index=albumler), len(albumler)

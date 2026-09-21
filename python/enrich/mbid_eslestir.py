@@ -366,6 +366,152 @@ def _sozcuk_sorgulari(
     return toplanan
 
 
+# --------------------------------------------------------------------------- #
+# Altıncı yol: önce SANATÇI, sonra onun kataloğu
+# --------------------------------------------------------------------------- #
+
+#: Katalog taraması en fazla bu kadar yayın grubu okur (sayfa başına 100).
+KATALOG_AZAMI = 300
+
+
+def _sanatci_kimlikleri(istemci: ApiIstemci, artist: str) -> list[str]:
+    """Etiketteki ada TAKMA AD DAHİL uyan MusicBrainz sanatçıları.
+
+    Önceki beş deneme sanatçıyı yayın grubunun `artist-credit` adıyla
+    karşılaştırıyor. Japon kayıtlarında o ad özgün yazımla duruyor:
+    «Masayoshi Takanaka» ↔ «高中正義», «Himiko Kikuchi» ↔ «菊池ひみこ».
+    Latin ad yalnız TAKMA AD listesinde; `ayni_kisi_mi` onu hiç görmüyordu.
+
+    Kabul dar: ad, sıralama adı ya da takma adlardan biri etiketle
+    `ayni_kisi_mi` düzeyinde tutmalı. Arama skorunun yüksek olması yetmez —
+    «Scott Henderson» araması «Michael Henderson»u 100 puanla döndürüyor.
+    """
+    parcalar = [artist] + [p.strip() for p in artist.split("/") if p.strip()]
+    kimlikler: list[str] = []
+    for ad in dict.fromkeys(parcalar):
+        temiz = ad.replace('"', "")
+        govde = istemci.get_json("artist", {
+            "query": f'artist:"{temiz}" OR alias:"{temiz}"', "fmt": "json",
+            "limit": 5})
+        for aday in (govde or {}).get("artists", []):
+            adlar = [aday.get("name"), aday.get("sort-name")] + [
+                t.get("name") for t in aday.get("aliases", []) or []]
+            if any(ayni_kisi_mi(ad, a) or _tanimliksiz(ad) == _tanimliksiz(a)
+                   for a in adlar if a):
+                if aday["id"] not in kimlikler:
+                    kimlikler.append(aday["id"])
+    return kimlikler[:2]
+
+
+def _katalog(istemci: ApiIstemci, sanatci_id: str) -> list[Aday]:
+    """Sanatçının yayın gruplarının tamamı (browse; arama değil)."""
+    adaylar: list[Aday] = []
+    ofset = 0
+    while ofset < KATALOG_AZAMI:
+        govde = istemci.get_json("release-group", {
+            "artist": sanatci_id, "limit": 100, "offset": ofset, "fmt": "json"})
+        gruplar = (govde or {}).get("release-groups", [])
+        for ham in gruplar:
+            adaylar.append(Aday(
+                mbid=ham["id"], artist=f"<{sanatci_id[:8]}>",
+                title=ham.get("title", ""),
+                yil=yil_ayikla(ham.get("first-release-date")),
+                skor=100, tur=ham.get("primary-type"),
+            ))
+        ofset += 100
+        if len(gruplar) < 100 or ofset >= int((govde or {}).get("release-group-count", 0)):
+            break
+    return adaylar
+
+
+#: Tanımlıklar sözcük örtüşmesine girmez. `normalize_esleme` BAŞTAKİ
+#: tanımlığı atıyor; «虹伝説 THE RAINBOW GOBLINS» CJK düşünce «the» başa
+#: geliyor ve gidiyor, bizim «Nijidensetsu -The Rainbow Goblins-»de ortada
+#: kalıyor. Sayılırsa oran yapay biçimde düşüyor (ölçüldü: 2/4 yerine 2/3).
+_TANIMLIK = frozenset({"the", "and", "les", "des", "der", "die", "das", "los", "las"})
+
+
+def _baslik_sozcukleri(baslik: str) -> set[str]:
+    return {w for w in normalize_esleme(baslik.translate(_TIRE)).split()
+            if len(w) >= 3 and w not in _TANIMLIK}
+
+
+def _tanimliksiz(ad: str | None) -> str:
+    """«The Stampeders» ↔ «Stampeders» — etiketler baştaki tanımlığı atlıyor."""
+    n = normalize_esleme(ad)
+    return n[4:] if n.startswith("the ") else n
+
+
+def katalog_karari(
+    title: str, yil: int | None, katalog: list[Aday], parca_sayisi: int | None = None,
+) -> Karar:
+    """Doğrulanmış sanatçının kataloğunda başlığı bul.
+
+    Sanatçı kimliği zaten doğrulandığı için başlık GEVŞEK tutulabilir ama
+    iki koşulla:
+    - Birebir (normalize) tutmuyorsa örtüşme İKİ YÖNLÜ en az %60 olmalı VE
+      yıl ±1 tutmalı. «Nijidensetsu -The Rainbow Goblins-» (1981) ↔
+      «虹伝説 THE RAINBOW GOBLINS» (1981): yıl tutuyor, 3 sözcüğün 2'si,
+      MB'nin 2 sözcüğünün 2'si ortak. Yıl şartı olmasa «Seychelles» (1976)
+      ↔ «Ukulele SEYCHELLES» (2011) bağlanırdı. Ters yön şartı olmasa
+      «Passion & Warfare (25th Anniversary)» fazladan bir albüm adı taşıyan
+      «Modern Primitive / Passion and Warfare»a bağlanırdı — kredileri de
+      başka albümü anlatırdı. Emin olunamıyorsa insana kalır.
+    - Birden çok aday kalırsa `karar_ver`'in yolu: tür, yıl, sonra yeniden
+      basım kuralı (etiket yılı hepsinden sonraysa en eski yayın grubu).
+    """
+    sade = arama_basligi(title)
+    n_baslik = normalize_esleme(sade.translate(_TIRE))
+    bizim = _baslik_sozcukleri(sade)
+
+    birebir = [a for a in katalog
+               if normalize_esleme(a.title.translate(_TIRE)) == n_baslik]
+    ortusen = []
+    if not birebir and bizim and yil:
+        for a in katalog:
+            onlarin = _baslik_sozcukleri(a.title)
+            ortak = bizim & onlarin
+            if (onlarin and len(ortak) / len(bizim) >= 0.6
+                    and len(ortak) / len(onlarin) >= 0.6
+                    and a.yil and abs(a.yil - yil) <= 1):
+                ortusen.append(a)
+
+    adaylar = birebir or ortusen
+    if not adaylar:
+        return Karar("yok", None, [])
+    neden = "katalog: birebir başlık" if birebir else "katalog: sözcük örtüşmesi + yıl"
+    if len(adaylar) == 1:
+        return Karar("kesin", adaylar[0], adaylar, neden)
+    kalan = _tur_ile_ayir(adaylar, parca_sayisi)
+    if len(kalan) == 1:
+        return Karar("kesin", kalan[0], adaylar, neden + ", tür ile ayrıldı")
+    if yil:
+        for tolerans in (0, 1):
+            uyan = [a for a in kalan if a.yil and abs(a.yil - yil) <= tolerans]
+            if len(uyan) == 1:
+                return Karar("kesin", uyan[0], adaylar, neden + ", yıl ile ayrıldı")
+        yillilar = [a for a in kalan if a.yil]
+        if yillilar and all(yil - a.yil > 1 for a in yillilar):
+            en_eski = min(yillilar, key=lambda a: a.yil)
+            return Karar("kesin", en_eski, adaylar,
+                         neden + f", yeniden basım: ilk çıkış {en_eski.yil}")
+    return Karar("supheli", kalan[0], adaylar[:5], neden + ", birden fazla aday")
+
+
+def katalog_yolu(
+    istemci: ApiIstemci, artist: str, title: str, yil: int | None,
+    parca_sayisi: int | None = None,
+) -> Karar:
+    en_iyi = Karar("yok", None, [])
+    for sanatci_id in _sanatci_kimlikleri(istemci, artist):
+        karar = katalog_karari(title, yil, _katalog(istemci, sanatci_id), parca_sayisi)
+        if karar.durum == "kesin":
+            return karar
+        if karar.durum == "supheli" and en_iyi.durum == "yok":
+            en_iyi = karar
+    return en_iyi
+
+
 def eslestir(
     conn: sqlite3.Connection,
     istemci: ApiIstemci,
@@ -374,9 +520,13 @@ def eslestir(
     yenile: bool = False,
 ) -> tuple[dict[str, int], list[dict]]:
     """mbid'i boş albümleri MusicBrainz'e bağla. (sayaçlar, rapor satırları)."""
-    sorgu = "SELECT album_id, artist, title, year, track_count FROM albums"
+    # Kullanıcı "MusicBrainz karşılığı yok" dediyse (`mbid_yok`) bir daha
+    # aranmaz: altıncı yol gevşek başlık eşlemesiyle ona MBID yazabilirdi ve
+    # insan kararını makine kararı ezmiş olurdu.
+    sorgu = ("SELECT album_id, artist, title, year, track_count FROM albums "
+             "WHERE mbid_yok = 0")
     if not yenile:
-        sorgu += " WHERE mbid IS NULL"
+        sorgu += " AND mbid IS NULL"
     sorgu += " ORDER BY artist, year, title"
     if limit:
         sorgu += f" LIMIT {int(limit)}"
@@ -447,6 +597,14 @@ def eslestir(
                     )
                     if besinci.durum == "kesin":
                         karar = besinci
+
+            # ALTINCI DENEME: sanatçıyı takma adıyla bul, kataloğunu tara.
+            if karar.durum != "kesin":
+                altinci = katalog_yolu(istemci, albom["artist"], albom["title"],
+                                       albom["year"], albom["track_count"])
+                if altinci.durum == "kesin" or (
+                        altinci.durum == "supheli" and karar.durum == "yok"):
+                    karar = altinci
         except AgYok:
             print(f"  çevrimdışı, atlandı: {albom['artist']} — {albom['title']}", file=sys.stderr)
             continue
@@ -497,14 +655,79 @@ def rapor_yaz(satirlar: list[dict], hedef: Path) -> None:
         yazici.writerows(satirlar)
 
 
-def duzeltmeleri_uygula(conn: sqlite3.Connection, dosya: Path) -> int:
-    """Elle doldurulmuş rapordaki mbid sütununu veritabanına yaz."""
+# --------------------------------------------------------------------------- #
+# MBID biçimi
+# --------------------------------------------------------------------------- #
+
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+#: UPC-A 12, EAN-13 13 hane; EAN-8 ve GTIN-14 de görülüyor.
+_BARKOD = re.compile(r"^\d{8,14}$")
+
+
+def mbid_coz(istemci: ApiIstemci | None, deger: str) -> str | None:
+    """Elle girilen değeri yayın grubu MBID'sine çevir; olmuyorsa None.
+
+    Ölçülen hata (2026-09-21): iki albümün `mbid` alanında BARKOD duruyordu
+    («074646770320», «4542696000309») — elle düzeltme CSV'sine barkod
+    yapıştırılmış. Kredi zenginleştirmesi o satırda 400 alıp tüm turu
+    düşürüyordu. Barkod aslında kesin bir kimlik: MusicBrainz'de yayına,
+    oradan tek bir yayın grubuna çözülüyor. Birden çok gruba dağılıyorsa
+    (farklı albümler aynı barkodu paylaşamaz ama kayıt hatası olur) None.
+    """
+    deger = (deger or "").strip().lower()
+    if _UUID.match(deger):
+        return deger
+    if not _BARKOD.match(deger) or istemci is None:
+        return None
+    govde = istemci.get_json("release", {"query": f"barcode:{deger}",
+                                         "fmt": "json", "limit": 10})
+    gruplar = {
+        (r.get("release-group") or {}).get("id")
+        for r in (govde or {}).get("releases", [])
+        if r.get("score", 0) >= 100 and (r.get("release-group") or {}).get("id")
+    }
+    return gruplar.pop() if len(gruplar) == 1 else None
+
+
+def bicim_onar(conn: sqlite3.Connection, istemci: ApiIstemci | None) -> list[str]:
+    """UUID olmayan `mbid`leri çöz ya da boşalt. Değişiklik satırlarını döner.
+
+    Çözülemeyen değer SİLİNİR (NULL): yanlış biçimli bir MBID her
+    zenginleştirme turunu düşürüyor, boş olan ise yalnız o albümü eşleştirme
+    ekranına geri gönderiyor.
+    """
+    notlar = []
+    for album_id, artist, title, mbid in conn.execute(
+        "SELECT album_id, artist, title, mbid FROM albums "
+        "WHERE mbid IS NOT NULL AND mbid != ''").fetchall():
+        if _UUID.match(mbid):
+            continue
+        yeni = mbid_coz(istemci, mbid)
+        with conn:
+            conn.execute("UPDATE albums SET mbid = ? WHERE album_id = ?", (yeni, album_id))
+        notlar.append(f"{artist} — {title}: «{mbid}» → {yeni or 'silindi (çözülemedi)'}")
+    return notlar
+
+
+def duzeltmeleri_uygula(
+    conn: sqlite3.Connection, dosya: Path, istemci: ApiIstemci | None = None,
+) -> int:
+    """Elle doldurulmuş rapordaki mbid sütununu veritabanına yaz.
+
+    Değer `mbid_coz`dan geçer: UUID olduğu gibi, barkod yayın grubuna
+    çözülerek yazılır; ikisi de değilse satır atlanır ve söylenir.
+    """
     uygulanan = 0
     with dosya.open(newline="", encoding="utf-8-sig") as f:
         for satir in csv.DictReader(f):
-            mbid = (satir.get("mbid") or "").strip()
+            ham = (satir.get("mbid") or "").strip()
             album_id = (satir.get("album_id") or "").strip()
-            if not mbid or not album_id:
+            if not ham or not album_id:
+                continue
+            mbid = mbid_coz(istemci, ham)
+            if mbid is None:
+                print(f"  ATLANDI {satir.get('sanatci')} — {satir.get('album')}: "
+                      f"«{ham}» MBID ya da çözülebilir barkod değil", file=sys.stderr)
                 continue
             with conn:
                 imlec = conn.execute(
@@ -534,12 +757,14 @@ def main(argv: list[str] | None = None) -> int:
 
     conn = baglan(args.db)
     try:
+        istemci = musicbrainz(cevrimdisi=args.cevrimdisi)
         if args.uygula:
-            adet = duzeltmeleri_uygula(conn, args.uygula)
+            adet = duzeltmeleri_uygula(conn, args.uygula, istemci)
             print(f"{adet} albümün mbid'i elle karardan yazıldı.")
             return 0
 
-        istemci = musicbrainz(cevrimdisi=args.cevrimdisi)
+        for not_ in bicim_onar(conn, istemci):
+            print(f"  biçim onarıldı: {not_}", file=sys.stderr)
         sayac, rapor = eslestir(conn, istemci, limit=args.limit, yenile=args.yenile)
     finally:
         conn.close()

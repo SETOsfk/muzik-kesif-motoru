@@ -302,6 +302,10 @@ class SesErisimi:
         self.LL = self.L @ self.L.T if self.L.size else np.zeros((0, 0))
         self._sahip_dizi = np.array(self.kutup_sahip)
 
+    #: "en_yakin_eksen": parça yalnız EN YAKIN kütüphane albümü sorgu
+    #: ekseninde ise sayılır (`etiket_clap.acik_havuz_adaylari` ile aynı kural).
+    kural: str = "en_yakin_eksen"
+
     def sirala(
         self, gizlenen: str, sahip: set[str], sorgu: set[str] | None = None,
     ) -> list[str]:
@@ -332,9 +336,18 @@ class SesErisimi:
         # Satır (parça) skoru = sorguya en yakın olduğu nokta.
         satir = duzeltilmis.max(axis=1)
 
+        if self.kural == "en_yakin_eksen" and sorgu is not None:
+            # En yakın albümü sorgu dışında kalan parça bu eksenin adayı değil.
+            tum = (self.S[:, kalan] - taban_havuz
+                   - self.LL[np.ix_(kalan, kalan)].mean(axis=1)[None, :])
+            eksende = np.isin(self._sahip_dizi[kalan], list(sorgu))
+            satir = np.where(eksende[tum.argmax(axis=1)], satir, -np.inf)
+
         skor: dict[str, float] = {}
         for deger, anahtar in zip(satir, self.havuz_sahip):
             if anahtar in sahip and anahtar != gizlenen:
+                continue
+            if deger == -np.inf:
                 continue
             if deger > skor.get(anahtar, float("-inf")):
                 skor[anahtar] = float(deger)
@@ -740,10 +753,14 @@ def main(argv: list[str] | None = None) -> int:
                              help="kanıt gücü çarpanı n/(n+k); k=0 kapalı")
     ayristirici.add_argument("--olcut", choices=("pmi", "npmi"), default="pmi",
                              help="birliktelik ölçütü")
+    ayristirici.add_argument("--ses-kural", choices=("en_yakin_eksen", "eksen"),
+                             default="en_yakin_eksen",
+                             help="ses erişiminde eksen kuralı (kıyas için)")
     ayristirici.add_argument("--en-kotu", type=int, default=0,
                              help="hiç bulunamayan ilk N sanatçıyı listele")
     args = ayristirici.parse_args(argv)
 
+    SesErisimi.kural = args.ses_kural
     conn = baglan(args.db)
     try:
         sonuc = calistir(conn, limit=args.limit, ayrinti=args.ayrinti,
