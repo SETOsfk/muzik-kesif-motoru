@@ -119,6 +119,8 @@ lisanslıdır.
 
 Kullanıcının önerdiği "kullanıcılar arası bulut havuzu" ELENDİ: sunucu, başka
 kullanıcılar ve gizlilik yönetimi gerektiriyor; bu proje tek kişilik ve 0 TL (K2).
+(Not 2026-09-15: proje artık en çok 5 kullanıcılı — bkz. K20. Ama ses profilleri
+hâlâ kullanıcılar arası paylaşılan bir "havuz" olarak değil, ortak aday verisi olarak tutuluyor.)
 
 **Kaynaklar karışmamalı:** `audio_features.kaynak` sütunu (yerel / acousticbrainz /
 onizleme). Önizlemeler AAC'ye sıkıştırılmış ve seviye normalize edilmiş olduğu için
@@ -285,7 +287,7 @@ listesinde geri plana iniyor.
 | RateYourMusic | **KULLANILMAZ** | API yok, scraping ToS'a aykırı |
 | Apple Music API | **KULLANILMAZ** | Ücretli geliştirici hesabı ($99/yıl) — K2'ye aykırı. iTunes Search zaten anahtarsız |
 | Tidal | Beklemede | Kayıt/onay gerektiriyor (401 döndü) |
-| Spotify | **KULLANILMAZ** | 2024 sonunda yeni uygulamalar için `preview_url` kapatıldı |
+| Spotify | **Yalnız giriş + kütüphane okuma** (`python/spotify.py`) | `preview_url` 2024 sonunda kapatıldı — önizleme için KULLANILMAZ. OAuth (Authorization Code, salt-okuma kapsamı) ile kimlik ve kayıtlı albümler okunur. Geliştirme modunda en çok 5 kullanıcı, panelde e-postayla eklenmeli. `onbellek.ApiIstemci` KULLANILMAZ: önbellek anahtarı Authorization başlığını içermiyor, kullanıcılar birbirinin verisini görür |
 | CritiqueBrainz | CC lisanslı kullanıcı yorumları | Anahtarsız. Kapsama İNCE — 6 albümde 2 yorum (ölçüldü). Yardımcı sinyal, ana sinyal değil |
 
 ### K14 — Dış kaynak iddiası, kendi verimizde karşılığı yoksa yazılmaz
@@ -401,3 +403,47 @@ Değerlendirme kodu üretim kodunu ÇAĞIRIR ama kopyalamaz; kopyalarsa üretimd
 hatayı ölçemez. Kopyalanması gereken tek yer üretimin değerlendirmeyi imkânsız
 kılan kısıtları (kütüphaneyi aday havuzundan çıkarmak gibi) ve o zaman sebebi
 yazılır.
+
+### K20 — Çok kiracılık: en çok 5 kullanıcı (2026-09-15)
+Ortak veri (albümler, krediler, adaylar, gömüler) `data/db/ortak.sqlite`; kişisel
+veri (kütüphane sahipliği, geri bildirim, küme adları) `data/db/kullanici/{id}.sqlite`.
+İkincisi bağlantıya ATTACH edilir; SQLite nitelenmemiş adı önce `main`'de sonra
+ATTACH sırasıyla çözdüğü için sorgular değişmeden kalır. Aktif kullanıcı
+`AKTIF_KULLANICI` ContextVar'ında. Oturum ara katmanı `ACIK_YOLLAR` dışındaki her
+yolu girişe zorlar (önek eşleşmesi: `/giris/*` açıktır).
+
+**Tekrarlayan hata sınıfı:** kullanıcı kimliğini anahtarına katmayan her önbellek
+(`lru_cache`, dosya önbelleği) veri sızdırır. Yeni önbellek eklerken önce bunu sor.
+
+Ayrıntı: `docs/karar-gunlugu.md` 2026-09-15 bölümleri.
+
+## Güncel durum (son güncelleme 2026-09-21)
+
+- **Testler:** `.venv/bin/python -m pytest` — 216 test geçiyor. Test gerçek
+  `ortak.sqlite`'a YAZMAMALI; `tests/test_web.py` geçici yol kullanıyor.
+- **Sunucu:** `.venv/bin/python -m web.sunucu --port 8800` (yerel). Sağlık: `/saglik`.
+- **Yayın:** ERTELENDİ (kullanıcı kararı). Sunmak için 47 MB yeter
+  (`ortak.sqlite`, `kullanici/`, `data/cache/clap`, `clap_parca`); torch/demucs
+  yalnız çevrimdışı. Streamlit Cloud elendi (K15 + veritabanları git'te yok +
+  kalıcı disk yok). Seçenekler: Oracle Always Free, HF Spaces + DB eşitleme,
+  küçük ücretli VPS. Kısıt: SQLite geri bildirim yazıyor → kalıcı disk şart;
+  Turso ATTACH'i bozar.
+
+### Kullanıcının yapması gereken (Claude YAPAMAZ — hesap/parola)
+- Spotify panelinde Redirect URI: `http://127.0.0.1:8800/giris/spotify/donus`
+- Panelde en çok 5 kullanıcıyı e-postayla ekle, gerçek bir girişle akışı doğrula.
+
+### Sıradaki işler (öncelik sırasıyla)
+1. **Yeni kullanıcı aktarım hattı:** Spotify kütüphanesi (`kayitli_albumler`,
+   `en_cok_sanatcilar`, `son_calinanlar`) → Deezer önizleme eşlemesi → CLAP gömüsü
+   → kümeleme. Bu olmadan seto dışındaki kullanıcı öneri alamıyor;
+   `web/sablonlar/basla.html` bunu dürüstçe söylüyor — hat bitince metni güncelle.
+2. 302 albümden 24'ünün MBID'si yok (`/eslestirme` ile elle ya da eşleştiriciyi iyileştir).
+3. Service worker'ı gerçek telefonda doğrula.
+
+### Değişmez kısıtlar
+- `.env` değerleri asla yazdırılmaz; yalnız "tanımlı/değil" söylenir.
+- Reddit onaysız uç nokta yok; RYM kazıma yok; Apple Music API yok; FMA'dan ses indirilmez.
+- Kullanıcı adına hesap açılmaz, parola girilmez (Spotify, Oracle, gh, Discogs).
+- Arayüz tutulamayacak söz vermez (404 veren düğme, "okuyorum" diyen sahte metin).
+- Spotify yenileme jetonları yerel SQLite'ta düz metin duruyor — yayından önce ele alınmalı.
