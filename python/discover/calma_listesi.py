@@ -50,7 +50,7 @@ import argparse
 import sqlite3
 import sys
 from collections import Counter, defaultdict
-from math import log
+from math import log, log2
 from pathlib import Path
 
 from python.db import VARSAYILAN_DB, baglan
@@ -71,6 +71,30 @@ TEK_SANATCI_ESIGI = 0.5
 KANIT_BUZULMESI = 1.0
 
 ASGARI_PARCA = 8
+
+#: Liste başına ağırlık — büyük "her şey karışık" listelerin sesini kısar.
+#:
+#: ÖLÇÜLDÜ (2026-09-23, 603 liste): 100'den fazla sanatçılı listeler havuzun
+#: %10'u ama birliktelik çiftlerinin %74'ünü üretiyor; en büyük 30 liste (%5)
+#: tek başına %56'sını. Bir liste n sanatçıyla ~n² çift doğuruyor, yani 250
+#: sanatçılı «1. Çalma Listem» 15 sanatçılı odaklı bir listenin ~280 katı söz
+#: hakkına sahipti. Belirti: Sezen Aksu «grunge» eksenine Duman ile yalnız
+#: üç ortak listeden girdi — ikisi 135 ve 250 sanatçılı kişisel karışımlar,
+#: biri «türkçe» adlı bir dil listesi. Sinyal "aynı tarz" değil "aynı dil".
+#:
+#: Yöntemler: "esit" (eski davranış, w=1), "log" (w=1/log2(1+n)), "ters"
+#: (w=1/n). Seçim `python/degerlendirme.py` ile yapılır; bkz. karar günlüğü.
+LISTE_AGIRLIGI = "esit"
+
+
+def liste_agirligi(sanatci_sayisi: int, yontem: str = LISTE_AGIRLIGI) -> float:
+    """Bir listenin birlikteliğe katkı ağırlığı (sanatçı sayısına göre)."""
+    n = max(int(sanatci_sayisi), 2)
+    if yontem == "log":
+        return 1.0 / log2(1 + n)
+    if yontem == "ters":
+        return 1.0 / n
+    return 1.0
 
 
 def deezer_listesi(**kwargs) -> ApiIstemci:
@@ -193,7 +217,7 @@ def hasat(
 
 def birliktelik(
     conn: sqlite3.Connection, *, asgari_liste: int = 2, olcut: str = "npmi",
-    buzulme: float = KANIT_BUZULMESI,
+    buzulme: float = KANIT_BUZULMESI, agirlik: str | None = None,
 ) -> list[tuple[str, str, int, float]]:
     """Kütüphane sanatçısı × dışarıdaki sanatçı için normalize edilmiş PMI.
 
@@ -259,29 +283,39 @@ def birliktelik(
     ):
         listeler[liste_id].add(anahtar)
 
-    toplam = len(listeler)
-    if toplam < 5:
+    if len(listeler) < 5:
         return []
 
-    gorulme = Counter()
-    for uyeler in listeler.values():
-        gorulme.update(uyeler)
+    # AĞIRLIKLI SAYIM (bkz. `liste_agirligi`). Olasılıklar ağırlık toplamı
+    # üzerinden; "en az iki liste" eşiği ve kanıt büzülmesi ise HAM liste
+    # sayısıyla — onlar "kaç ayrı insan bu bağı kurdu" sorusunun cevabı.
+    yontem = agirlik or LISTE_AGIRLIGI
+    w = {lid: liste_agirligi(len(u), yontem) for lid, u in listeler.items()}
+    toplam = sum(w.values())
+
+    gorulme: Counter = Counter()
+    for lid, uyeler in listeler.items():
+        for x in uyeler:
+            gorulme[x] += w[lid]
 
     birlikte: Counter = Counter()
-    for uyeler in listeler.values():
+    ham: Counter = Counter()
+    for lid, uyeler in listeler.items():
         icerdeki = uyeler & sahip
         disaridaki = uyeler - sahip
         for a in icerdeki:
             for b in disaridaki:
-                birlikte[(a, b)] += 1
+                birlikte[(a, b)] += w[lid]
+                ham[(a, b)] += 1
 
     sonuc = []
-    for (a, b), adet in birlikte.items():
+    for (a, b), agirlikli in birlikte.items():
+        adet = ham[(a, b)]
         if adet < asgari_liste:
             continue
         # PMI: birlikte görülme, tek tek görülme sıklıklarının gerektirdiğinden
         # ne kadar fazla. Popüler `b` için payda büyür ve skor söner.
-        p_ab = adet / toplam
+        p_ab = agirlikli / toplam
         p_a, p_b = gorulme[a] / toplam, gorulme[b] / toplam
         if p_a <= 0 or p_b <= 0:
             continue

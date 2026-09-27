@@ -29,16 +29,22 @@ onların yerine geçmiyor, önlerine yeni bir görüntü koyuyor.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import re
 import sqlite3
+import sys
+import threading
+import time
 from contextvars import ContextVar
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -61,6 +67,11 @@ from python.hesap import (
     oturum_coz,
     oturum_kapat,
 )
+from python import kesif
+from python.dil import (
+    AKTIF_DIL, DIL_CEREZI, DILLER, dil as etkin_dil, istekten_dil, sayi as dil_sayi, t, yuzde,
+)
+from web.yer_tutucu import yer_tutucu_svg
 
 KOK = Path(__file__).resolve().parent
 # Starlette 1.3 imzası: TemplateResponse(request, ad, bağlam). Eski
@@ -81,7 +92,7 @@ AKTIF_KULLANICI: ContextVar[int | None] = ContextVar("aktif_kullanici",
                                                     default=None)
 
 #: Oturum gerektirmeyen yollar. Geri kalan her şey girişe yönlendirilir.
-ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik", "/sw.js")
+ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik", "/sw.js", "/dil")
 
 #: Spotify Development Mode uygulaması en fazla beş yetkili hesap taşıyor
 #: (Şubat 2026). Panele eklenmeyen hesap Spotify tarafında zaten giriş
@@ -97,7 +108,6 @@ HTTPS_ARKASINDA = os.environ.get("KESIF_HTTPS", "").lower() in ("1", "true", "ev
 #: `X-Forwarded-For` ancak GÜVENİLİR bir vekil arkasındayken anlamlı; aksi
 #: hâlde istemci onu uydurup hız sınırını atlar.
 GUVENILIR_VEKIL = HTTPS_ARKASINDA
-
 
 def _baglanti() -> sqlite3.Connection:
     """İstek başına yeni bağlantı — AKTİF KULLANICININ veritabanı.
@@ -177,8 +187,11 @@ def _eksen_adlari_onbellek(kullanici_id: int | None,
                            calisma_id: str) -> dict[int, str]:
     conn = _baglanti()
     try:
+        # YALNIZ ham ad önbelleğe girer. Yedek ad ("Eksen 3"/"Axis 3") dile
+        # bağlı ve gösterimde kuruluyor; önbellekte dursaydı ilk istek hangi
+        # dildeyse herkes onu görürdü (K20'deki önbellek sınıfının dil hâli).
         return {
-            int(r["kume_id"]): (r["kullanici_adi"] or f"Küme {r['kume_id']}")
+            int(r["kume_id"]): r["kullanici_adi"]
             for r in conn.execute(
                 "SELECT kume_id, kullanici_adi FROM clusters WHERE calisma_id = ?",
                 (calisma_id,),
@@ -189,7 +202,8 @@ def _eksen_adlari_onbellek(kullanici_id: int | None,
 
 
 def _eksen_adlari(calisma_id: str) -> dict[int, str]:
-    return _eksen_adlari_onbellek(AKTIF_KULLANICI.get(), calisma_id)
+    return {k: ad or kesif.eksen_etiketi(k)
+            for k, ad in _eksen_adlari_onbellek(AKTIF_KULLANICI.get(), calisma_id).items()}
 
 
 _eksen_adlari.cache_clear = _eksen_adlari_onbellek.cache_clear
@@ -206,29 +220,174 @@ def _boru_hatti_onbellek(kullanici_id: int | None) -> tuple[dict, ...]:
             except sqlite3.Error:
                 return 0
 
+        # Yalnız SAYILAR önbelleğe girer; etiketler dile göre gösterimde.
         return (
-            {"ad": "albüm", "deger": say("SELECT COUNT(*) FROM albums"),
-             "alt": "kütüphanende"},
-            {"ad": "müzisyen", "deger": say(
-                "SELECT COUNT(DISTINCT person_name) FROM credits"),
-             "alt": "kredi grafiğinde"},
-            {"ad": "ses ölçümü", "deger": say(
-                "SELECT COUNT(DISTINCT album_id) FROM stem_profili WHERE tur='album'"),
-             "alt": "ayrılmış stem"},
-            {"ad": "aday", "deger": say(
-                "SELECT COUNT(DISTINCT aday_id) FROM adaylar"), "alt": "üretilmiş öneri"},
-            {"ad": "kararın", "deger": say("SELECT COUNT(*) FROM feedback"),
-             "alt": "geri bildirim"},
+            ("album", say("SELECT COUNT(*) FROM albums")),
+            ("muzisyen", say("SELECT COUNT(DISTINCT person_name) FROM credits")),
+            ("stem", say("SELECT COUNT(DISTINCT album_id) FROM stem_profili WHERE tur='album'")),
+            ("aday", say("SELECT COUNT(DISTINCT aday_id) FROM adaylar")),
+            ("karar", say("SELECT COUNT(*) FROM feedback")),
         )
     finally:
         conn.close()
 
 
+_BORU_ETIKET = {
+    "album": ("albüm", "albums"), "muzisyen": ("müzisyen", "musicians"),
+    "stem": ("ses ölçümü", "audio scans"), "aday": ("aday", "candidates"),
+    "karar": ("karar", "decisions"),
+}
+
+
 def _boru_hatti() -> list[dict]:
-    return list(_boru_hatti_onbellek(AKTIF_KULLANICI.get()))
+    return [{"ad": t(*_BORU_ETIKET[k]), "deger": n}
+            for k, n in _boru_hatti_onbellek(AKTIF_KULLANICI.get())]
 
 
 _boru_hatti.cache_clear = _boru_hatti_onbellek.cache_clear
+
+
+# --------------------------------------------------------------------------- #
+# Süreli önbellek — pahalı, yalnız boru hattı koşunca değişen hesaplar
+# --------------------------------------------------------------------------- #
+#
+# ÖLÇÜLDÜ (2026-09-23, seto'nun verisi): /oneriler 1,7–3,4 sn. Dağılım:
+# müzisyen profilleri aday başına yeniden hesaplanıyordu (40 × 0,11 sn),
+# çalma listesi bağlamı 2,1 sn, CLAP havuzu her istekte ~2.600 dosya okuması
+# (0,45 sn), kütüphane uzaklık dağılımı 1,1 sn. Hiçbiri kararla değişmiyor.
+#
+# `lru_cache` yetmiyor: aktarım AYRI SÜREÇTE yazıyor ve komut satırından
+# koşulan boru hattı sunucuya haber vermiyor. Süre dolumu, sunucu yeniden
+# başlatılmadan bayatlığın bir üst sınırı olmasını sağlıyor; bilinen yazma
+# yolları (aktarım bitişi, desteyi büyütme) ayrıca açıkça boşaltıyor.
+#
+# K20: İLK ARGÜMAN HER ZAMAN KULLANICI KİMLİĞİ. Anahtarsız önbellek
+# kullanıcılar arası veri sızdırır — bu projede dört kez yaşandı.
+
+class _Sureli:
+    def __init__(self, fn, saniye: float):
+        self.fn, self.saniye = fn, saniye
+        self._veri: dict[tuple, tuple[float, object]] = {}
+        self._kilit = threading.Lock()
+        self.__name__ = fn.__name__
+        self.__doc__ = fn.__doc__
+
+    def __call__(self, *anahtar):
+        simdi = time.monotonic()
+        with self._kilit:
+            kayit = self._veri.get(anahtar)
+        if kayit and simdi - kayit[0] < self.saniye:
+            return kayit[1]
+        deger = self.fn(*anahtar)
+        with self._kilit:
+            self._veri[anahtar] = (simdi, deger)
+        return deger
+
+    def cache_clear(self) -> None:
+        with self._kilit:
+            self._veri.clear()
+
+
+_SURELILER: list[_Sureli] = []
+
+
+def _sureli(saniye: float):
+    def sar(fn):
+        s = _Sureli(fn, saniye)
+        _SURELILER.append(s)
+        return s
+    return sar
+
+
+def _onbellekleri_bosalt() -> None:
+    """Kullanıcı verisini etkileyen bir yazmadan sonra her şeyi boşalt."""
+    for s in _SURELILER:
+        s.cache_clear()
+    _calismalar.cache_clear()
+    _boru_hatti.cache_clear()
+    _eksen_adlari.cache_clear()
+    _icra_eslesmesi_onbellek.cache_clear()
+
+
+def _baglantiyla(islev, *arg, **kw):
+    conn = _baglanti()
+    try:
+        return islev(conn, *arg, **kw)
+    finally:
+        conn.close()
+
+
+@_sureli(1200)
+def _icra_profilleri_onbellek(kullanici_id: int | None, rol: str):
+    from python.muzisyen import icra_profilleri
+    return _baglantiyla(icra_profilleri, rol)
+
+
+@_sureli(1800)
+def _baglam_onbellek(kullanici_id: int | None) -> dict:
+    try:
+        from python.etiket import sanatci_baglami
+        return _baglantiyla(sanatci_baglami)
+    except Exception:
+        return {}
+
+
+@_sureli(1800)
+def _olcum_onbellek(kullanici_id: int | None) -> dict:
+    try:
+        from python.etiket import aday_olcum_etiketleri
+        return _baglantiyla(aday_olcum_etiketleri)
+    except Exception:
+        return {}
+
+
+@_sureli(1200)
+def _havuz_onbellek(kullanici_id: int | None):
+    """CLAP havuzu (adaylar + liste parçaları). Adaylar değişince (desteyi
+    büyütme) açıkça boşaltılıyor; bkz. `api_buyut`."""
+    from python.ses_kume import havuz_gomuleri
+    try:
+        return _baglantiyla(havuz_gomuleri)
+    except Exception:
+        return None
+
+
+@_sureli(1200)
+def _taban_onbellek(kullanici_id: int | None, calisma_id: str, eksen: int):
+    """Kütüphanenin kendi albümlerinin bu eksene uzaklığı: iç/dış medyan."""
+    from python.discover.ses_uzakligi import kutuphane_uzaklik_dagilimi
+
+    conn = _baglanti()
+    try:
+        dagilim = kutuphane_uzaklik_dagilimi(conn, calisma_id, eksen)
+        if dagilim.empty:
+            return None
+        uyelik = pd.read_sql_query(
+            "SELECT album_id, kume_id, uyelik FROM memberships WHERE calisma_id = ?",
+            conn, params=(calisma_id,))
+        U = uyelik.pivot(index="album_id", columns="kume_id", values="uyelik").fillna(0.0)
+        keskin = U.idxmax(axis=1)
+        ic = dagilim[dagilim.index.map(keskin) == eksen]
+        dis = dagilim[dagilim.index.map(keskin) != eksen]
+        if len(ic) >= 3 and len(dis) >= 3:
+            return {"ic": float(ic.median()), "dis": float(dis.median())}
+        return None
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
+def _yakinlik(conn, calisma_id: str) -> dict:
+    from python.geri_bildirim import yakinlik_etkisi
+    havuz = _havuz_onbellek(AKTIF_KULLANICI.get())
+    return yakinlik_etkisi(conn, calisma_id, havuz=havuz)
+
+
+def _liste_sayisi() -> int:
+    if AKTIF_KULLANICI.get() is None:
+        return 0
+    return _baglantiyla(kesif.liste_sayisi)
 
 
 def _ortam(istek, **fazladan) -> dict:
@@ -241,6 +400,7 @@ def _ortam(istek, **fazladan) -> dict:
         "eksen_adlari": _eksen_adlari(calisma_id) if calisma_id else {},
         "boru": _boru_hatti(),
         "yol": istek.url.path,
+        "liste_sayisi": _liste_sayisi(),
     }
     ortam.update(fazladan)
     return ortam
@@ -257,8 +417,12 @@ def _sayi(deger, basamak: int = 2) -> str:
 # --------------------------------------------------------------------------- #
 
 async def anasayfa(istek):
-    """Giriş yapılmışsa önerilere, yapılmamışsa ara katman girişe yollar."""
-    return RedirectResponse("/oneriler")
+    """Giriş yapılmışsa Keşfet'e, yapılmamışsa ara katman girişe yollar.
+
+    Keşfet günlük döngünün kendisi (kaydır, dinle, listeye at); Öneriler
+    ayrıntılı inceleme için menüde duruyor.
+    """
+    return RedirectResponse("/kesfet")
 
 
 #: Ana akıştaki yollar — leave-one-artist-out ile ölçüldü ve tuttular.
@@ -271,14 +435,16 @@ ANA_STRATEJILER = ("melez", "liste_birlikteligi", "ses_benzerligi")
 NIS_STRATEJILER = ("kredi_sicramasi", "sahne_komsulugu", "bilincli_uzaklik")
 
 
-async def oneriler(istek):
-    from python.discover.ses_uzakligi import (
-        eksen_uzakliklari, kutuphane_uzaklik_dagilimi,
-    )
-    from python.geri_bildirim import (
-        ETKI_TAVANI, bilinen_sanatcilar, yakinlik_etkisi,
-    )
+def oneriler(istek):
+    # SYNC: Starlette bunu iş parçacığı havuzunda koşturuyor. `async` iken
+    # pandas hesabı olay döngüsünü kilitliyor, o sırada gelen her istek
+    # (aynı kullanıcının önizleme çağrısı dahil) bekliyordu. Bağlam
+    # değişkeni (AKTIF_KULLANICI) iş parçacığına kopyalanıyor (anyio).
+    from python.discover.ses_uzakligi import eksen_uzakliklari
+    from python.geri_bildirim import ETKI_TAVANI, bilinen_sanatcilar
     from python.metin import normalize_esleme
+
+    kullanici_id = AKTIF_KULLANICI.get()
 
     calisma_id = istek.query_params.get("calisma") or _son_calisma()
     if not calisma_id:
@@ -299,21 +465,20 @@ async def oneriler(istek):
         }
         bilinenler = bilinen_sanatcilar(conn)
         # Etiketler kartta gösterilecek: bağlam (çalma listesi başlıklarından,
-        # "dinleyici tipi") ve ölçüm (adayın kendi stem'lerinden).
+        # "dinleyici tipi") ve ölçüm (adayın kendi stem'lerinden). İkisi de
+        # pahalı ve karardan bağımsız — süreli önbellekten.
+        baglam = _baglam_onbellek(kullanici_id)
+        olcum_et = _olcum_onbellek(kullanici_id)
         try:
-            from python.etiket import (
-                ACIKLAMALAR, aday_olcum_etiketleri, sanatci_baglami,
-            )
-            baglam = sanatci_baglami(conn)
-            olcum_et = aday_olcum_etiketleri(conn)
-            etiket_aciklama = ACIKLAMALAR
+            from python.etiket import ACIKLAMALAR as etiket_aciklama
         except Exception:
-            baglam, olcum_et, etiket_aciklama = {}, {}, {}
+            etiket_aciklama = {}
 
         if adaylar.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj="Henüz aday yok. "
-                "<code>python -m python.discover.adaylar --tum-eksenler</code>"))
+                istek, mesaj=t("Henüz aday yok. Üretmek için: ",
+                               "No candidates yet. To generate them: ")
+                + "<code>python -m python.discover.adaylar --tum-eksenler</code>"))
 
         eksenler = sorted(adaylar["eksen"].unique())
         secili = int(istek.query_params.get("eksen", eksenler[0]))
@@ -344,28 +509,15 @@ async def oneriler(istek):
 
         # Ses uzaklığı + kütüphanenin kendi dağılımı (kıyas tabanı olmadan
         # "1.24 uzak mı?" sorusunun cevabı yok).
-        taban = None
         try:
             uzakliklar = eksen_uzakliklari(conn, calisma_id, secili)
             if not uzakliklar.empty:
                 gorunum = gorunum.merge(
                     uzakliklar[["aday_id", "ses_uzakligi"]], on="aday_id", how="left"
                 )
-            dagilim = kutuphane_uzaklik_dagilimi(conn, calisma_id, secili)
-            if not dagilim.empty:
-                uyelik = pd.read_sql_query(
-                    "SELECT album_id, kume_id, uyelik FROM memberships "
-                    "WHERE calisma_id = ?", conn, params=(calisma_id,),
-                )
-                U = uyelik.pivot(index="album_id", columns="kume_id",
-                                 values="uyelik").fillna(0.0)
-                keskin = U.idxmax(axis=1)
-                ic = dagilim[dagilim.index.map(keskin) == secili]
-                dis = dagilim[dagilim.index.map(keskin) != secili]
-                if len(ic) >= 3 and len(dis) >= 3:
-                    taban = {"ic": float(ic.median()), "dis": float(dis.median())}
         except Exception:
             pass
+        taban = _taban_onbellek(kullanici_id, calisma_id, secili)
         if "ses_uzakligi" not in gorunum.columns:
             gorunum["ses_uzakligi"] = float("nan")
 
@@ -391,6 +543,22 @@ async def oneriler(istek):
         # Gerekçe zaten sanatçı düzeyinde ("bunu dinleyenler şunu da dinliyor");
         # albüm düzeyinde tekrarlamak bilgi eklemiyordu. Artık bir sanatçı =
         # bir kart, albümleri kartın içinde.
+        from python.gerekce import gerekce as gerekce_yaz
+        eksen_adi_secili = _eksen_adlari(calisma_id).get(secili) or kesif.eksen_etiketi(secili)
+        kutuphane_adlari = kesif.kutuphane_adlari(conn)
+
+        # Medya (kapak + çalınabilir parça) tek sorguda. Keşfet destesinin
+        # çözdüğü kapaklar burada da görünür; albüm adayının saklı önizlemesi
+        # yoksa medyanın bulduğu parça çalınır.
+        kimlikler = [str(k) for k in gorunum["aday_id"].unique()]
+        medya: dict[str, sqlite3.Row] = {}
+        for i in range(0, len(kimlikler), 500):
+            dilim = kimlikler[i:i + 500]
+            for r in conn.execute(
+                f"SELECT aday_id, kapak, parca_id, parca_adi FROM medya "
+                f"WHERE aday_id IN ({','.join('?' * len(dilim))})", dilim):
+                medya[r["aday_id"]] = r
+
         gruplar = []
         for (sanatci, strateji), grup in gorunum.groupby(
             ["artist", "strateji"], sort=False
@@ -399,6 +567,7 @@ async def oneriler(istek):
             albumler = []
             for _, aday in grup.iterrows():
                 uz = aday.get("ses_uzakligi")
+                m = medya.get(aday["aday_id"])
                 albumler.append({
                     "aday_id": aday["aday_id"], "title": aday["title"],
                     "year": int(aday["year"]) if pd.notna(aday["year"]) else None,
@@ -407,9 +576,11 @@ async def oneriler(istek):
                     # ömürlü imzalıyor. Kimlik varsa "dinle" düğmesi taze URL
                     # çeker (`/api/onizleme/{parca_id}`).
                     "parca_id": int(aday["parca_id"]) if pd.notna(
-                        aday.get("parca_id")) else None,
+                        aday.get("parca_id")) else (
+                        int(m["parca_id"]) if m and m["parca_id"] else None),
                     "parca": aday.get("onizleme_parca") if pd.notna(
-                        aday.get("onizleme_parca")) else None,
+                        aday.get("onizleme_parca")) else (m["parca_adi"] if m else None),
+                    "kapak": m["kapak"] if m else None,
                     "uzaklik": float(uz) if pd.notna(uz) else None,
                     "karar": kararlar.get(aday["aday_id"]),
                     "dayanak": _dayanak_metni(aday["dayanak"]),
@@ -430,7 +601,11 @@ async def oneriler(istek):
             gruplar.append({
                 "sanatci": sanatci, "strateji": strateji,
                 "skor": float(grup["skor"].max()),
-                "gerekce": ilk["gerekce"],
+                # Gerekçe GÖSTERİMDE, etkin dilde ve kanıtın gücüyle kuruluyor
+                # (`python/gerekce.py`); saklanan Türkçe metin yalnız yedek.
+                "gerekce": gerekce_yaz(strateji, ilk.get("dayanak"),
+                                       eksen=eksen_adi_secili, saklanan=ilk["gerekce"],
+                                       adlar=kutuphane_adlari),
                 "albumler": albumler,
                 "aday_kimlikleri": [a["aday_id"] for a in albumler],
                 "kararlar": {a["karar"] for a in albumler if a["karar"]},
@@ -444,7 +619,8 @@ async def oneriler(istek):
                     e for a in albumler
                     for e in olcum_et.get(a["aday_id"], ())
                 })[:4],
-                "kapak": ilk.get("kapak") if pd.notna(ilk.get("kapak")) else None,
+                "kapak": next((a["kapak"] for a in albumler if a["kapak"]), None)
+                         or (ilk.get("kapak") if pd.notna(ilk.get("kapak")) else None),
                 # İcra eşleşmesi sanatçı düzeyinde bir kez: aynı sanatçının dört
                 # albümü için dört kez hesaplamak hem yavaş hem gereksiz.
                 "icra": _icra_eslesmesi_onbellek(albumler[0]["aday_id"],
@@ -459,7 +635,7 @@ async def oneriler(istek):
         #
         # Tavan bilerek düşük: n=2 beğendim, n=3 tutmadı. Kararlar sıralamayı
         # DEVİRMİYOR, kaydırıyor. Ölçülebilir hâle gelince süpürülecek (K19).
-        etki = yakinlik_etkisi(conn, calisma_id)
+        etki = _yakinlik(conn, calisma_id)
         if etki:
             skorlar = [g["skor"] for g in gruplar]
             ortalama = sum(skorlar) / len(skorlar) if skorlar else 0.0
@@ -493,7 +669,7 @@ async def oneriler(istek):
             nis_secili=[st for st in secili_strateji if st in NIS_STRATEJILER],
             sirala=sirala, gizle=gizle, geri_at=geri_at, taban=taban,
             toplam=len(gorunum), sanatci_sayisi=len(gruplar),
-            etiket_aciklama=etiket_aciklama,
+            etiket_aciklama_tr=etiket_aciklama,
             bilinenler=sorted(bilinenler)[:5],
             geri_bildirim_etkin=bool(etki),
         ))
@@ -521,7 +697,9 @@ def _icra_eslesmesi_onbellek(aday_id: str, kullanici_id: int | None = None) -> t
     try:
         sonuc = []
         for rol in ("drums", "bass", "guitar", "vocals"):
-            tablo, _ = adaya_benzeyen_icracilar(conn, aday_id, rol, adet=3)
+            tablo, _ = adaya_benzeyen_icracilar(
+                conn, aday_id, rol, adet=3,
+                profiller=_icra_profilleri_onbellek(kullanici_id, rol))
             if not tablo.empty:
                 sonuc.append((rol, tuple(
                     (str(s["kisi_adi"]), float(s["benzerlik"]))
@@ -553,7 +731,7 @@ async def karar_ver(istek):
     )
     calisma_id = veri.get("calisma_id") or _son_calisma()
     if not kimlikler or karar not in ("begendim", "tutmadi", "zaten_biliyorum"):
-        return JSONResponse({"hata": "geçersiz karar"}, status_code=400)
+        return JSONResponse({"hata": t("geçersiz karar", "invalid decision")}, status_code=400)
 
     conn = _baglanti()
     try:
@@ -587,19 +765,26 @@ async def karar_ver(istek):
                         "VALUES (?,?,?,?,date('now'))",
                         (aday_id, calisma_id, eksen[0] if eksen else 0, karar),
                     )
+        # Liste, Keşfet'teki sağa kaydırmayla AYNI anlamı taşımalı: 👍 listeye
+        # ekler; 👍 geri alınır ya da başka karara dönülürse yalnız hâlâ
+        # 'yeni' olan satırlar çıkar (dinlenmiş/edinilmiş olan korunur).
+        if karar == "begendim" and not geri_al:
+            kesif.listeye_ekle(conn, calisma_id, kimlikler)
+        elif "begendim" in mevcut:
+            kesif.listeden_cikar_yeni(conn, kimlikler)
+        liste = kesif.liste_sayisi(conn)
     finally:
         conn.close()
     _boru_hatti.cache_clear()
     return JSONResponse(
-        {"karar": None if geri_al else karar, "adet": len(kimlikler)}
+        {"karar": None if geri_al else karar, "adet": len(kimlikler), "liste": liste}
     )
 
 
 async def profil(istek):
     from python.profil import (
-        ODAKLAR, ODAK_HARITASI,
-        cesitlilik, eksen_ozeti, enstruman_dengesi, kume_ses_imzasi,
-        profil_cumleleri, stem_verisi,
+        cesitlilik, eksen_adi, eksen_ozeti, enstruman_dengesi, harita,
+        kume_ses_imzasi, odaklar, profil_cumleleri, stem_adi, stem_verisi,
     )
     from web import grafik
 
@@ -609,12 +794,14 @@ async def profil(istek):
         veri = stem_verisi(conn)
         if veri.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj="Stem ölçümü yok. "
-                "<code>python -m python.enrich.icra_profili --tum</code>"))
+                istek, mesaj=t("Henüz enstrüman ölçümü yok. Çalıştırmak için: ",
+                               "No instrument measurements yet. To run them: ")
+                + "<code>python -m python.enrich.icra_profili --tum</code>"))
 
         # ODAK. Aynı ekran herkese aynı şeyi göstermemeli: biri gitara,
         # biri vokale bakmak ister, biri hiçbirine — düz bir profil ister.
         # Varsayılan «genel» ve enstrüman jargonu içermiyor.
+        ODAKLAR = odaklar()
         odak = istek.query_params.get("odak", "genel")
         if odak not in ODAKLAR:
             odak = "genel"
@@ -634,7 +821,7 @@ async def profil(istek):
 
         # --- grafikler ---
         g_denge = grafik.yatay_cubuk(
-            [(r["stem"], r["enerji_payi"]) for _, r in denge.iterrows()],
+            [(stem_adi(r["stem"]), r["enerji_payi"]) for _, r in denge.iterrows()],
             basamak=3, renk=grafik.PALET["ikincil"])
         g_cesit = grafik.yatay_cubuk(
             [(r["eksen"], r["yayilim"]) for _, r in cesit.iterrows()],
@@ -642,9 +829,8 @@ async def profil(istek):
 
         # HARİTA ODAĞA GÖRE. Eskiden sabit bir "Davul haritası" vardı; vokale
         # bakan kullanıcı yine davul görüyordu.
-        h = ODAK_HARITASI.get(odak, ODAK_HARITASI["genel"])
-        x_sutun, x_stem, y_sutun, y_stem, harita_aciklama = h
-        harita_basligi = ODAKLAR[odak][0] + " haritası"
+        x_sutun, x_stem, y_sutun, y_stem, harita_aciklama = harita(odak)
+        harita_basligi = t(f"{ODAKLAR[odak][0]} haritası", f"{ODAKLAR[odak][0]} map")
 
         if x_stem == y_stem:
             kaynak = veri[veri["stem"] == x_stem]
@@ -665,7 +851,9 @@ async def profil(istek):
                   f"{r['artist']} — {r['title']}  ·  {r[x_sutun]:.2f} / "
                   f"{r[y_ad]:.2f}  ·  {r['kume']}")
                  for _, r in davul.iterrows()],
-                x_baslik="tekme payı", y_baslik="zil payı")
+                # Eksen başlıkları ODAĞA göre. Eskiden sabit "tekme payı /
+                # zil payı" yazıyordu; vokal haritasında bile.
+                x_baslik=eksen_adi(x_sutun, x_stem), y_baslik=eksen_adi(y_sutun, y_stem))
             efsane = grafik.sacilim_efsanesi(sorted(davul["kume"].unique()))
 
         g_imza = None
@@ -674,9 +862,11 @@ async def profil(istek):
                 sorted(imza["eksen"].unique()), sorted(imza["kume"].unique()),
                 {(r["eksen"], r["kume"]): float(r["sapma"]) for _, r in imza.iterrows()},
                 ipuclari={(r["eksen"], r["kume"]):
-                          f"{r['kume']} · {r['eksen']}: {r['medyan']:.3f} "
-                          f"(kütüphane {r['genel_medyan']:.3f}, "
-                          f"sapma {r['sapma']:+.0%}, {r['albüm']} albüm)"
+                          f"{r['kume']} · {r['eksen']}: {dil_sayi(r['medyan'], 3)} "
+                          + t(f"(kütüphane {dil_sayi(r['genel_medyan'], 3)}, "
+                              f"sapma {yuzde(r['sapma'])}, {r['albüm']} albüm)",
+                              f"(library {dil_sayi(r['genel_medyan'], 3)}, "
+                              f"deviation {yuzde(r['sapma'])}, {r['albüm']} albums)")
                           for _, r in imza.iterrows()})
 
         secili_eksen = istek.query_params.get("uc") or (
@@ -698,7 +888,7 @@ async def profil(istek):
             istek, cumleler=profil_cumleleri(ozet, denge), denge=denge,
             g_denge=g_denge, g_cesit=g_cesit, g_davul=g_davul, efsane=efsane,
             g_imza=g_imza, ozet=ozet, uclar=uclar,
-            odak=odak, odaklar=ODAKLAR,
+            odak=odak, odaklar=ODAKLAR, stem_adi=stem_adi,
             harita_basligi=harita_basligi, harita_aciklama=harita_aciklama,
             eksen_listesi=list(ozet["eksen"]), albom_sayisi=veri["album_id"].nunique(),
         ))
@@ -717,86 +907,162 @@ def _klip_bul(veri: pd.DataFrame, stem: str, etiket: str):
 
 async def ogrenme(istek):
     from python.geri_bildirim import (
-        kararlar, ozet_cumleleri, strateji_isabeti, uzaklik_tercihi,
+        kararlar, ozet_cumleleri, sanatci_duzeyi, strateji_isabeti, uzaklik_tercihi,
     )
+    from python.gerekce import strateji_adi
     from web import grafik
 
     calisma_id = istek.query_params.get("calisma") or _son_calisma()
     conn = _baglanti()
     try:
-        veri = kararlar(conn, calisma_id)
+        # SANATÇI düzeyinde (bkz. `sanatci_duzeyi`) ve TÜM çalışmalar: kararlar
+        # kümeleme çalışmasına değil kullanıcının zevkine ait.
+        veri = sanatci_duzeyi(kararlar(conn))
         isabet = strateji_isabeti(veri) if not veri.empty else pd.DataFrame()
         if isabet.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj="Henüz geri bildirim yok. Öneriler sayfasında "
-                "👍 / 👎 / 😐 düğmelerini kullandıkça bu ekran dolar."))
+                istek, mesaj=t("Henüz geri bildirim yok. Keşfet'te kaydırdıkça ya da "
+                               "Öneriler'de karar verdikçe bu ekran dolar.",
+                               "No feedback yet. This page fills up as you swipe in "
+                               "Discover or decide on Recommendations.")))
 
         kesif = grafik.aralik([
-            (r["strateji"], r["kesif_orani"], r["kesif_alt"], r["kesif_ust"],
-             f"{r['strateji']}: {r['toplam']} karar, "
-             f"{r['zaten_biliyorum']}'i «zaten biliyorum»")
+            (strateji_adi(r["strateji"]), r["kesif_orani"], r["kesif_alt"], r["kesif_ust"],
+             t(f"{strateji_adi(r['strateji'])}: {r['toplam']} karar, "
+               f"{r['zaten_biliyorum']} tanesi «zaten biliyorum»",
+               f"{strateji_adi(r['strateji'])}: {r['toplam']} decisions, "
+               f"{r['zaten_biliyorum']} \"already know it\""))
             for _, r in isabet.iterrows()])
         zevkli = isabet[isabet["zevk_n"] > 0]
         zevk = grafik.aralik([
-            (r["strateji"], r["zevk_isabeti"], r["zevk_alt"], r["zevk_ust"],
-             f"{r['strateji']}: {r['begendim']} beğendim / {r['tutmadi']} tutmadı")
+            (strateji_adi(r["strateji"]), r["zevk_isabeti"], r["zevk_alt"], r["zevk_ust"],
+             t(f"{strateji_adi(r['strateji'])}: {r['begendim']} beğendim / {r['tutmadi']} tutmadı",
+               f"{strateji_adi(r['strateji'])}: {r['begendim']} liked / {r['tutmadi']} passed"))
             for _, r in zevkli.iterrows()]) if not zevkli.empty else None
 
         return SABLONLAR.TemplateResponse(istek, "ogrenme.html", _ortam(
             istek, cumleler=ozet_cumleleri(isabet), isabet=isabet,
             g_kesif=kesif, g_zevk=zevk,
-            uzaklik=uzaklik_tercihi(conn, veri, calisma_id),
+            # Uzaklık eksen merkezine göre ve merkez ÇALIŞMAYA bağlı: yalnız
+            # etkin çalışmanın kararları.
+            uzaklik=uzaklik_tercihi(conn, sanatci_duzeyi(kararlar(conn, calisma_id)), calisma_id)
+            if calisma_id else pd.DataFrame(),
+            strateji_adi=strateji_adi,
             karar_sayisi=veri["aday_id"].nunique(), satir=len(veri),
         ))
     finally:
         conn.close()
 
 
-async def muzisyenler(istek):
+@_sureli(1200)
+def _muzisyen_verisi_onbellek(kullanici_id: int | None):
+    from python.muzisyen import muzisyen_verisi
+    return _baglantiyla(muzisyen_verisi, None)
+
+
+def _olcu_cubuklari(kendi, profiller, sutunlar) -> list[dict]:
+    """Her ölçüt için kişinin değeri, kütüphanenin p5–p95 aralığında konumu.
+
+    Ham sayı ("zil payı 0,41") tek başına bir şey söylemiyor; kütüphanedeki
+    müzisyenlerin arasında NEREDE durduğu söylüyor (K13: norm uydurulmuyor,
+    referans bu kütüphanenin kendisi).
+    """
+    from python.sozluk import terim
+
+    cubuklar = []
+    for s in sutunlar:
+        if s not in kendi.index or kendi[s] != kendi[s] or s not in profiller.columns:
+            continue
+        seri = profiller[s].astype(float).dropna()
+        if len(seri) < 5:
+            continue
+        alt, ust, med = seri.quantile(0.05), seri.quantile(0.95), seri.median()
+        aralik = max(ust - alt, 1e-9)
+        konum = lambda x: max(0.0, min(1.0, (float(x) - alt) / aralik))  # noqa: E731
+        tanim = terim(s) or {}
+        cubuklar.append({
+            "sutun": s, "ad": tanim.get("ad") or s.replace("_", " "),
+            "ipucu": tanim.get("kisa", ""), "deger": float(kendi[s]),
+            "konum": konum(kendi[s]), "medyan": konum(med),
+        })
+    return cubuklar
+
+
+def muzisyenler(istek):
+    """Müzisyenler — rol çipleri, kişi listesi, seçilen kişinin icra profili,
+    benzer icracılar ve "bu müzisyen gibi çalan, sende olmayan albümler".
+
+    SYNC: müzisyen verisi pandas ağırlıklı; iş parçacığında koşar.
+    """
     from python.enrich.icra_profili import ROL_STEM
     from python.muzisyen import (
-        ROL_SUTUNLARI, benzer_icracilar, enstruman_rolleri, icra_profilleri,
-        muzisyen_verisi, rol_listesi,
+        ROL_SUTUNLARI, benzer_icracilar, enstruman_rolleri, muzisyene_benzeyen_adaylar,
+        rol_listesi,
     )
 
-    conn = _baglanti()
+    kullanici_id = AKTIF_KULLANICI.get()
+    veri = _muzisyen_verisi_onbellek(kullanici_id)
+    if veri.profil.empty:
+        return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
+            istek, mesaj=t("Henüz kredi verisi yok. Çalıştırmak için: ",
+                           "No credit data yet. To fetch it: ")
+            + "<code>python -m python.enrich.krediler</code>"))
+
+    # Yalnız enstrüman kanalı olan roller: akordeon ya da banjo için ayrılmış
+    # bir kanal yok ve profil çıkamıyordu (çip tıklanınca boş sayfa). Ana
+    # enstrümanlar önde.
+    ONCELIK = ("drums", "bass", "guitar", "keyboards", "piano", "vocals",
+               "synthesizer", "saxophone", "organ", "percussion", "backing_vocals")
+    roller = sorted((r for r in enstruman_rolleri(veri) if r in ROL_STEM),
+                    key=lambda r: ONCELIK.index(r) if r in ONCELIK else len(ONCELIK))
+    if not roller:
+        return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
+            istek, mesaj=t("Enstrüman kredisi yok.", "No instrument credits yet.")))
+    rol = istek.query_params.get("rol")
+    if rol not in roller:
+        rol = "drums" if "drums" in roller else roller[0]
+    liste = rol_listesi(veri, rol, adet=300)
+    secim = istek.query_params.get("kisi")
+    if secim not in liste.index and len(liste):
+        secim = liste.index[0]
+
+    profiller = _icra_profilleri_onbellek(kullanici_id, rol)
     try:
-        veri = muzisyen_verisi(conn, None)
-        if veri.profil.empty:
-            return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj="Kredi verisi yok. "
-                "<code>python -m python.enrich.krediler</code>"))
+        agirlik = min(1.0, max(0.0, float(istek.query_params.get("agirlik", 0.7))))
+    except ValueError:
+        agirlik = 0.7
+    sutunlar = [c for c in ROL_SUTUNLARI.get(rol, ())][:6]
+    benzer, temel, kendi, cubuklar = pd.DataFrame(), "", None, []
+    adaylar, havuz = pd.DataFrame(), 0
+    if secim is not None and not profiller.empty and secim in profiller.index:
+        kendi = profiller.loc[secim]
+        benzer, temel = benzer_icracilar(
+            veri, profiller, secim, rol=rol, adet=6, icra_agirligi=agirlik)
+        cubuklar = _olcu_cubuklari(kendi, profiller, sutunlar)
+        conn = _baglanti()
+        try:
+            adaylar, havuz = muzisyene_benzeyen_adaylar(conn, profiller, secim, rol, adet=6)
+            if not adaylar.empty:
+                kapak = {r[0]: r[1] for r in conn.execute(
+                    f"SELECT aday_id, kapak FROM medya WHERE aday_id IN "
+                    f"({','.join('?' * len(adaylar))})", list(adaylar["aday_id"]))}
+                adaylar["kapak"] = adaylar["aday_id"].map(kapak)
+        finally:
+            conn.close()
 
-        roller = enstruman_rolleri(veri)
-        rol = istek.query_params.get("rol") or ("drums" if "drums" in roller else roller[0])
-        liste = rol_listesi(veri, rol, adet=300)
-        secim = istek.query_params.get("kisi") or (liste.index[0] if len(liste) else None)
-        if secim not in liste.index and len(liste):
-            secim = liste.index[0]
-
-        profiller = icra_profilleri(conn, rol)
-        agirlik = float(istek.query_params.get("agirlik", 0.7))
-        benzer, temel = (pd.DataFrame(), "")
-        kendi = None
-        if secim is not None and not profiller.empty and secim in profiller.index:
-            kendi = profiller.loc[secim]
-            benzer, temel = benzer_icracilar(
-                veri, profiller, secim, rol=rol, adet=6, icra_agirligi=agirlik)
-
-        albumleri = veri.albumleri[veri.albumleri["kisi"] == secim] if secim else pd.DataFrame()
-        return SABLONLAR.TemplateResponse(istek, "muzisyenler.html", _ortam(
-            istek, roller=roller, rol=rol, stem=ROL_STEM.get(rol),
-            liste=liste.head(60), secim=secim,
-            kisi_adi=veri.profil.loc[secim, "kisi"] if secim in veri.profil.index else "",
-            profil=veri.profil.loc[secim] if secim in veri.profil.index else None,
-            kendi=kendi, sutunlar=[s for s in ROL_SUTUNLARI.get(rol, ())][:6],
-            benzer=benzer, temel=temel, agirlik=agirlik,
-            albumleri=albumleri.groupby(["artist", "title", "year"])["role"]
-            .apply(lambda r: ", ".join(sorted(set(r)))).reset_index()
-            if not albumleri.empty else pd.DataFrame(),
-        ))
-    finally:
-        conn.close()
+    albumleri = veri.albumleri[veri.albumleri["kisi"] == secim] if secim else pd.DataFrame()
+    return SABLONLAR.TemplateResponse(istek, "muzisyenler.html", _ortam(
+        istek, roller=roller, rol=rol, stem=ROL_STEM.get(rol),
+        liste=liste.head(80), secim=secim,
+        kisi_adi=veri.profil.loc[secim, "kisi"] if secim in veri.profil.index else "",
+        profil=veri.profil.loc[secim] if secim in veri.profil.index else None,
+        kendi=kendi, cubuklar=cubuklar, sutunlar=sutunlar,
+        benzer=benzer, temel=temel, agirlik=agirlik,
+        adaylar=adaylar, havuz=havuz,
+        albumleri=albumleri.groupby(["artist", "title", "year"])["role"]
+        .apply(lambda r: ", ".join(sorted(set(r)))).reset_index()
+        if not albumleri.empty else pd.DataFrame(),
+    ))
 
 
 async def kumeler(istek):
@@ -919,7 +1185,7 @@ async def eslestirme(istek):
         try:
             adaylar, hata = album_ara(istemci, albom["artist"], albom["title"]), None
         except AgYok:
-            adaylar, hata = [], "önbellekte yok — «ağdan ara»yı aç"
+            adaylar, hata = [], t("önbellekte yok, «ağdan ara»yı aç", "not in the cache; turn on \"search online\"")
         except Exception as h:
             adaylar, hata = [], str(h)
         satirlar.append({
@@ -952,7 +1218,7 @@ async def eslestir_kaydet(istek):
     if mbid != "__yok__":
         mbid = mbid_coz(musicbrainz(), str(mbid or ""))
         if mbid is None:
-            return JSONResponse({"hata": "MBID ya da çözülebilir barkod değil"},
+            return JSONResponse({"hata": t("MBID ya da çözülebilir bir barkod değil", "not an MBID or a resolvable barcode")},
                                 status_code=400)
     conn = _baglanti()
     try:
@@ -976,27 +1242,28 @@ async def sozluk_sayfasi(istek):
     üstüne gelince görünüyor ve nasıl ölçüldüğü gibi uzun açıklamayı
     taşıyamıyor. Burada hepsi bir arada, aranabilir.
     """
-    from python.sozluk import SOZLUK
+    from python.sozluk import _kaynak
 
     gruplar = {
-        "Ölçümler — ayrılmış stem'den": [
+        t("Ölçümler: ayrılmış kanallardan", "Measurements: from separated stems"): [
             "stem", "izgara_entropi", "tekme_payi", "trampet_payi", "zil_payi",
             "nota_vurus", "harmonik_pay", "perde_medyan", "perde_araligi",
             "vibrato_hizi", "sustain_orani", "parlaklik", "dinamik_db",
             "enerji_payi",
         ],
-        "Kümeleme ve profil": [
+        t("Kümeleme ve profil", "Clustering and profile"): [
             "eksen", "uyelik", "stabilite", "ses_uzakligi", "icra_profili",
             "yayilim",
         ],
-        "Aday üretme stratejileri": [
+        t("Öneri kaynakları", "Recommendation sources"): [
             "kredi_sicramasi", "sahne_komsulugu", "bilincli_uzaklik",
             "liste_birlikteligi", "pmi",
         ],
-        "Geri bildirim": ["kesif_orani", "zevk_isabeti", "wilson"],
+        t("Ölçüm ve geri bildirim", "Evaluation and feedback"): [
+            "loao", "tavan", "yuzdelik", "melez", "kesif_orani", "zevk_isabeti", "wilson"],
     }
     return SABLONLAR.TemplateResponse(istek, "sozluk.html", _ortam(
-        istek, gruplar=gruplar, sozluk=SOZLUK))
+        istek, gruplar=gruplar, sozluk=_kaynak()))
 
 
 async def etiketler(istek):
@@ -1011,7 +1278,8 @@ async def etiketler(istek):
                 ORDER BY albüm DESC""", conn)
         if etiket.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj="Etiket yok. <code>python -m python.etiket</code>"))
+                istek, mesaj=t("Henüz etiket yok. Üretmek için: ", "No tags yet. To build them: ")
+                + "<code>python -m python.etiket</code>"))
 
         secili = istek.query_params.get("etiket")
         albumler = pd.DataFrame()
@@ -1044,9 +1312,9 @@ async def ses_kumeleri(istek):
         kumeler = pd.read_sql_query("SELECT * FROM ses_kumesi", conn)
         if kumeler.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj="Ses kümesi yok. Önce "
-                "<code>python -m python.etiket_clap --gomu</code> sonra "
-                "<code>python -m python.ses_kume</code>"))
+                istek, mesaj=t("Henüz ses kümesi yok. Önce ", "No sound clusters yet. First run ")
+                + "<code>python -m python.etiket_clap --gomu</code>" + t(", sonra ", ", then ")
+                + "<code>python -m python.ses_kume</code>"))
 
         albumler = {
             r[0]: (r[1], r[2]) for r in conn.execute(
@@ -1109,7 +1377,7 @@ async def taze_onizleme(istek):
     except Exception:
         url = None
     if not url:
-        return JSONResponse({"hata": "önizleme yok"}, status_code=404)
+        return JSONResponse({"hata": t("önizleme yok", "no preview")}, status_code=404)
     return JSONResponse({"url": url})
 
 
@@ -1140,6 +1408,13 @@ class OturumAraKatmani(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, istek, sonraki):
+        yol = istek.url.path
+        # Statik dosya ve servis çalışanı kimlik istemiyor; oturum çözmek
+        # (paylaşılan veritabanında bir sorgu) her ikon ve CSS isteğinde boşa
+        # gidiyordu.
+        if yol.startswith("/statik/") or yol == "/sw.js":
+            return _guvenlik_basliklari(await sonraki(istek))
+
         jeton = istek.cookies.get(CEREZ_ADI)
         conn = _oturum_baglantisi()
         try:
@@ -1147,15 +1422,59 @@ class OturumAraKatmani(BaseHTTPMiddleware):
         finally:
             conn.close()
 
+        # Dil: çerez, yoksa tarayıcının tercihi (bkz. python/dil.py). Bağlam
+        # değişkeninde — kullanıcı gibi — ki cümle üreten `python/` işlevleri
+        # imza değiştirmeden iki dilde konuşsun.
+        dil_belirtec = AKTIF_DIL.set(istekten_dil(
+            istek.cookies.get(DIL_CEREZI), istek.headers.get("accept-language")))
         belirtec = AKTIF_KULLANICI.set(kullanici_id)
         try:
-            yol = istek.url.path
             acik = any(yol == a or yol.startswith(a + "/") for a in ACIK_YOLLAR)
             if kullanici_id is None and not acik:
+                if yol.startswith("/api/"):
+                    # Fetch çağrısı yönlendirmeyi izleyip giriş sayfasının
+                    # HTML'ini JSON diye okumaya çalışıyordu; açık bir 401
+                    # istemcinin "oturum düştü" diyebilmesini sağlıyor.
+                    return _guvenlik_basliklari(
+                        JSONResponse({"hata": t("oturum yok", "not signed in")}, status_code=401))
                 return RedirectResponse("/giris", status_code=303)
-            return await sonraki(istek)
+            yanit = await sonraki(istek)
+            yanit.headers.setdefault("Content-Language", etkin_dil())
+            yanit.headers.setdefault("Vary", "Cookie, Accept-Language")
+            return _guvenlik_basliklari(yanit)
         finally:
             AKTIF_KULLANICI.reset(belirtec)
+            AKTIF_DIL.reset(dil_belirtec)
+
+
+#: İçerik güvenliği. Betik ve stil yalnız kendi kökenimizden (satır içi
+#: `onchange="this.form.submit()"` kalıpları için 'unsafe-inline' — dış betik
+#: yine yasak). Görsel ve ses yalnız kullandığımız CDN'lerden: Deezer
+#: (dzcdn.net), iTunes (apple.com / mzstatic.com), Cover Art Archive.
+#: `frame-ancestors 'none'`: uygulama başka bir sayfaya çerçevelenemez.
+ICERIK_POLITIKASI = "; ".join((
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https://*.dzcdn.net https://*.mzstatic.com "
+    "https://coverartarchive.org https://*.archive.org",
+    "media-src 'self' https://*.dzcdn.net https://*.apple.com https://*.mzstatic.com",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self' https://accounts.spotify.com",
+))
+
+
+def _guvenlik_basliklari(yanit):
+    b = yanit.headers
+    b.setdefault("X-Content-Type-Options", "nosniff")
+    b.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    b.setdefault("X-Frame-Options", "DENY")
+    b.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if "text/html" in b.get("content-type", ""):
+        b.setdefault("Content-Security-Policy", ICERIK_POLITIKASI)
+    return yanit
 
 
 def _cerez_koy(yanit, jeton: str):
@@ -1280,7 +1599,38 @@ async def cikis(istek):
     return yanit
 
 
+async def dil_degistir(istek):
+    """Dili değiştir ve geldiğin sayfaya dön. Seçim çerezde, bir yıl.
+
+    Dönüş adresi YALNIZ yerel bir yol olabilir ("/..." ama "//..." değil):
+    aksi hâlde bu uç, başka bir siteye yönlendiren açık bir kapı olurdu.
+    """
+    kod = istek.path_params["kod"]
+    if kod not in DILLER:
+        kod = "tr"
+    geri = istek.query_params.get("geri") or "/"
+    if not geri.startswith("/") or geri.startswith("//"):
+        geri = "/"
+    yanit = RedirectResponse(geri, status_code=303)
+    yanit.set_cookie(DIL_CEREZI, kod, max_age=365 * 86400, samesite="lax",
+                     path="/", secure=HTTPS_ARKASINDA)
+    return yanit
+
+
 async def saglik(istek):
+    """Canlılık denetimi — süreç ayakta VE paylaşılan veritabanı okunuyor.
+
+    Yalnız "ayakta" dönmek, veritabanı kilitli ya da diski dolmuşken de
+    "sağlıklı" demekti; launchd/izleyici bunu göremezdi.
+    """
+    try:
+        conn = _oturum_baglantisi()
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as hata:
+        return JSONResponse({"durum": "veritabani", "hata": str(hata)}, status_code=503)
     return JSONResponse({"durum": "ayakta"})
 
 
@@ -1406,9 +1756,7 @@ def _aktarim_bitti_mi(kullanici_id: int | None) -> dict | None:
         return None
     durum = durum_oku(kullanici_id)
     if durum and durum.get("durum") == "bitti":
-        _calismalar.cache_clear()
-        _boru_hatti.cache_clear()
-        _eksen_adlari.cache_clear()
+        _onbellekleri_bosalt()
     return durum
 
 
@@ -1442,7 +1790,7 @@ async def basla(istek):
     # Durum dosyası "çalışıyor" diyor ama süreç yok: öldürülmüş ya da çökmüş.
     if durum and durum.get("durum") == "calisiyor" and not calisiyor:
         durum = {**durum, "durum": "hata",
-                 "hata": "aktarım yarıda kesildi (süreç artık çalışmıyor)"}
+                 "hata": t("aktarım yarıda kesildi (süreç artık çalışmıyor)", "the import was cut short (the process is no longer running)")}
     asama = (durum or {}).get("asama")
     return SABLONLAR.TemplateResponse(istek, "basla.html", {
         "request": istek, "yol": "/basla",
@@ -1505,8 +1853,283 @@ async def aktar_durum(istek):
         "calisiyor": calisiyor_mu(kullanici_id), "hata": durum.get("hata"),
     })
 
+
+# --------------------------------------------------------------------------- #
+# Keşfet — kaydırmalı deste
+# --------------------------------------------------------------------------- #
+
+_KIMLIK = re.compile(r"^[0-9a-f]{8,40}$")
+
+
+def _calisma_sec(istek, veri: dict | None = None) -> str | None:
+    return ((veri or {}).get("calisma_id") or istek.query_params.get("calisma")
+            or _son_calisma())
+
+
+def kesfet_sayfa(istek):
+    """Keşfet: kart kart dinle, kaydırarak karar ver.
+
+    Sayfa kabuğu sunucuda çiziliyor (eksen çipleri, günlük özet); kartlar
+    `/api/kesfet/deste`den parti parti geliyor. Böylece her kaydırma sayfa
+    yenilemiyor ve çalan önizleme kesilmiyor — K15'in gerekçesi aynen.
+    """
+    calisma_id = _calisma_sec(istek)
+    if not calisma_id:
+        return RedirectResponse("/basla", status_code=303)
+    conn = _baglanti()
+    try:
+        eksenler = kesif.eksenler(conn, calisma_id)
+        gunluk = kesif.gunluk_ozet(conn)
+        derinlik = kesif.mevcut_derinlik(conn, calisma_id)
+    finally:
+        conn.close()
+    secili = istek.query_params.get("eksen")
+    return SABLONLAR.TemplateResponse(istek, "kesfet.html", _ortam(
+        istek, eksenler=eksenler, gunluk=gunluk,
+        secili_eksen=int(secili) if secili and secili.lstrip("-").isdigit() else None,
+        kaynak=istek.query_params.get("kaynak") if istek.query_params.get("kaynak")
+        in kesif.KAYNAKLAR else "ana",
+        buyutulebilir=derinlik < kesif.BUYUTME_TAVANI,
+    ))
+
+
+def api_deste(istek):
+    """Sıradaki kart partisi. Her partide sıralama YENİDEN hesaplanır: az önce
+    verilen kararlar `yakinlik_etkisi` ile bir sonraki partiye yansır."""
+    q = istek.query_params
+    calisma_id = _calisma_sec(istek)
+    if not calisma_id:
+        return JSONResponse({"kartlar": [], "kalan": 0, "toplam": 0})
+    eksen = q.get("eksen")
+    eksen = int(eksen) if eksen and eksen.lstrip("-").isdigit() else None
+    try:
+        adet = max(1, min(int(q.get("adet", 8)), 20))
+    except ValueError:
+        adet = 8
+    haric = {k for k in (q.get("haric") or "").split(",") if _KIMLIK.match(k)}
+    kullanici_id = AKTIF_KULLANICI.get()
+    conn = _baglanti()
+    try:
+        sonuc = kesif.deste(
+            conn, calisma_id, eksen=eksen, kaynak=q.get("kaynak", "ana"),
+            adet=adet, haric=haric, etki=_yakinlik(conn, calisma_id),
+            baglam=_baglam_onbellek(kullanici_id), olcum=_olcum_onbellek(kullanici_id),
+            eksen_adlari=_eksen_adlari(calisma_id),
+        )
+    finally:
+        conn.close()
+    for kart in sonuc["kartlar"]:
+        kart["yer_tutucu"] = str(yer_tutucu_svg(kart["artist"], kart["title"]))
+    sonuc["calisma_id"] = calisma_id
+    return JSONResponse(sonuc)
+
+
+def api_medya(istek):
+    """Kartın görseli + TAZE önizlemesi. İlk çağrıda Deezer'dan çözülür ve
+    `medya` tablosuna yazılır; sonrakiler yalnız taze önizleme için bir çağrı."""
+    from python.medya import medya_coz
+
+    aday_id = istek.path_params["aday_id"]
+    if not _KIMLIK.match(aday_id):
+        return JSONResponse({"hata": t("geçersiz kimlik", "invalid id")}, status_code=400)
+    conn = _baglanti()
+    try:
+        satir = conn.execute(
+            "SELECT artist, title, MAX(parca_id) parca_id FROM adaylar "
+            "WHERE aday_id = ? GROUP BY aday_id", (aday_id,)).fetchone()
+        if satir is None:
+            satir = conn.execute(
+                "SELECT artist, title, parca_id FROM liste WHERE aday_id = ?",
+                (aday_id,)).fetchone()
+        if satir is None:
+            return JSONResponse({"hata": "aday yok"}, status_code=404)
+        sonuc = medya_coz(conn, {"aday_id": aday_id, **dict(satir)})
+    finally:
+        conn.close()
+    return JSONResponse(sonuc)
+
+
+async def api_kesfet_karar(istek):
+    veri = await istek.json()
+    karar, aday_id = veri.get("karar"), str(veri.get("aday_id") or "")
+    if karar not in kesif.KARARLAR or not _KIMLIK.match(aday_id):
+        return JSONResponse({"hata": t("geçersiz karar", "invalid decision")}, status_code=400)
+    conn = _baglanti()
+    try:
+        sonuc = kesif.karar_kaydet(conn, _calisma_sec(istek, veri), aday_id, karar)
+    except LookupError:
+        return JSONResponse({"hata": t("aday bulunamadı", "pick not found")}, status_code=404)
+    finally:
+        conn.close()
+    _boru_hatti.cache_clear()
+    return JSONResponse(sonuc)
+
+
+async def api_kesfet_geri_al(istek):
+    veri = await istek.json()
+    aday_id = str(veri.get("aday_id") or "")
+    if not _KIMLIK.match(aday_id):
+        return JSONResponse({"hata": t("geçersiz kimlik", "invalid id")}, status_code=400)
+    conn = _baglanti()
+    try:
+        sonuc = kesif.karar_geri_al(conn, _calisma_sec(istek, veri), aday_id)
+    finally:
+        conn.close()
+    _boru_hatti.cache_clear()
+    return JSONResponse(sonuc)
+
+
+#: Aynı kullanıcı için ikinci büyütme isteği birinciyi beklemez, reddedilir.
+_BUYUYEN: set[int] = set()
+_BUYUME_KILIDI = threading.Lock()
+
+
+def api_buyut(istek):
+    """Desteyi büyüt: ana stratejileri +20 sıra derine üret (tavan 50).
+
+    Ayrı süreç DEĞİL (aktarımdan farklı): üç ana strateji yerel veriyle
+    ~7 sn'de bitiyor (ölçüldü), torch yüklemiyor. İstek iş parçacığında
+    bekler, istemci o sırada "kartlar hazırlanıyor" gösterir.
+    """
+    kullanici_id = AKTIF_KULLANICI.get()
+    calisma_id = _calisma_sec(istek)
+    if not calisma_id or kullanici_id is None:
+        return JSONResponse({"durum": "yok"}, status_code=400)
+    with _BUYUME_KILIDI:
+        if kullanici_id in _BUYUYEN:
+            return JSONResponse({"durum": "suruyor"}, status_code=409)
+        _BUYUYEN.add(kullanici_id)
+    try:
+        conn = _baglanti()
+        try:
+            sonuc = kesif.desteyi_buyut(conn, calisma_id)
+        finally:
+            conn.close()
+    except Exception as hata:          # üretim hatası kullanıcıya sade döner
+        print(f"[buyut] {type(hata).__name__}: {hata}", file=sys.stderr)
+        return JSONResponse({"durum": "hata"}, status_code=500)
+    finally:
+        with _BUYUME_KILIDI:
+            _BUYUYEN.discard(kullanici_id)
+    _onbellekleri_bosalt()      # CLAP havuzu ve sayaçlar yeni adayları görsün
+    return JSONResponse(sonuc)
+
+
+# --------------------------------------------------------------------------- #
+# Listem
+# --------------------------------------------------------------------------- #
+
+def listem(istek):
+    """Sağa kaydırılanlar: dinle, durumunu işaretle, nereden edineceğini gör,
+    dışa aktar — ve listenin kendi dökümü."""
+    durum = istek.query_params.get("durum")
+    durum = durum if durum in kesif.DURUMLAR or durum == "kutuphanede" else None
+    kullanici_id = AKTIF_KULLANICI.get()
+    calisma_id = _son_calisma()
+    conn = _baglanti()
+    try:
+        tumu = kesif.liste_ogeleri(conn)
+        gunluk = kesif.gunluk_ozet(conn)
+        etkinlik = kesif.etkinlik(conn, 21)
+        isabet = (kesif.eksen_isabeti(conn, calisma_id, _eksen_adlari(calisma_id))
+                  if calisma_id else [])
+    finally:
+        conn.close()
+    if durum == "kutuphanede":
+        ogeler = [o for o in tumu if o["kutuphanede"]]
+    elif durum:
+        ogeler = [o for o in tumu if o["durum"] == durum]
+    else:
+        ogeler = tumu
+    analiz = kesif.liste_analizi(tumu, _baglam_onbellek(kullanici_id))
+    en_cok = max([n for _, n in etkinlik] + [1])
+    return SABLONLAR.TemplateResponse(istek, "listem.html", _ortam(
+        istek, ogeler=ogeler, tumu_sayi=len(tumu), durum=durum, analiz=analiz,
+        gunluk=gunluk, etkinlik=etkinlik, en_cok=en_cok, isabet=isabet,
+        durumlar=kesif.DURUMLAR,
+    ))
+
+
+def listem_aktar(istek):
+    bicim = istek.path_params["bicim"]
+    if bicim not in ("csv", "txt", "json"):
+        return JSONResponse({"hata": t("biçim csv, txt ya da json olmalı", "format must be csv, txt or json")}, status_code=404)
+    durum = istek.query_params.get("durum")
+    conn = _baglanti()
+    try:
+        ogeler = kesif.liste_ogeleri(conn, durum if durum in kesif.DURUMLAR else None)
+    finally:
+        conn.close()
+    icerik, tur = kesif.disa_aktar(ogeler, bicim)
+    ad = f"kesif-listem-{date.today().isoformat()}{'-' + durum if durum else ''}.{bicim}"
+    return Response(icerik, media_type=tur,
+                    headers={"Content-Disposition": f'attachment; filename="{ad}"'})
+
+
+async def api_liste_ekle(istek):
+    """Bir adayı doğrudan listeye ekle (Müzisyenler sayfasındaki ♥).
+
+    Destedeki sağa kaydırmayla AYNI kayıt: sanatçı düzeyinde «beğendim» +
+    liste satırı. Adayın bulunduğu en yeni çalışma kullanılır.
+    """
+    veri = await istek.json()
+    aday_id = str(veri.get("aday_id") or "")
+    if not _KIMLIK.match(aday_id):
+        return JSONResponse({"hata": t("geçersiz istek", "invalid request")}, status_code=400)
+    conn = _baglanti()
+    try:
+        satir = conn.execute(
+            "SELECT MAX(calisma_id) FROM adaylar WHERE aday_id = ?", (aday_id,)).fetchone()
+        if not satir or not satir[0]:
+            return JSONResponse({"hata": t("aday yok", "no such pick")}, status_code=404)
+        sonuc = kesif.karar_kaydet(conn, satir[0], aday_id, "begendim")
+    finally:
+        conn.close()
+    _boru_hatti.cache_clear()
+    return JSONResponse(sonuc)
+
+
+async def api_liste_durum(istek):
+    veri = await istek.json()
+    aday_id, durum = str(veri.get("aday_id") or ""), veri.get("durum")
+    if not _KIMLIK.match(aday_id) or durum not in kesif.DURUMLAR:
+        return JSONResponse({"hata": t("geçersiz istek", "invalid request")}, status_code=400)
+    conn = _baglanti()
+    try:
+        tamam = kesif.durum_guncelle(conn, aday_id, durum)
+    finally:
+        conn.close()
+    return JSONResponse({"tamam": tamam, "durum": durum},
+                        status_code=200 if tamam else 404)
+
+
+async def api_liste_sil(istek):
+    veri = await istek.json()
+    aday_id = str(veri.get("aday_id") or "")
+    if not _KIMLIK.match(aday_id):
+        return JSONResponse({"hata": t("geçersiz istek", "invalid request")}, status_code=400)
+    conn = _baglanti()
+    try:
+        tamam = kesif.listeden_sil(conn, aday_id)
+        sayi = kesif.liste_sayisi(conn)
+    finally:
+        conn.close()
+    return JSONResponse({"tamam": tamam, "liste": sayi})
+
+
 ROTALAR = [
     Route("/", anasayfa),
+    Route("/kesfet", kesfet_sayfa),
+    Route("/api/kesfet/deste", api_deste),
+    Route("/api/kesfet/karar", api_kesfet_karar, methods=["POST"]),
+    Route("/api/kesfet/geri-al", api_kesfet_geri_al, methods=["POST"]),
+    Route("/api/kesfet/buyut", api_buyut, methods=["POST"]),
+    Route("/api/medya/{aday_id}", api_medya),
+    Route("/listem", listem),
+    Route("/listem/disa-aktar/{bicim}", listem_aktar),
+    Route("/api/liste/ekle", api_liste_ekle, methods=["POST"]),
+    Route("/api/liste/durum", api_liste_durum, methods=["POST"]),
+    Route("/api/liste/sil", api_liste_sil, methods=["POST"]),
     Route("/oneriler", oneriler),
     Route("/profil", profil),
     Route("/ogrenme", ogrenme),
@@ -1529,6 +2152,7 @@ ROTALAR = [
     Route("/giris/spotify", spotify_baslat),
     Route("/giris/spotify/donus", spotify_donus),
     Route("/saglik", saglik),
+    Route("/dil/{kod}", dil_degistir),
     # Servis çalışanının KAPSAMI bulunduğu dizinle sınırlı. `/statik/sw.js`
     # yalnız `/statik/*` isteklerini görebilirdi; uygulamanın tamamını
     # kapsaması için kökten sunuluyor.
@@ -1540,12 +2164,44 @@ ROTALAR = [
     Mount("/statik", StaticFiles(directory=str(KOK / "statik")), name="statik"),
 ]
 
+def _onbellekleri_isit() -> None:
+    """Açılışta, arka planda: her kullanıcının pahalı önbelleklerini doldur.
+
+    Ölçüldü (2026-09-23): soğuk sunucuda ilk deste partisi 1,9 sn, sıcakta
+    0,14 sn; farkın tamamı bağlam etiketleri ve CLAP havuzunun ilk okunuşu.
+    Kullanıcı sayfayı açmadan önce bu iş bitmiş olsun. Hata sessiz: ısıtma
+    bir iyileştirme, uygulamanın çalışması ona bağlı değil.
+    """
+    try:
+        conn = _oturum_baglantisi()
+        try:
+            kimlikler = [r[0] for r in conn.execute("SELECT kullanici_id FROM kullanici")]
+        finally:
+            conn.close()
+        for kid in kimlikler:
+            belirtec = AKTIF_KULLANICI.set(kid)
+            try:
+                _baglam_onbellek(kid)
+                _olcum_onbellek(kid)
+                _havuz_onbellek(kid)
+            finally:
+                AKTIF_KULLANICI.reset(belirtec)
+    except Exception as hata:          # noqa: BLE001 — ısıtma asla çökertmemeli
+        print(f"[isitma] {type(hata).__name__}: {hata}", file=sys.stderr)
+
+
+@contextlib.asynccontextmanager
+async def _yasam(uygulama_):
+    threading.Thread(target=_onbellekleri_isit, name="isitma", daemon=True).start()
+    yield
+
+
 uygulama = Starlette(
     routes=ROTALAR,
     middleware=[Middleware(OturumAraKatmani)],
+    lifespan=_yasam,
 )
 
-SABLONLAR.env.filters["sayi"] = _sayi
 
 
 def _statik(yol: str) -> str:
@@ -1566,6 +2222,17 @@ def _statik(yol: str) -> str:
 
 
 SABLONLAR.env.globals["statik"] = _statik
+SABLONLAR.env.globals["yer_tutucu"] = yer_tutucu_svg
+SABLONLAR.env.globals["t"] = t
+SABLONLAR.env.globals["dil"] = etkin_dil
+SABLONLAR.env.filters["sayi"] = dil_sayi
+SABLONLAR.env.filters["yuzde"] = yuzde
+from python.ceviri import etiket_aciklama, etiket_adi, rol_adi  # noqa: E402
+from python.gerekce import strateji_adi  # noqa: E402
+SABLONLAR.env.filters["etiket_adi"] = etiket_adi
+SABLONLAR.env.filters["rol_adi"] = rol_adi
+SABLONLAR.env.globals["etiket_aciklama"] = etiket_aciklama
+SABLONLAR.env.globals["strateji_adi"] = strateji_adi
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,63 +1,61 @@
 {% extends "kabuk.html" %}
-{% block baslik %}Giriş — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Giriş", "Sign in") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
-<div class="kapi">
-  <h1>Keşif Motoru</h1>
-  <p class="kapi-alt">Kütüphaneni tanıyan, sana <em>sende olmayanı</em> öneren motor.</p>
+<div class="kapi hud">
+  <div class="kapi-marka"><span class="logo">◈</span><b>{{ t("KEŞİF", "KEŞİF") }}</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
+  <h1>{{ t("Tekrar hoş geldin", "Welcome back") }}</h1>
+  <p class="kapi-alt">{{ t("Kütüphaneni tanıyan ve sana sende olmayanı öneren motor.",
+                           "The engine that knows your library and finds what you don't have yet.") }}</p>
 
   {% if ilk_kurulum %}
-    <div class="kapi-not">
-      Henüz hesap yok. İlk hesabı sen açacaksın.
-    </div>
+    <div class="kapi-not">{{ t("Henüz hesap yok. İlk hesabı sen açacaksın.",
+                               "No accounts yet. You'll be creating the first one.") }}</div>
   {% endif %}
 
   {% if hata == 'kilit' %}
-    <div class="kapi-hata">
-      Çok fazla başarısız deneme. Birkaç dakika sonra tekrar dene.
-    </div>
+    <div class="kapi-hata">{{ t("Çok fazla başarısız deneme. Birkaç dakika sonra tekrar dene.",
+                                "Too many failed attempts. Try again in a few minutes.") }}</div>
   {% elif hata == 'dolu' %}
-    <div class="kapi-hata">
-      Beş kullanıcılık kontenjan dolu. Yeni hesap açılamıyor.
-    </div>
+    <div class="kapi-hata">{{ t("Beş kişilik kontenjan dolu, yeni hesap açılamıyor.",
+                                "All five seats are taken, so no new accounts can be created.") }}</div>
   {% elif hata == 'spotify_iptal' %}
-    <div class="kapi-hata">Spotify bağlantısını sen iptal ettin. Sorun yok.</div>
+    <div class="kapi-hata">{{ t("Spotify bağlantısını iptal ettin. Sorun değil.",
+                                "You cancelled the Spotify connection. No problem.") }}</div>
   {% elif hata == 'spotify_durum' %}
-    <div class="kapi-hata">
-      Spotify turu zaman aşımına uğradı. Düğmeye yeniden bas.
-    </div>
+    <div class="kapi-hata">{{ t("Spotify oturumu zaman aşımına uğradı. Düğmeye yeniden bas.",
+                                "The Spotify session timed out. Press the button again.") }}</div>
   {% elif hata == 'spotify_yok' %}
-    <div class="kapi-hata">Spotify bağlantısı bu sunucuda yapılandırılmamış.</div>
+    <div class="kapi-hata">{{ t("Bu sunucuda Spotify bağlantısı ayarlı değil.",
+                                "Spotify isn't set up on this server.") }}</div>
   {% elif hata == 'spotify' %}
-    <div class="kapi-hata">Spotify'a bağlanamadım. Birazdan tekrar dene.</div>
+    <div class="kapi-hata">{{ t("Spotify'a bağlanamadım. Birazdan tekrar dene.",
+                                "Couldn't reach Spotify. Try again in a moment.") }}</div>
   {% elif hata %}
-    <div class="kapi-hata">E-posta ya da parola tutmadı.</div>
+    <div class="kapi-hata">{{ t("E-posta ya da parola yanlış.", "Wrong email or password.") }}</div>
   {% endif %}
 
   <form method="post" action="/giris" class="kapi-form">
-    <label>E-posta
+    <label>{{ t("E-posta", "Email") }}
       <input type="email" name="eposta" required autocomplete="username"
-             autofocus placeholder="sen@ornek.com"></label>
-    <label>Parola
-      <input type="password" name="parola" required
-             autocomplete="current-password"></label>
-    <button type="submit" class="birincil">Gir</button>
+             autofocus placeholder="{{ t('sen@ornek.com', 'you@example.com') }}"></label>
+    <label>{{ t("Parola", "Password") }}
+      <input type="password" name="parola" required autocomplete="current-password"></label>
+    <button type="submit" class="birincil">{{ t("Giriş yap", "Sign in") }}</button>
   </form>
 
   {% if spotify_hazir %}
-  <div class="kapi-ayrac"><span>ya da</span></div>
-
+  <div class="kapi-ayrac"><span>{{ t("ya da", "or") }}</span></div>
   <a class="spotify-dugme" href="/giris/spotify">
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <path fill="currentColor" d="M12 0a12 12 0 100 24 12 12 0 000-24zm5.5 17.3a.75.75 0 01-1.03.25c-2.82-1.72-6.37-2.11-10.55-1.16a.75.75 0 11-.33-1.46c4.57-1.04 8.5-.59 11.66 1.34.35.22.46.68.25 1.03zm1.47-3.27a.94.94 0 01-1.29.31c-3.23-1.98-8.15-2.56-11.97-1.4a.94.94 0 11-.54-1.8c4.36-1.32 9.78-.68 13.49 1.6.44.27.58.85.31 1.29zm.13-3.4C15.23 8.33 8.86 8.12 5.16 9.24a1.12 1.12 0 01-.65-2.15c4.25-1.29 11.28-1.04 15.72 1.59a1.12 1.12 0 01-1.13 1.94z"/>
+      <path fill="currentColor" d="M12 0a12 12 0 100 24 12 12 0 000-24zm5.5 17.3a.75.75 0 01-1.03.25c-2.82-1.72-6.37-2.11-10.55-1.16a.75.75 0 11-.33-1.46c4.57-1.04 8.5-.59 11.66 1.34.35.22.46.68.25 1.030zm1.47-3.27a.94.94 0 01-1.29.31c-3.23-1.98-8.15-2.56-11.97-1.4a.94.94 0 11-.54-1.8c4.36-1.32 9.78-.68 13.49 1.6.44.27.58.85.31 1.29zm.13-3.4C15.23 8.33 8.86 8.12 5.16 9.24a1.12 1.12 0 01-.65-2.15c4.25-1.29 11.28-1.04 15.72 1.59a1.12 1.12 0 01-1.13 1.94z"/>
     </svg>
-    Spotify ile bağlan
+    {{ t("Spotify ile devam et", "Continue with Spotify") }}
   </a>
-  <p class="kapi-ipucu">
-    Spotify ile girersen kütüphaneni okuyup eksenlerini kendim çıkarırım —
-    dosya yüklemene gerek kalmaz.
-  </p>
+  <p class="kapi-ipucu">{{ t("Spotify ile girersen kütüphaneni okuyup eksenlerini kendim çıkarırım; dosya yüklemen gerekmez.",
+                             "Sign in with Spotify and I'll read your library and work out your taste axes myself. No file uploads needed.") }}</p>
   {% endif %}
 
-  <p class="kapi-alt2">Hesabın yok mu? <a href="/uyelik">Üye ol</a></p>
+  <p class="kapi-alt2">{{ t("Hesabın yok mu?", "No account yet?") }} <a href="/uyelik">{{ t("Üye ol", "Sign up") }}</a></p>
+  {% include "_dil_secici.html" %}
 </div>
 {% endblock %}

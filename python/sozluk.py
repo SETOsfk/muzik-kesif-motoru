@@ -244,8 +244,13 @@ SOZLUK: dict[str, dict[str, str]] = {
         "capalar": "The Ocean ↔ Pineapple Thief · Vega ↔ TNK · "
                    "Adam Nitti ↔ Nathan East.",
         "uyari": "Çalma listesi müzikal benzerlik kadar BAĞLAM da taşır "
-                 "(spor, chill, parti). Ham sayı kullanılsaydı Van Halen ↔ "
-                 "Madonna çıkıyordu — ikisi de 80'ler olduğu için.",
+                 "(spor, chill, parti, dil). Ham sayı kullanılsaydı Van Halen ↔ "
+                 "Madonna çıkıyordu, ikisi de 80'ler olduğu için. Ölçüldü "
+                 "(2026-09-23): Sezen Aksu «grunge» eksenine Duman'ın yanından "
+                 "yalnız 3 ortak listeyle girdi; ikisi «her şey karışık» kişisel "
+                 "listeler, biri «türkçe» adlı. Sinyal «aynı tarz» değil «aynı "
+                 "dil» diyordu. 3 ya da daha az listeye dayanan öneriler artık "
+                 "«zayıf kanıt» olarak işaretleniyor.",
     },
     # ------------------------------------------------------------- değerlendirme --
     "loao": {
@@ -291,7 +296,8 @@ SOZLUK: dict[str, dict[str, str]] = {
                 "SIRALARININ birleştirilmesi.",
         "nasil": "skor(x) = Σ a/(60 + sıra). Skorlar toplanmıyor çünkü "
                  "ölçekleri kıyaslanamaz (bağ gücü −1…+1, ses ≈ −0,35…0). "
-                 "Çalma listesi 2, ses 1 ağırlıkta; oran ölçülerek seçildi.",
+                 "Çalma listesi 1, ses 2 ağırlıkta: 2026-09-15'te gerçek "
+                 "kararların sesi öne çıkarınca tersine çevrildi.",
         "capalar": "Bir listede birinci ama diğerinde hiç yok olan aday, iki "
                    "listede de ellinci olana yenilir — kesişim ödüllendirilir.",
         "uyari": "Asıl kazancı sıralama değil ERİŞİM: 14 sanatçıya yalnız ses "
@@ -348,13 +354,22 @@ SOZLUK: dict[str, dict[str, str]] = {
 }
 
 
+def _kaynak() -> dict[str, dict[str, str]]:
+    """Etkin dile göre sözlük (İngilizcesi `sozluk_en.py`)."""
+    from python.dil import dil
+    if dil() == "en":
+        from python.sozluk_en import SOZLUK_EN
+        return SOZLUK_EN
+    return SOZLUK
+
+
 def terim(anahtar: str) -> dict[str, str] | None:
-    return SOZLUK.get(anahtar)
+    return _kaynak().get(anahtar)
 
 
 def ipucu(anahtar: str) -> str:
     """`title=` özniteliğine konacak tek satırlık metin."""
-    t = SOZLUK.get(anahtar)
+    t = _kaynak().get(anahtar)
     if not t:
         return ""
     parcalar = [t["kisa"]]

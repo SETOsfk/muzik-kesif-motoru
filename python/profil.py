@@ -219,6 +219,122 @@ ODAK_HARITASI: dict[str, tuple[str, str, str, str, str]] = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# İngilizce (2026-09-23) — veri Türkçe kalır, METİN gösterimde seçilir.
+# --------------------------------------------------------------------------- #
+
+EKSEN_EN: dict[tuple[str, str], tuple[str, str, str]] = {
+    ("tempo", "drums"): ("tempo", "slow", "fast"),
+    ("dinamik_db", "drums"): ("dynamic range", "compressed / always the same level", "wide / breathing"),
+    ("izgara_entropi", "drums"): ("human feel", "programmed / locked to the grid", "human hands / elastic"),
+    ("zil_payi", "drums"): ("cymbal weight", "punchy, sparse cymbals", "ride/hi-hat heavy"),
+    ("tekme_payi", "drums"): ("kick weight", "light foot", "tom-and-kick heavy"),
+    ("perde_araligi", "bass"): ("bass movement", "sits on the root", "melodic, roaming"),
+    ("nota_vurus", "bass"): ("bass density", "sparse, leaves space", "note-dense"),
+    ("perde_medyan", "bass"): ("bass register", "deep / downtuned", "high"),
+    ("perde_araligi", "other"): ("guitar movement", "steady riff / chords", "wide-ranging / solo"),
+    ("harmonik_pay", "other"): ("tone texture", "distorted / noisy", "clean / tonal"),
+    ("enerji_payi", "other"): ("guitar weight", "back in the mix", "wall of guitars"),
+    ("parlaklik", "other"): ("guitar timbre", "warm / thick", "bright / trebly"),
+    ("sustain_orani", "other"): ("note length", "clipped / staccato", "sustained / atmospheric"),
+    ("perde_medyan", "vocals"): ("vocal register", "low / chest", "high / thin"),
+    ("perde_araligi", "vocals"): ("vocal movement", "flat delivery", "wide melodic range"),
+    ("harmonik_pay", "vocals"): ("vocal texture", "noisy / harsh / rhythmic", "clean / tonal"),
+    ("nota_vurus", "vocals"): ("delivery speed", "sparse / long notes", "dense syllables"),
+    ("enerji_payi", "vocals"): ("vocal weight", "close to instrumental", "vocals up front"),
+}
+
+#: Çapa açıklamaları ("Sanatçı — açıklama"nın açıklama kısmı).
+CAPA_EN: dict[str, str] = {
+    "ağır": "slow", "hızlı": "fast", "sıkıştırılmış": "compressed",
+    "geniş, nefes alan": "wide, breathing", "programlanmış beat": "programmed beat",
+    "insan eli": "human hands", "tok, tom ağırlıklı": "punchy, tom-heavy",
+    "ride ağırlıklı": "ride-heavy", "hafif ayak": "light foot", "tekme ağırlıklı": "kick-heavy",
+    "kök notada duran bas": "bass on the root", "geniş gezinen bas": "roaming bass",
+    "seyrek, boşluk bırakan": "sparse, leaves space", "nota yoğun bas": "note-dense bass",
+    "derin bas": "deep bass", "yüksek register": "high register", "sabit riff": "steady riff",
+    "geniş gezinen solo": "wide-ranging solo", "gürültülü doku": "noisy texture",
+    "temiz / tonal": "clean / tonal",
+    "gitar mikste yok denecek kadar geride": "guitar barely there in the mix",
+    "gitar duvarı": "wall of guitars", "tok, kalın tını": "warm, thick timbre",
+    "parlak tını": "bright timbre", "kesik, kısa notalar": "clipped, short notes",
+    "uzayan, çınlayan": "sustained, ringing", "kalın / göğüs": "low / chest voice",
+    "tiz / haykırmaya yakın": "high / close to screaming", "dar aralık": "narrow range",
+    "geniş gezinme": "wide range", "ritmik, gürültülü (rap)": "rhythmic, noisy (rap)",
+    "temiz, tonal söyleyiş": "clean, tonal delivery", "seyrek, uzun notalar": "sparse, long notes",
+    "yoğun hece": "dense syllables", "enstrümantale yakın": "close to instrumental",
+    "vokal önde": "vocals up front",
+}
+
+ODAKLAR_EN: dict[str, tuple[str, str]] = {
+    "genel": ("Overview", "No instrument detail: how fast, how much room to breathe, how clean, whether the vocals lead."),
+    "davul": ("Drums", "The character of the rhythm: human or machine, and where the weight sits."),
+    "bas": ("Bass", "Does the bass sit on the root or roam around, and how busy is it."),
+    "gitar": ("Guitar / keys", "The melodic layer: steady riff or wide solo, clean or distorted."),
+    "vokal": ("Vocals", "Register, range, texture and delivery speed."),
+    "hepsi": ("Everything", "Every axis we measure."),
+}
+
+HARITA_EN: dict[str, str] = {
+    "genel": "Across: tempo · Up: dynamic range. Bottom right = fast and compressed; top left = slow and breathing.",
+    "davul": "Across: kick weight · Up: cymbal weight. Top left = cymbal-heavy with a light foot; bottom right = tom-and-kick heavy.",
+    "bas": "Across: movement · Up: note density. Top right = bass that roams and stays busy.",
+    "gitar": "Across: movement · Up: room taken in the mix. Top right = guitar up front, roaming wide.",
+    "vokal": "Across: range · Up: texture (down = noisy/rhythmic, up = clean). Bottom left = close to rap; top right = melodic.",
+}
+
+STEM_ADI: dict[str, tuple[str, str]] = {
+    "drums": ("davul", "drums"), "bass": ("bas", "bass"),
+    "other": ("gitar/klavye", "guitar/keys"), "vocals": ("vokal", "vocals"),
+}
+
+
+def _eksen_metni(sutun: str, stem: str, ad: str, dusuk: str, yuksek: str) -> tuple[str, str, str]:
+    from python.dil import dil
+    if dil() == "en" and (sutun, stem) in EKSEN_EN:
+        return EKSEN_EN[(sutun, stem)]
+    return ad, dusuk, yuksek
+
+
+def eksen_adi(sutun: str, stem: str) -> str:
+    """Bir eksenin etkin dildeki adı (grafik başlıkları için)."""
+    for e in EKSENLER:
+        if e[0] == sutun and e[1] == stem:
+            return _eksen_metni(*e)[0]
+    return sutun
+
+
+def _capa_metni(ad: str) -> str:
+    """"Eminem — ağır" → İngilizcede "Eminem — slow"."""
+    from python.dil import dil
+    if dil() != "en" or " — " not in ad:
+        return ad
+    sanatci, _, aciklama = ad.partition(" — ")
+    return f"{sanatci} — {CAPA_EN.get(aciklama, aciklama)}"
+
+
+def odaklar() -> dict[str, tuple[str, str, tuple[str, ...]]]:
+    """ODAKLAR, etkin dilde."""
+    from python.dil import dil
+    if dil() != "en":
+        return ODAKLAR
+    return {k: (*ODAKLAR_EN.get(k, v[:2]), v[2]) for k, v in ODAKLAR.items()}
+
+
+def harita(odak: str) -> tuple[str, str, str, str, str]:
+    """ODAK_HARITASI, etkin dilde."""
+    from python.dil import dil
+    h = ODAK_HARITASI.get(odak, ODAK_HARITASI["genel"])
+    if dil() == "en":
+        return (*h[:4], HARITA_EN.get(odak if odak in ODAK_HARITASI else "genel", h[4]))
+    return h
+
+
+def stem_adi(stem: str) -> str:
+    from python.dil import t
+    return t(*STEM_ADI.get(stem, (stem, stem)))
+
+
 def odak_eksenleri(odak: str) -> tuple:
     """Odağa giren eksenler. Bilinmeyen odak `genel`e düşer.
 
@@ -295,6 +411,7 @@ def eksen_ozeti(veri: pd.DataFrame, odak: str = "hepsi") -> pd.DataFrame:
         return pd.DataFrame()
     satirlar = []
     for sutun, stem, ad, dusuk, yuksek in odak_eksenleri(odak):
+        ad, dusuk, yuksek = _eksen_metni(sutun, stem, ad, dusuk, yuksek)
         # Sütun eksik olabilir: eski veritabanı, kısmi ölçüm ya da göç öncesi
         # çerçeve. Eksik sütunda çakılmak tüm profil ekranını çökertiyordu.
         if sutun not in veri.columns:
@@ -340,6 +457,7 @@ def kume_ses_imzasi(
     keskin = U.idxmax(axis=1)
     satirlar = []
     for sutun, stem, ad, *_ in EKSENLER:
+        ad = _eksen_metni(sutun, stem, ad, '', '')[0]
         if sutun not in veri.columns:
             continue
         x = veri[(veri["stem"] == stem) & veri[sutun].notna()]
@@ -382,30 +500,35 @@ def _sayi(x: float) -> str:
 
 def _capa_cumlesi(sutun: str, stem: str, deger: float) -> str | None:
     """Değeri ölçülmüş çapa noktalarına göre konumlandır."""
+    from python.dil import t
+
     capalar = CAPALAR.get((sutun, stem))
     if not capalar:
         return None
     (alt_d, alt_ad), (ust_d, ust_ad) = capalar[0], capalar[-1]
+    alt_ad, ust_ad = _capa_metni(alt_ad), _capa_metni(ust_ad)
     if deger <= alt_d:
-        return f"{alt_ad} tarafında"
+        return t(f"{alt_ad} tarafında", f"out at the far end, past {alt_ad}")
     if deger >= ust_d:
-        return f"{ust_ad} tarafında"
+        return t(f"{ust_ad} tarafında", f"out at the far end, past {ust_ad}")
     oran = (deger - alt_d) / max(1e-9, ust_d - alt_d)
-    yakin = alt_ad if oran < 0.5 else ust_ad
+    yakin = (alt_ad if oran < 0.5 else ust_ad).split(" — ")[0]
     # EK YERİNE TARAF. Türkçe yönelme eki (-e/-a) ünlü uyumuna bağlı ve
     # yabancı adlarda YAZILIŞA değil OKUNUŞA göre alınıyor: «Death» yazılışta
     # son ünlüsü «a» ama «Deth» okunduğu için «Death'e» olur. Her grup adının
     # okunuşunu tahmin etmeye kalkmak kaçınılmaz olarak yanlış üretir;
     # «... tarafında» kurgusu adı ek almadan bırakıyor ve hep doğru.
-    return f"ikisinin arasında, {yakin.split(' — ')[0]} tarafında"
+    return t(f"ikisinin arasında, {yakin} tarafında", f"in between, closer to {yakin}")
 
 
 def profil_cumleleri(ozet: pd.DataFrame, denge: pd.DataFrame) -> list[str]:
-    """Kütüphaneyi anlatan cümleler — şablon, LLM yok (K2).
+    """Kütüphaneyi anlatan cümleler — şablon, LLM yok (K2). İki dilde.
 
     Her cümlenin sayısal dayanağı var ve dayanak ekranda yanında duruyor.
     K7'nin "uydurma yok, doğrulanabilir" kuralı burada da geçerli.
     """
+    from python.dil import bas_harf_buyuk, sayi, t, yuzde
+
     cumleler: list[str] = []
 
     if not denge.empty:
@@ -413,21 +536,26 @@ def profil_cumleleri(ozet: pd.DataFrame, denge: pd.DataFrame) -> list[str]:
         if not vokal.empty:
             kapsama = float(vokal.iloc[0]["kapsama"])
             if kapsama < 0.80:
-                cumleler.append(
-                    f"Albümlerinin yalnızca %{kapsama*100:.0f}'inde ölçülebilir bir vokal "
-                    f"katmanı var — kütüphanen enstrümantal ağırlıklı."
-                )
+                cumleler.append(t(
+                    f"Albümlerinin yalnız {yuzde(kapsama)}'inde ölçülebilir bir vokal "
+                    f"katmanı var: kütüphanen enstrümantale yakın.",
+                    f"Only {yuzde(kapsama)} of your albums have a measurable vocal "
+                    f"layer, so your library leans instrumental.",
+                ))
 
     for _, satir in ozet.iterrows():
         capa = _capa_cumlesi(satir["sutun"], satir["stem"], satir["medyan"])
         if not capa:
             continue
-        cumleler.append(
-            f"**{satir['eksen'].capitalize()}**: medyanın {_sayi(satir['medyan'])}, "
-            f"{capa}. "
-            f"Uçların: {satir['en_dusuk']} ({_sayi(satir['en_dusuk_deger'])}) ↔ "
-            f"{satir['en_yuksek']} ({_sayi(satir['en_yuksek_deger'])})."
-        )
+        eksen = bas_harf_buyuk(satir["eksen"])
+        cumleler.append(t(
+            f"**{eksen}**: medyanın {sayi(satir['medyan'])}, {capa}. "
+            f"Uçların: {satir['en_dusuk']} ({sayi(satir['en_dusuk_deger'])}) ↔ "
+            f"{satir['en_yuksek']} ({sayi(satir['en_yuksek_deger'])}).",
+            f"**{eksen}**: your median is {sayi(satir['medyan'])}, {capa}. "
+            f"Your extremes: {satir['en_dusuk']} ({sayi(satir['en_dusuk_deger'])}) ↔ "
+            f"{satir['en_yuksek']} ({sayi(satir['en_yuksek_deger'])}).",
+        ))
     return cumleler
 
 

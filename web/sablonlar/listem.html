@@ -1,0 +1,181 @@
+{% extends "taban.html" %}
+{% block baslik %}{{ t("Listem", "My list") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block govde %}
+{% set durum_adi = {'yeni': t('Yeni', 'New'), 'dinlendi': t('Dinlendi', 'Listened'), 'edinildi': t('Edinildi', 'Acquired')} %}
+
+<div class="listem-bas">
+  <div class="sayfa-basi" style="margin:0">
+    <p class="etiket-ust" style="margin:0 0 4px">{{ t("edinme listesi", "your pick-up list") }}</p>
+    <h1>{{ t("Listem", "My list") }}</h1>
+    <p>{{ t("Sağa kaydırdıkların ve 👍 dediklerin burada. Dinle, durumunu işaretle, nereden edineceğini seç. Yeni bir albümü kütüphanene tarattığında burada",
+            "Everything you swiped right on or gave a 👍 lands here. Listen, mark where you are with it, and pick where to buy it. Once a new album is scanned into your library it shows up here as") }}
+       <span class="rozet yesil">✓ {{ t("kütüphanende", "in your library") }}</span>{{ t(" olarak görünür.", ".") }}</p>
+  </div>
+  <details class="aktar-menu">
+    <summary class="dugme birincil">⇩ {{ t("Dışa aktar", "Export") }}</summary>
+    <div class="menu-govde" role="menu">
+      {% set q = '?durum=' ~ durum if durum in durumlar else '' %}
+      <a href="/listem/disa-aktar/csv{{ q }}">{{ t("CSV (Excel)", "CSV (Excel)") }}
+        <small>{{ t("tam tablo: durum, eksen, gerekçe, mağaza bağlantıları", "full table: status, axis, reason, store links") }}</small></a>
+      <a href="/listem/disa-aktar/txt{{ q }}">{{ t("Alışveriş listesi (.txt)", "Shopping list (.txt)") }}
+        <small>{{ t("albüm başına bir satır: \"Sanatçı — Albüm (Yıl)\"", "one line per album: \"Artist — Album (Year)\"") }}</small></a>
+      <a href="/listem/disa-aktar/json{{ q }}">JSON
+        <small>{{ t("betiklerle işlemek için", "for scripts") }}</small></a>
+    </div>
+  </details>
+</div>
+
+<nav class="cipler" aria-label="{{ t('Durum süzgeci', 'Filter by status') }}" style="margin-bottom:var(--b4)">
+  <a class="cip {{ 'etkin' if not durum }}" href="/listem">{{ t("Tümü", "All") }}<b>{{ tumu_sayi }}</b></a>
+  {% for d in durumlar %}
+    <a class="cip {{ 'etkin' if durum == d }}" href="/listem?durum={{ d }}">{{ durum_adi[d] }}<b>{{ analiz.durum[d] }}</b></a>
+  {% endfor %}
+  <a class="cip {{ 'etkin' if durum == 'kutuphanede' }}" href="/listem?durum=kutuphanede">{{ t("Kütüphanende", "In your library") }}<b>{{ analiz.kutuphanede }}</b></a>
+</nav>
+
+{% if not ogeler %}
+  <div class="bos">
+    {% if tumu_sayi %}{{ t("Bu süzgeçte bir şey yok.", "Nothing matches this filter.") }}
+    {% else %}{{ t("Listen boş.", "Your list is empty.") }} <a href="/kesfet">{{ t("Keşfet", "Discover") }}</a>{{ t("'te sağa kaydırdığın her şey buraya düşer.", ": anything you swipe right on lands here.") }}{% endif %}
+  </div>
+{% else %}
+<div class="liste-izgara">
+  {% for o in ogeler %}
+  <article class="lo" data-aday="{{ o.aday_id }}" data-durum="{{ o.durum }}" data-sanatci="{{ o.artist }}">
+    <div class="lo-kapak">
+      {{ yer_tutucu(o.artist, o.album or o.title) }}
+      {% if o.kapak %}<img src="{{ o.kapak }}" alt="" loading="lazy" decoding="async" data-kapak>{% endif %}
+      <button class="lo-cal" type="button" data-aday="{{ o.aday_id }}" aria-label="{{ t('Önizlemeyi çal', 'Play preview') }}: {{ o.artist }}">▶</button>
+    </div>
+    <div class="lo-govde">
+      <div class="lo-sanatci" title="{{ o.artist }}">{{ o.artist }}</div>
+      <div class="lo-eser" title="{{ o.album }}">
+        {% if o.birim == 'parca' %}▸ {{ o.parca }}{% if o.album %} · {{ o.album }}{% endif %}
+        {% else %}{{ o.album }}{% endif %}{% if o.year %} · {{ o.year }}{% endif %}
+      </div>
+      <div class="lo-alt">
+        <span class="rozet mavi">{{ o.eksen_ad }}</span>
+        {% if o.kutuphanede %}<span class="rozet yesil">✓ {{ t("kütüphanende", "in your library") }}</span>{% endif %}
+        <span class="etiket-ust">{{ (o.eklenme or '')[:10] }}</span>
+      </div>
+      <div class="lo-eylem">
+        <div class="durum-anahtar" role="group" aria-label="{{ t('Durum', 'Status') }}">
+          {% for d, ad in [('yeni', t('yeni', 'new')), ('dinlendi', t('dinledim', 'listened')), ('edinildi', t('edindim', 'got it'))] %}
+            <button type="button" data-durum="{{ d }}" aria-pressed="{{ 'true' if o.durum == d else 'false' }}">{{ ad }}</button>
+          {% endfor %}
+        </div>
+        <details class="edin">
+          <summary>{{ t("Edin", "Get it") }} ↗</summary>
+          <div class="menu-govde">
+            {% for ad, url in o.baglantilar %}
+              <a href="{{ url }}" target="_blank" rel="noopener">{{ ad }}
+                {% if ad in ('Bandcamp', 'Qobuz') %}<small>{{ t("kayıpsız dosya satın al", "buy lossless files") }}</small>{% endif %}</a>
+            {% endfor %}
+          </div>
+        </details>
+        <button class="lo-sil dugme" type="button"
+                title="{{ t('Listeden çıkar (beğeni kaydı kalır)', 'Remove from list (your like is kept)') }}"
+                aria-label="{{ t('Listeden çıkar', 'Remove from list') }}" style="padding:4px 9px;margin-left:auto">✕</button>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if tumu_sayi %}
+<section class="bolum" style="margin-top:var(--b7)">
+  <h2>{{ t("Listenin dökümü", "What's in your list") }}</h2>
+  <p class="aciklama">{{ t("Yalnız sayılmış şeyler. \"Ortalama dinleyiciye göre\" diye bir kıyas yok, çünkü elimizde böyle bir norm yok (K13).",
+                           "Only things we actually counted. There's no \"compared with the average listener\", because no such norm exists here (K13).") }}</p>
+
+  <div class="izgara bes" style="margin-bottom:var(--b4)">
+    <dl class="olcu"><dt>{{ t("öğe", "items") }}</dt><dd>{{ analiz.toplam }}</dd></dl>
+    <dl class="olcu"><dt>{{ t("sanatçı", "artists") }}</dt><dd>{{ analiz.sanatci }}</dd></dl>
+    <dl class="olcu"><dt>{{ t("edinildi", "acquired") }}</dt><dd>{{ analiz.durum.edinildi }}</dd></dl>
+    <dl class="olcu"><dt>{{ t("kütüphanende", "in library") }}</dt><dd>{{ analiz.kutuphanede }}</dd></dl>
+    <dl class="olcu"><dt>{{ t("seri", "streak") }}</dt><dd>{{ gunluk.seri }}<span class="alt"> {{ t("gün", "days") }}</span></dd></dl>
+  </div>
+
+  <div class="analiz">
+    <div class="kart">
+      <h3>{{ t("Son 21 gün", "Last 21 days") }}</h3>
+      <div class="kivilcim" role="img" aria-label="{{ t('Günlük sanatçı kararı sayısı', 'Artist decisions per day') }}">
+        {% for gun, n in etkinlik %}
+          <i class="{{ 'bugun' if loop.last }}" style="height:{{ (n / en_cok * 100)|round(1) }}%"
+             title="{{ gun }}: {{ n }} {{ t('karar', 'decisions') }}"></i>
+        {% endfor %}
+      </div>
+      <p class="aciklama" style="margin:var(--b2) 0 0;font-size:.8rem">{{ t("Gün başına sanatçı kararı. Bugün:", "Artist decisions per day. Today:") }} {{ gunluk.karar }}.</p>
+    </div>
+
+    {% if isabet %}
+    <div class="kart">
+      <h3>{{ t("Hangi eksen tutuyor?", "Which axis is landing?") }}</h3>
+      <div class="cubuklar">
+        {% for e in isabet if e.n %}
+        <div class="cubuk" title="{{ e.begendim }} {{ t('listeye', 'saved') }} / {{ e.tutmadi }} {{ t('geç', 'passed') }} · Wilson %90: {{ e.alt|yuzde }}–{{ e.ust|yuzde }}{{ '' if e.yeterli else t(' · 4 karardan az, yorum yapılmıyor', ' · fewer than 4 decisions, no verdict yet') }}">
+          <span>{{ e.ad }}</span>
+          <span class="iz" style="{{ '' if e.yeterli else 'opacity:.45' }}">
+            <i class="aralik" style="left:{{ (e.alt*100)|round(1) }}%;right:auto;width:{{ ((e.ust-e.alt)*100)|round(1) }}%"></i>
+            <b style="left:{{ (e.isabet*100)|round(1) }}%"></b>
+          </span>
+          <em>{{ e.isabet|yuzde }} · n{{ e.n }}</em>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="aciklama" style="margin:var(--b3) 0 0;font-size:.8rem">{{ t("Zevk isabeti = listeye / (listeye + geç), sanatçı başına tek karar. Bant %90 Wilson aralığı; «biliyorum» paydaya girmiyor.",
+                                                                           "Hit rate = saved / (saved + passed), one decision per artist. The band is a 90% Wilson interval; \"know it\" isn't counted.") }}</p>
+    </div>
+    {% endif %}
+
+    {% if analiz.eksen %}
+    <div class="kart">
+      <h3>{{ t("Eksenler", "Axes") }}</h3>
+      {% set tepe = analiz.eksen[0][1] %}
+      <div class="cubuklar">
+        {% for ad, n in analiz.eksen %}
+        <div class="cubuk"><span>{{ ad }}</span><span class="iz"><i class="vurgu" style="width:{{ (n / tepe * 100)|round(1) }}%"></i></span><em>{{ n }}</em></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if analiz.onyil %}
+    <div class="kart">
+      <h3>{{ t("On yıllar", "Decades") }}</h3>
+      {% set tepe = analiz.onyil|map(attribute=1)|max %}
+      <div class="cubuklar">
+        {% for ad, n in analiz.onyil %}
+        <div class="cubuk"><span>{{ ad }}</span><span class="iz"><i style="width:{{ (n / tepe * 100)|round(1) }}%"></i></span><em>{{ n }}</em></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if analiz.baglam %}
+    <div class="kart">
+      <h3>{{ t("Bağlam", "Context") }}</h3>
+      <p class="aciklama" style="font-size:.8rem">{{ t("Listendeki sanatçıları insanlar hangi çalma listelerine koymuş.", "The kinds of playlists people put your saved artists in.") }}</p>
+      <div class="etiketler">
+        {% for e, n in analiz.baglam %}
+          <a class="rozet mavi" href="/etiketler?etiket={{ e|urlencode }}" style="text-decoration:none">◑ {{ e|etiket_adi }} · {{ n }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="kart">
+      <h3>{{ t("Nereden geldiler", "Where they came from") }}</h3>
+      {% set tepe = analiz.strateji[0][1] if analiz.strateji else 1 %}
+      <div class="cubuklar">
+        {% for ad, n in analiz.strateji %}
+        <div class="cubuk"><span>{{ ad }}</span><span class="iz"><i class="vurgu" style="width:{{ (n / tepe * 100)|round(1) }}%"></i></span><em>{{ n }}</em></div>
+        {% endfor %}
+      </div>
+      <p class="aciklama" style="margin:var(--b3) 0 0;font-size:.8rem">{{ t("Kaynak başına ayrıntılı ölçüm:", "Detailed numbers per source:") }} <a href="/ogrenme">{{ t("Ne öğrendik", "What we learned") }}</a>.</p>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

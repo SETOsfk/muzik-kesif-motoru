@@ -1,0 +1,92 @@
+{% extends "taban.html" %}
+{% block baslik %}{{ t("Keşfet", "Discover") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block govde %}
+
+{# Kartlar istemcide çiziliyor (`kesfet.js`), veriler `/api/kesfet/deste`den
+   parti parti. Sunucu yalnız kabuğu ve durumu basar: eksen çipleri, günlük
+   sayaç. Sayfa yenilenmediği için çalan önizleme kaydırmada kesilmez. #}
+<div class="kesfet-arka" id="kesfet-arka" aria-hidden="true"><img alt=""></div>
+
+<div class="kesfet" id="kesfet"
+     data-calisma="{{ calisma_id }}"
+     data-eksen="{{ secili_eksen if secili_eksen is not none else '' }}"
+     data-kaynak="{{ kaynak }}"
+     data-buyutulebilir="{{ 'evet' if buyutulebilir else 'hayir' }}">
+
+  <div class="kesfet-bas">
+    <h1>{{ t("Keşfet", "Discover") }}</h1>
+    <div class="gunluk" id="gunluk">
+      <span class="etiket-ust">{{ t("bugün", "today") }}</span>
+      <span><b data-gunluk="karar">{{ gunluk.karar }}</b> {{ t("karar", "decisions") }}</span>
+      <span><b data-gunluk="begendim">{{ gunluk.begendim }}</b> {{ t("listeye", "saved") }}</span>
+      <span class="seri" title="{{ t('Art arda karar verdiğin gün sayısı', 'Days in a row you have made decisions') }}"
+            {% if not gunluk.seri %}hidden{% endif %}>⚡ <b data-gunluk="seri">{{ gunluk.seri }}</b> {{ t("gün", "day streak") }}</span>
+    </div>
+  </div>
+
+  <nav class="cipler" aria-label="{{ t('Eksen seçimi', 'Choose an axis') }}">
+    <a class="cip {{ 'etkin' if secili_eksen is none }}"
+       href="/kesfet?calisma={{ calisma_id }}&kaynak={{ kaynak }}">{{ t("Karışık", "Mixed") }}</a>
+    {% for e in eksenler %}
+      <a class="cip {{ 'etkin' if secili_eksen == e.eksen }}"
+         href="/kesfet?calisma={{ calisma_id }}&eksen={{ e.eksen }}&kaynak={{ kaynak }}">{{ e.ad }}<b>{{ e.sanatci }}</b></a>
+    {% endfor %}
+    <a class="cip {{ 'etkin' if kaynak == 'cesur' }}"
+       href="/kesfet?calisma={{ calisma_id }}{% if secili_eksen is not none %}&eksen={{ secili_eksen }}{% endif %}&kaynak={{ 'ana' if kaynak == 'cesur' else 'cesur' }}"
+       title="{{ t('Kadro grafiği: kütüphanendeki müzisyenlerin ve komşularının başka kayıtları. Ölçümde erişimi dar çıktı, bu yüzden ana akışta değil.',
+                   'Lineup graph: other records by the musicians in your library and their neighbours. Its reach measured narrow, so it stays out of the main feed.') }}">
+      {{ t('← ana akış', '← main feed') if kaynak == 'cesur' else t('Cesur mod ↗', 'Bold mode ↗') }}</a>
+  </nav>
+
+  <div class="deste" id="deste" aria-live="polite" aria-label="{{ t('Öneri destesi', 'Recommendation deck') }}">
+    {# İlk ziyaret eğitimi. Bir kez; "Başla" ile kapanır ve bu cihazda hatırlanır. #}
+    <div class="egitim hud" id="egitim" hidden>
+      <p class="etiket-ust">{{ t("nasıl çalışır", "how it works") }}</p>
+      <h2>{{ t("Dinle, kaydır, listende biriksin.", "Listen, swipe, build your list.") }}</h2>
+      <ul>
+        <li><b class="yon sag">→</b><span>{{ t("Sağa kaydır: listene eklenir, sonra dinler ya da edinirsin.",
+                                               "Swipe right to save it to your list, then listen or pick it up later.") }}</span></li>
+        <li><b class="yon sol">←</b><span>{{ t("Sola kaydır: geç. Buna benzeyenler geri plana düşer.",
+                                               "Swipe left to pass. Similar-sounding picks drop back.") }}</span></li>
+        <li><b class="yon ust">↑</b><span>{{ t("Yukarı kaydır: zaten biliyorum. O sanatçı bir daha gelmez.",
+                                               "Swipe up if you already know it. That artist won't come back.") }}</span></li>
+        <li><b class="yon">↺</b><span>{{ t("Yanlış mı kaydırdın? Geri al düğmesi ya da Z tuşu.",
+                                           "Swiped by mistake? Hit undo, or press Z.") }}</span></li>
+      </ul>
+      <p class="aciklama">{{ t("Her karar ölçüme yazılır ve sıradaki kartların sırasını kaydırır: beğendiğine benzeyenler yukarı, geçtiğine benzeyenler aşağı.",
+                               "Every decision is recorded and reshuffles the cards that follow: more like what you saved, less like what you passed on.") }}</p>
+      <button type="button" class="birincil" data-eylem="egitim-tamam">{{ t("Başla", "Start") }}</button>
+    </div>
+    <div class="deste-yukleniyor" id="deste-yukleniyor"></div>
+    <div class="deste-bos" id="deste-bos" hidden>
+      <div>
+        <h2>{{ t("Bu destede kart kalmadı", "You've cleared this deck") }}</h2>
+        <p id="deste-bos-metin">{{ t("Buradaki her sanatçı için karar verdin.", "You've decided on every artist here.") }}</p>
+        <div class="eylemler">
+          {% if buyutulebilir %}
+          <button class="birincil" type="button" data-eylem="buyut">✦ {{ t("Daha derinden kart getir", "Dig deeper for more cards") }}</button>
+          {% endif %}
+          {% if secili_eksen is not none %}
+          <a class="dugme" href="/kesfet?calisma={{ calisma_id }}">{{ t("Karışık desteye dön", "Back to the mixed deck") }}</a>
+          {% endif %}
+          <a class="dugme" href="/listem">{{ t("Listeme git →", "Go to my list →") }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="deste-dugmeler" role="group" aria-label="{{ t('Karar', 'Decision') }}">
+    <button class="dd kucuk geri" type="button" data-eylem="geri" aria-label="{{ t('Son kararı geri al (Z)', 'Undo last decision (Z)') }}" title="{{ t('Geri al', 'Undo') }} · Z">↺</button>
+    <button class="dd buyuk gec" type="button" data-eylem="tutmadi" aria-label="{{ t('Geç (←)', 'Pass (←)') }}" title="{{ t('Geç', 'Pass') }} · ←">✕</button>
+    <button class="dd bilinen" type="button" data-eylem="zaten_biliyorum" aria-label="{{ t('Zaten biliyorum (↑)', 'Already know it (↑)') }}" title="{{ t('Zaten biliyorum', 'Already know it') }} · ↑">◎</button>
+    <button class="dd buyuk liste" type="button" data-eylem="begendim" aria-label="{{ t('Listeye ekle (→)', 'Save to list (→)') }}" title="{{ t('Listeye ekle', 'Save to list') }} · →">♥</button>
+    <button class="dd kucuk ses" type="button" data-eylem="ses" aria-label="{{ t('Otomatik çalmayı aç/kapat (M)', 'Toggle autoplay (M)') }}" title="{{ t('Otomatik çalma', 'Autoplay') }} · M">🔊</button>
+  </div>
+  <p class="kisayol"><kbd>←</kbd> {{ t("geç", "pass") }} · <kbd>→</kbd> {{ t("listeye", "save") }} · <kbd>↑</kbd> {{ t("biliyorum", "know it") }} ·
+     <kbd>{{ t("boşluk", "space") }}</kbd> {{ t("çal/durdur", "play/pause") }} · <kbd>Z</kbd> {{ t("geri al", "undo") }} · <kbd>M</kbd> {{ t("ses", "sound") }}</p>
+</div>
+
+<audio id="oynatici" preload="auto"></audio>
+{% endblock %}
+
+{% block betik %}<script src="{{ statik('kesfet.js') }}"></script>{% endblock %}

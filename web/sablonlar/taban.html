@@ -1,118 +1,117 @@
 <!doctype html>
-<html lang="tr">
+<html lang="{{ dil() }}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block baslik %}Müzik Keşif Motoru{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block baslik %}{{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ statik('stil.css') }}">
 <link rel="manifest" href="{{ statik('manifest.webmanifest') }}">
-<meta name="theme-color" content="#0e0f12">
+<meta name="theme-color" content="#05060c">
 {# iOS ana ekrana eklendiğinde tam ekran açılsın ve durum çubuğu koyu olsun.
    Apple `beforeinstallprompt` desteklemiyor; kurulum elle yapılıyor. #}
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Keşif">
+<meta name="apple-mobile-web-app-title" content="{{ t('Keşif', 'Keşif') }}">
 <link rel="apple-touch-icon" href="{{ statik('ikon-180.png') }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎧</text></svg>">
 </head>
 <body>
-<div class="kabuk">
 
-  <aside class="yan">
-    <div class="marka"><span>🎧</span><b>Keşif Motoru</b></div>
+{# GEZİNTİ: ÜÇ SEKME, ALTINDA SEÇENEKLER (2026-09-23).
+   Eskiden yan menüde on bir düz bağlantı vardı ve telefonda "Daha" altına
+   sekizi gizleniyordu. Kullanıcının üç işi var: yeni bir şey bul (Keşfet),
+   bulduğunu işle (Listem), kendine bak (Kütüphane). Her sayfa bu üçünden
+   birinin altında; sekme adresi o grubun ilk sayfası. #}
+{% set sekmeler = [
+  ('kesfet', t('Keşfet', 'Discover'), '◈', [
+      ('/kesfet', t('Kaydır', 'Swipe')), ('/oneriler', t('Öneriler', 'Recommendations')),
+      ('/ses-kumeleri', t('Ses kümeleri', 'Sound clusters')), ('/etiketler', t('Etiketler', 'Tags'))]),
+  ('listem', t('Listem', 'My list'), '♥', [
+      ('/listem', t('Liste', 'List')), ('/ogrenme', t('Ne öğrendik', 'What we learned'))]),
+  ('kutuphane', t('Kütüphane', 'Library'), '◍', [
+      ('/profil', t('Profilin', 'Your profile')), ('/muzisyenler', t('Müzisyenler', 'Musicians')),
+      ('/kumeler', t('Kümeler', 'Clusters')), ('/veri', t('Veri seti', 'Dataset')),
+      ('/eslestirme', t('Eşleştirme', 'Matching')), ('/sozluk', t('Sözlük', 'Glossary'))]),
+] %}
+{% set ns = namespace(aktif=None, alt=[]) %}
+{% for kimlik, ad, simge, alt in sekmeler %}
+  {% if alt|selectattr(0, 'equalto', yol)|list %}{% set ns.aktif = kimlik %}{% set ns.alt = alt %}{% endif %}
+{% endfor %}
+{% macro adres(yol_) -%}
+  {{ yol_ }}{% if calisma_id and yol_ not in ('/listem', '/sozluk') %}?calisma={{ calisma_id }}{% endif %}
+{%- endmacro %}
 
-    {# Dokuz düz bağlantı fazlaydı. Üç öbek: ne yapmak istediğine göre.
-       Keşfet = yeni bir şey bul · Kütüphanen = kendine bak · Bakım = veriyi düzelt. #}
-    {% set obekler = [
-      ('Keşfet', [('/oneriler','Öneriler','◆'),
-                  ('/ses-kumeleri','Ses kümeleri','◎'),
-                  ('/etiketler','Etiketler','⌗')]),
-      ('Kütüphanen', [('/profil','Profilin','◍'), ('/muzisyenler','Müzisyenler','♪'),
-                      ('/kumeler','Kümeler','⬡')]),
-      ('Bakım', [('/ogrenme','Ne öğrendik','↺'), ('/veri','Veri seti','▤'),
-                 ('/eslestirme','Eşleştirme','⇄')]),
-    ] %}
-    {% for obek_adi, sayfalar in obekler %}
-      <p class="yan-baslik">{{ obek_adi }}</p>
-      <nav class="gezinti">
-        {% for adres, ad, simge in sayfalar %}
-          <a href="{{ adres }}{% if calisma_id %}?calisma={{ calisma_id }}{% endif %}"
-             class="{{ 'etkin' if yol == adres else '' }}"><i>{{ simge }}</i>{{ ad }}</a>
-        {% endfor %}
-      </nav>
+<header class="ust">
+  <a class="marka" href="/kesfet" aria-label="{{ t('Keşif Motoru — Keşfet\'e dön', 'Discovery Engine — back to Discover') }}">
+    <span class="logo">◈</span><b>KEŞİF</b><span class="marka-alt">{{ t('motoru', 'engine') }}</span>
+  </a>
+
+  <nav class="ana-sekmeler" aria-label="{{ t('Ana bölümler', 'Main sections') }}">
+    {% for kimlik, ad, simge, alt in sekmeler %}
+      <a href="{{ adres(alt[0][0]) }}" class="{{ 'etkin' if ns.aktif == kimlik }}"
+         {% if ns.aktif == kimlik %}aria-current="page"{% endif %}>
+        <i aria-hidden="true">{{ simge }}</i><span>{{ ad }}</span>
+        {% if kimlik == 'listem' %}<b class="sayac-rozet" data-liste-sayac {{ 'hidden' if not liste_sayisi }}>{{ liste_sayisi or 0 }}</b>{% endif %}
+      </a>
     {% endfor %}
-    <nav class="gezinti">
-      <a href="/sozluk" class="{{ 'etkin' if yol == '/sozluk' else '' }}"
-         style="font-size:.83rem"><i>?</i>Sözlük — terimler ne demek</a>
-    </nav>
-
-    {% if calismalar %}
-    <p class="yan-baslik">Çalışma</p>
-    <form method="get" action="{{ yol }}">
-      <div class="alan">
-        <select name="calisma" onchange="this.form.submit()" style="min-width:0;width:100%">
-          {% for c in calismalar %}
-            <option value="{{ c.calisma_id }}" {{ 'selected' if c.calisma_id == calisma_id }}>
-              {{ c.calisma_id[:13] }} · {{ c.stabil or 0 }}/{{ c.kume }} stabil
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-    </form>
-    {% endif %}
-
-    {% if boru %}
-    <details style="margin-top:var(--b4)">
-      <summary style="font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;
-                      color:var(--metin-3);font-weight:600;padding-left:var(--b3)">
-        Veri durumu</summary>
-      <dl style="margin:var(--b2) 0 0">
-        {% for s in boru %}
-        <div style="display:flex;justify-content:space-between;padding:4px var(--b3);
-                    font-size:.82rem;color:var(--metin-2)">
-          <span>{{ s.ad }}</span>
-          <b style="color:var(--metin);font-variant-numeric:tabular-nums">
-            {{ '{:,}'.format(s.deger).replace(',', '.') }}</b>
-        </div>
-        {% endfor %}
-      </dl>
-    </details>
-    {% endif %}
-  </aside>
-
-  <main class="govde">
-    {% block govde %}{% endblock %}
-  </main>
-</div>
-<script src="{{ statik('uygulama.js') }}"></script>
-
-  {# TELEFON ALT ŞERİDİ. Ölçüldü (375px): yan menü ilk ekranın ~%60'ını
-     yiyordu ve içerik katlamanın altında kalıyordu. Telefonda gezinti
-     parmağın olduğu yere, alta iner; yan menü gizlenir.
-
-     Sekiz sayfanın hepsi alta sığmaz ve sığdırmaya çalışmak dokunma
-     hedeflerini küçültür. En sık kullanılan dört tanesi burada; geri kalanı
-     "Daha" altında. Sıralama keşif akışına göre: öneri → ses → profil. #}
-  <nav class="alt-serit" aria-label="Telefon gezintisi">
-    {% set alt = [('/oneriler','Öneriler','◆'), ('/ses-kumeleri','Ses','◎'),
-                  ('/profil','Profilin','◍'), ('/ogrenme','Öğrenilen','↺')] %}
-    {% for adres, ad, simge in alt %}
-      <a href="{{ adres }}{% if calisma_id %}?calisma={{ calisma_id }}{% endif %}"
-         class="{{ 'etkin' if yol == adres else '' }}">
-        <i>{{ simge }}</i><span>{{ ad }}</span></a>
-    {% endfor %}
-    <details class="alt-daha">
-      <summary><i>⋯</i><span>Daha</span></summary>
-      <div class="alt-daha-govde">
-        {% for adres, ad in [('/etiketler','Etiketler'), ('/muzisyenler','Müzisyenler'),
-                             ('/kumeler','Kümeler'), ('/veri','Veri seti'),
-                             ('/eslestirme','Eşleştirme'), ('/sozluk','Sözlük')] %}
-          <a href="{{ adres }}{% if calisma_id %}?calisma={{ calisma_id }}{% endif %}">{{ ad }}</a>
-        {% endfor %}
-        <a href="/cikis" class="cikis-bag">Çıkış</a>
-      </div>
-    </details>
   </nav>
 
+  <details class="sistem-menu">
+    <summary aria-label="{{ t('Sistem menüsü', 'System menu') }}">
+      <span class="nabiz" aria-hidden="true"></span><span class="sistem-etiket">{{ t("sistem", "system") }}</span>
+    </summary>
+    <div class="menu-govde">
+      {% if calismalar %}
+      <form method="get" action="{{ yol }}" class="menu-bolum">
+        <label class="etiket-ust" for="calisma-sec">{{ t("kümeleme çalışması", "clustering run") }}</label>
+        <select id="calisma-sec" name="calisma" onchange="this.form.submit()">
+          {% for c in calismalar %}
+            <option value="{{ c.calisma_id }}" {{ 'selected' if c.calisma_id == calisma_id }}>
+              {{ c.calisma_id[:13] }} · {{ c.stabil or 0 }}/{{ c.kume }} {{ t('stabil', 'stable') }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      {% if boru %}
+      <dl class="menu-bolum hud-okuma">
+        {% for s in boru %}
+          <div><dt>{{ s.ad }}</dt><dd>{{ '{:,}'.format(s.deger).replace(',', '.') }}</dd></div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% include "_dil_secici.html" %}
+      <a href="/cikis" class="cikis-bag">{{ t("Çıkış yap", "Sign out") }} ↗</a>
+    </div>
+  </details>
+</header>
+
+{% if ns.alt|length > 1 %}
+<nav class="alt-sekmeler" aria-label="{{ t('Bölüm seçenekleri', 'Section options') }}">
+  {% for adres_, ad in ns.alt %}
+    <a href="{{ adres(adres_) }}" class="{{ 'etkin' if yol == adres_ }}"
+       {% if yol == adres_ %}aria-current="page"{% endif %}>{{ ad }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+<main class="govde">
+  {% block govde %}{% endblock %}
+</main>
+
+{# TELEFON: üç sekme alt şeritte, başparmağın olduğu yerde. Alt seçenekler
+   üstteki kaydırılabilir satırda kalıyor — "Daha" menüsü artık yok. #}
+<nav class="alt-serit" aria-label="{{ t('Ana bölümler', 'Main sections') }}">
+  {% for kimlik, ad, simge, alt in sekmeler %}
+    <a href="{{ adres(alt[0][0]) }}" class="{{ 'etkin' if ns.aktif == kimlik }}">
+      <i aria-hidden="true">{{ simge }}</i><span>{{ ad }}</span>
+      {% if kimlik == 'listem' %}<b class="sayac-rozet" data-liste-sayac {{ 'hidden' if not liste_sayisi }}>{{ liste_sayisi or 0 }}</b>{% endif %}
+    </a>
+  {% endfor %}
+</nav>
+
+<div class="bildirim" id="bildirim" role="status" aria-live="polite"></div>
+
+<script src="{{ statik('uygulama.js') }}"></script>
+{% block betik %}{% endblock %}
 </body>
 </html>

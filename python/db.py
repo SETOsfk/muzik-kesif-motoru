@@ -346,6 +346,55 @@ SEMA: tuple[str, ...] = (
     """
     CREATE INDEX IF NOT EXISTS ix_oturum_kullanici ON oturum(kullanici_id)
     """,
+    # Keşfet destesinde sağa kaydırılan (ya da öneride 👍 denen) öğeler — bir
+    # EDİNME listesi. `feedback`ten AYRI çünkü ikisi farklı soruya cevap:
+    # feedback "zevkime uydu mu" (ölçüm girdisi), liste "bunu edinmek /
+    # dinlemek istiyorum" (iş listesi). Listeden silmek beğeniyi geri almaz;
+    # albümü satın alıp kütüphaneye katmış olabilirsin.
+    #
+    # Adayın alanları KOPYALANIYOR (denormalize): `adaylar` çalışmaya bağlı ve
+    # yeniden kümelemede bayat aday temizliği satırları silebiliyor. Liste
+    # kümelemeden bağımsız yaşamalı.
+    """
+    CREATE TABLE IF NOT EXISTS liste (
+        aday_id     TEXT PRIMARY KEY,   -- gösterilen öğe (albüm ya da parça)
+        calisma_id  TEXT,
+        eksen       INTEGER,
+        strateji    TEXT,
+        artist      TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        year        INTEGER,
+        birim       TEXT NOT NULL DEFAULT 'album',
+        parca_id    INTEGER,
+        mbid        TEXT,
+        gerekce     TEXT,
+        dayanak     TEXT,   -- adayın kanıtı (JSON); gerekçe bundan, iki dilde
+        durum       TEXT NOT NULL DEFAULT 'yeni',  -- yeni / dinlendi / edinildi
+        eklenme     TEXT NOT NULL,
+        guncelleme  TEXT
+    )
+    """,
+    # Aday görseli ve çalınabilir parçası — Deezer'ın anahtarsız genel API'si.
+    # PAYLAŞIMLI: kapak bir albümü tarif eder, kullanıcıyı değil; `aday_id`
+    # `album_kimligi()` ile türetildiği için iki kullanıcının aynı adayı aynı
+    # kimliği taşır. Önizleme URL'si SAKLANMAZ (kısa ömürlü imzalı, bkz.
+    # `taze_onizleme`); kalıcı olan parça kimliği saklanır.
+    """
+    CREATE TABLE IF NOT EXISTS medya (
+        aday_id         TEXT PRIMARY KEY,
+        kapak           TEXT,      -- albüm kapağı (1000 px)
+        sanatci_gorsel  TEXT,      -- sanatçı fotoğrafı (1000 px)
+        parca_id        INTEGER,   -- çalınacak Deezer parçası
+        parca_adi       TEXT,
+        -- 1: önerilen parçanın önizlemesi yoktu (lisans), sanatçının en
+        -- popüler ÇALINABİLİR parçası konuldu. Arayüz bunu AÇIKÇA yazar.
+        yedek           INTEGER NOT NULL DEFAULT 0,
+        album_adi       TEXT,      -- parça adayında: parçanın albümü
+        deezer_album    INTEGER,
+        durum           TEXT NOT NULL,   -- bulundu / yok
+        tarih           TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -384,11 +433,12 @@ ORTAK_TABLOLAR: frozenset[str] = frozenset({
     "liste_parca",      # havuz
     "kullanici",        # hesaplar
     "oturum",           # oturum jetonları
+    "medya",            # aday → kapak, sanatçı görseli, çalınacak parça
 })
 
 #: Kullanıcıya özel kalanlar (belge amaçlı; kod `ORTAK_TABLOLAR` dışını kullanır):
 #: albums, dosyalar, plays, memberships, temsilciler, clusters, adaylar,
-#: feedback, album_etiket, ses_kumesi, ses_kume_adi, liste_birlikteligi.
+#: feedback, album_etiket, ses_kumesi, ses_kume_adi, liste_birlikteligi, liste.
 #:
 #: `liste_birlikteligi` ve `album_etiket` paylaşımlı DEĞİL çünkü ikisi de
 #: kütüphaneye görelidir: PMI "kütüphane sanatçısı × dışarıdaki" bağıdır,
@@ -520,6 +570,19 @@ def baglan(db_yolu: Path | str = VARSAYILAN_DB, *, sema: bool = True) -> sqlite3
         kullanici_altinda = KULLANICI_KOK.resolve() in db_yolu.resolve().parents
     except (OSError, RuntimeError):
         kullanici_altinda = False
+    # YAPISAL KORUMA (2026-09-23). Yukarıdaki denetim klasörü yalnız
+    # `KULLANICI_KOK` değişkeniyle tanıyordu; değişken başka yere yönlendirilince
+    # (kum havuzu, test) gerçek `data/db/kullanici/1.sqlite` "kullanıcı dosyası
+    # değil" sanıldı ve üzerine TAM şema kuruldu — aynı gölge tablo hatası,
+    # ikinci kez (11 boş tablo; onarıldı, yedek `.golge-oncesi-20260923`).
+    # Artık `kullanici/` adlı bir klasördeki dosyaya tam şema ASLA kurulmaz:
+    # ya etkin köke yönlendirilir ya reddedilir.
+    if not kullanici_altinda and db_yolu.parent.name == KULLANICI_KOK.name:
+        raise ValueError(
+            f"{db_yolu} bir kullanıcı veritabanı gibi görünüyor ama etkin "
+            f"KULLANICI_KOK ({KULLANICI_KOK}) altında değil. Tam şema kurulmadı; "
+            f"doğru yolu ver ya da baglan_kullanici() kullan."
+        )
     if kullanici_altinda:
         return baglan_kullanici(db_yolu.stem, sema=sema)
     if str(db_yolu) != ":memory:":
@@ -562,6 +625,11 @@ GOC: tuple[tuple[str, str, str], ...] = (
     # (ölçüldü, saatler sonra 10 URL'nin 10'u 403). Kalıcı olan kimlik;
     # taze URL çalma anında `/api/onizleme/{parca_id}` ile alınıyor.
     ("adaylar", "parca_id", "ALTER TABLE adaylar ADD COLUMN parca_id INTEGER"),
+    # Önerilen parçanın önizlemesi yoksa sanatçının başka parçası çalınıyor;
+    # arayüz bunu açıkça yazmalı (bkz. `python/medya.py:parcadan`).
+    ("medya", "yedek", "ALTER TABLE medya ADD COLUMN yedek INTEGER NOT NULL DEFAULT 0"),
+    # Gerekçe gösterim anında ve iki dilde kuruluyor (`python/gerekce.py`).
+    ("liste", "dayanak", "ALTER TABLE liste ADD COLUMN dayanak TEXT"),
 )
 
 

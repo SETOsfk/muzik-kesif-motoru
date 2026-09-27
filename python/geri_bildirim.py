@@ -204,37 +204,71 @@ def uzaklik_tercihi(
     return ozet[ozet["count"] >= 3].round(3)
 
 
+def sanatci_duzeyi(veri: pd.DataFrame) -> pd.DataFrame:
+    """Her (strateji, sanatçı) için TEK karar — en sonuncusu.
+
+    Karar sanatçıya veriliyor ama o sanatçının her aday satırına yazılıyor;
+    satır saymak dört albümlük bir sanatçının tek kararını dört karar sayar
+    ve stratejileri albüm sayısına göre ağırlar (2026-09-23'te düzeltildi;
+    Keşfet destesi ve Listem zaten sanatçı düzeyinde sayıyordu).
+    """
+    if veri.empty:
+        return veri
+    from python.metin import normalize_esleme
+    x = veri.copy()
+    x["_anahtar"] = x["artist"].map(lambda a: normalize_esleme(str(a)))
+    x = x.sort_values("tarih").drop_duplicates(["strateji", "_anahtar"], keep="last")
+    return x.drop(columns="_anahtar")
+
+
 def ozet_cumleleri(isabet: pd.DataFrame) -> list[str]:
-    """Ölçümü cümleye çevir — şablon, LLM yok (K2).
+    """Ölçümü cümleye çevir — şablon, LLM yok (K2). İki dilde.
 
     Sayıya güvenilmeyecek kadar az veri varsa cümle KURULMAZ. "Bu strateji
     %100 isabetli" demek 1/1'de yanlış bilgi vermektir.
     """
+    from python.dil import t, yuzde
+    from python.gerekce import strateji_adi
+
     cumleler = []
     for satir in isabet.itertuples():
+        ad = strateji_adi(satir.strateji)
         # Asgari n şart. İlk sürümde yalnız `kesif_ust < 0.75` aranıyordu ve
         # tek kararlık bir strateji (n=1, üst sınır 0.73) on kararlık bir
         # stratejiyle aynı alarmı alıyordu — bu modülün baştan kaçınmak için
         # yazıldığı hatanın ta kendisi.
         if satir.toplam >= ASGARI_N and satir.zaten_biliyorum and satir.kesif_ust < 0.75:
-            cumleler.append(
-                f"**{satir.strateji}** sana çoğunlukla bildiğin şeyleri getiriyor: "
-                f"{satir.toplam} karardan {satir.zaten_biliyorum}'i «zaten biliyorum». "
-                f"Keşif oranı %{satir.kesif_orani*100:.0f} "
-                f"(%{satir.kesif_alt*100:.0f}–%{satir.kesif_ust*100:.0f}). "
-                "Zevk hatası değil, KEŞİF hatası — asıl sorun bu."
-            )
+            cumleler.append(t(
+                f"**{ad}** sana çoğunlukla zaten bildiğin şeyleri getiriyor: "
+                f"{satir.toplam} kararın {satir.zaten_biliyorum} tanesi «zaten biliyorum». "
+                f"Keşif oranı {yuzde(satir.kesif_orani)} ({yuzde(satir.kesif_alt)}–"
+                f"{yuzde(satir.kesif_ust)}). Sorun zevkte değil, keşifte.",
+                f"**{ad}** mostly brings you things you already know: "
+                f"{satir.zaten_biliyorum} of {satir.toplam} decisions were \"already know it\". "
+                f"Discovery rate {yuzde(satir.kesif_orani)} ({yuzde(satir.kesif_alt)}–"
+                f"{yuzde(satir.kesif_ust)}). The problem isn't taste, it's discovery.",
+            ))
         if satir.zevk_n >= ASGARI_N and satir.zevk_alt > 0.5:
-            cumleler.append(
-                f"**{satir.strateji}** zevkini tutturuyor: {satir.zevk_n} kararda "
-                f"%{satir.zevk_isabeti*100:.0f} beğeni "
-                f"(alt sınır %{satir.zevk_alt*100:.0f})."
-            )
+            cumleler.append(t(
+                f"**{ad}** zevkini tutturuyor: {satir.zevk_n} kararda "
+                f"{yuzde(satir.zevk_isabeti)} beğeni (alt sınır {yuzde(satir.zevk_alt)}).",
+                f"**{ad}** is landing with you: {yuzde(satir.zevk_isabeti)} liked across "
+                f"{satir.zevk_n} decisions (lower bound {yuzde(satir.zevk_alt)}).",
+            ))
+        if satir.zevk_n >= ASGARI_N and satir.zevk_ust < 0.5:
+            cumleler.append(t(
+                f"**{ad}** zevkini tutturamıyor: {satir.zevk_n} kararda "
+                f"{yuzde(satir.zevk_isabeti)} beğeni (üst sınır {yuzde(satir.zevk_ust)}).",
+                f"**{ad}** isn't landing with you: {yuzde(satir.zevk_isabeti)} liked across "
+                f"{satir.zevk_n} decisions (upper bound {yuzde(satir.zevk_ust)}).",
+            ))
     if not cumleler:
-        cumleler.append(
-            "Henüz güvenilir bir sonuç çıkaracak kadar geri bildirim yok. "
-            "Wilson alt sınırları geniş — birkaç karar daha gerekiyor."
-        )
+        cumleler.append(t(
+            "Güvenilir bir sonuç çıkaracak kadar geri bildirim henüz yok; Wilson "
+            "aralıkları geniş. Birkaç karar daha gerekiyor.",
+            "Not enough feedback yet for a reliable verdict; the Wilson intervals "
+            "are still wide. A few more decisions will do it.",
+        ))
     return cumleler
 
 
@@ -290,7 +324,8 @@ def yargilanan_sanatcilar(
 
 
 def yakinlik_etkisi(
-    conn: sqlite3.Connection, calisma_id: str | None = None,
+    conn: sqlite3.Connection, calisma_id: str | None = None, *,
+    havuz: tuple[list[dict], "object"] | None = None,
 ) -> dict[str, tuple[float, str]]:
     """{aday sanatçı anahtarı: (etki, gerekçe)} — kararlardan türeyen kayma.
 
@@ -309,9 +344,15 @@ def yakinlik_etkisi(
     üretime girmez" diyor; buradaki istisna bilinçli ve bedeli `ETKI_TAVANI`
     ile sınırlandı — kararlar sıralamayı deviremez, yalnız kaydırır. Etki
     ölçülebilir hâle geldiğinde katsayı süpürülecek.
+
+    `havuz`: önceden yüklenmiş `havuz_gomuleri(conn)` sonucu. Verilmezse
+    burada okunur — ~2.600 `.npy` dosyası, istek başına ~0,45 sn (ölçüldü
+    2026-09-23). Web katmanı bunu kullanıcı başına önbellekleyip geçiriyor;
+    Keşfet destesi her yeni kart partisinde bu işlevi çağırıyor.
     """
     import numpy as np
 
+    from python.gerekce import geri_bildirim_cumlesi
     from python.metin import normalize_esleme
     from python.ses_kume import havuz_gomuleri
 
@@ -320,7 +361,7 @@ def yakinlik_etkisi(
         return {}
 
     try:
-        kayitlar, A = havuz_gomuleri(conn)
+        kayitlar, A = havuz if havuz is not None else havuz_gomuleri(conn)
     except Exception:
         return {}
     if not kayitlar or A.size == 0:
@@ -358,12 +399,12 @@ def yakinlik_etkisi(
             kaynak = max(yargi["begendim"],
                          key=lambda a: float((V @ A[indeks[a]].T).max())
                          if indeks.get(a) else -9)
-            gerekce = f"👍 dediğin «{okunur.get(kaynak, kaynak)}» ile aynı sesten"
+            gerekce = geri_bildirim_cumlesi("arti", okunur.get(kaynak, kaynak))
         else:
             kaynak = max(yargi["tutmadi"],
                          key=lambda a: float((V @ A[indeks[a]].T).max())
                          if indeks.get(a) else -9)
-            gerekce = f"👎 dediğin «{okunur.get(kaynak, kaynak)}» ile aynı sesten"
+            gerekce = geri_bildirim_cumlesi("eksi", okunur.get(kaynak, kaynak))
         ham[anahtar] = (fark, gerekce)
 
     if not ham:

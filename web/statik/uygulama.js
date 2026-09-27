@@ -1,3 +1,7 @@
+/* İki dil: sayfanın `lang` özniteliği sunucuda etkin dile göre basılıyor.
+ * Her betik metni iki dilde yazılır — biri boş kalamaz. */
+window.t = (tr, en) => (document.documentElement.lang === 'en' ? en : tr);
+
 /* Sayfa yenilenmeden çalışan iki etkileşim.
  *
  * Streamlit'te 👍'ye basmak tüm betiği yeniden çalıştırıyor ve ÇALAN 30 SANİYELİK
@@ -25,21 +29,25 @@ document.addEventListener('click', async (olay) => {
         karar: dugme.dataset.karar,
       }),
     });
+    if (!yanit.ok) throw new Error(String(yanit.status));
     const veri = await yanit.json();
+    if (typeof veri.liste === 'number') {
+      document.querySelectorAll('[data-liste-sayac]').forEach((e) => { e.textContent = veri.liste; e.hidden = !veri.liste; });
+    }
     kutu.querySelectorAll('button').forEach((d) => d.classList.remove('secili'));
     const kart = dugme.closest('.aday');
     if (veri.karar) {
       dugme.classList.add('secili');
-      durum.textContent = `${veri.adet} albüm kaydedildi`;
+      durum.textContent = t(`${veri.adet} albüm kaydedildi`, `${veri.adet} saved`);
       kart.classList.add('karar-verildi');
     } else {
       // Aynı düğmeye ikinci kez basmak kararı geri alır.
-      durum.textContent = 'geri alındı';
+      durum.textContent = t('geri alındı', 'undone');
       kart.classList.remove('karar-verildi');
     }
     setTimeout(() => { durum.textContent = ''; }, 2200);
   } catch (hata) {
-    durum.textContent = 'kaydedilemedi';
+    durum.textContent = t('kaydedilemedi', 'couldn\'t save');
   } finally {
     dugme.disabled = false;
   }
@@ -64,7 +72,7 @@ document.addEventListener('input', (olay) => {
         ad: alan.value,
       }),
     });
-    durum.textContent = 'kaydedildi';
+    durum.textContent = t('kaydedildi', 'saved');
     setTimeout(() => { durum.textContent = ''; }, 1800);
   }, 600);
 });
@@ -83,11 +91,11 @@ document.addEventListener('click', async (olay) => {
   });
   // Yanıta bakmadan «bağlandı» yazmak tutulmayan bir söz olurdu.
   if (!yanit.ok) {
-    durum.textContent = 'kaydedilemedi';
+    durum.textContent = t('kaydedilemedi', 'couldn\'t save');
     dugme.disabled = false;
     return;
   }
-  durum.textContent = dugme.dataset.mbid === '__yok__' ? 'karşılığı yok işaretlendi' : 'bağlandı';
+  durum.textContent = dugme.dataset.mbid === '__yok__' ? t('karşılığı yok olarak işaretlendi', 'marked as no match') : t('bağlandı', 'linked');
   kart.classList.add('karar-verildi');
 });
 
@@ -109,7 +117,7 @@ document.addEventListener('click', async (olay) => {
     yuva.replaceWith(ses);
     dugme.remove();
   } catch (hata) {
-    dugme.textContent = 'önizleme yok';
+    dugme.textContent = t('önizleme yok', 'no preview');
   }
 });
 
@@ -127,7 +135,7 @@ document.addEventListener('input', (olay) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kume: alan.dataset.kume, ad: alan.value }),
     });
-    durum.textContent = 'kaydedildi';
+    durum.textContent = t('kaydedildi', 'saved');
     setTimeout(() => { durum.textContent = ''; }, 1800);
   }, 600);
 });
@@ -159,4 +167,154 @@ if ("serviceWorker" in navigator) {
     setTimeout(yokla, 4000);
   }
   setTimeout(yokla, 4000);
+})();
+
+/* ---------------------------------------------------------------------------
+ * Bildirim — "listeye eklendi · Geri al". Tek kutu, üst üste binmez.
+ * ------------------------------------------------------------------------- */
+let bildirimZamani;
+window.bildir = function bildir(metin, eylemAdi, eylem) {
+  const kutu = document.getElementById('bildirim');
+  if (!kutu) return;
+  kutu.replaceChildren(document.createTextNode(metin));
+  if (eylemAdi && eylem) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = eylemAdi;
+    b.addEventListener('click', () => { kutu.classList.remove('acik'); eylem(); });
+    kutu.append(b);
+  }
+  kutu.classList.add('acik');
+  clearTimeout(bildirimZamani);
+  bildirimZamani = setTimeout(() => kutu.classList.remove('acik'), eylem ? 4200 : 2400);
+};
+
+/* ---------------------------------------------------------------------------
+ * Listem — durum anahtarı, silme, önizleme. Sayfa yenilenmez.
+ * ------------------------------------------------------------------------- */
+async function jsonGonder(yol, govde) {
+  const yanit = await fetch(yol, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(govde),
+  });
+  if (!yanit.ok) throw new Error(String(yanit.status));
+  return yanit.json();
+}
+
+document.addEventListener('click', async (olay) => {
+  const d = olay.target.closest('.durum-anahtar button');
+  if (!d) return;
+  const oge = d.closest('.lo');
+  try {
+    await jsonGonder('/api/liste/durum', { aday_id: oge.dataset.aday, durum: d.dataset.durum });
+    oge.querySelectorAll('.durum-anahtar button').forEach((x) =>
+      x.setAttribute('aria-pressed', String(x === d)));
+    oge.dataset.durum = d.dataset.durum;
+  } catch (_) {
+    bildir(t('Durum kaydedilemedi', 'Couldn\'t save the status'));
+  }
+});
+
+document.addEventListener('click', async (olay) => {
+  const b = olay.target.closest('.lo-sil');
+  if (!b) return;
+  const oge = b.closest('.lo');
+  try {
+    const v = await jsonGonder('/api/liste/sil', { aday_id: oge.dataset.aday });
+    oge.classList.add('siliniyor');
+    setTimeout(() => oge.remove(), 300);
+    document.querySelectorAll('[data-liste-sayac]').forEach((e) => { e.textContent = v.liste; e.hidden = !v.liste; });
+    bildir(t(`${oge.dataset.sanatci} listeden çıkarıldı`, `${oge.dataset.sanatci} removed from your list`));
+  } catch (_) {
+    bildir(t('Silinemedi', 'Couldn\'t remove it'));
+  }
+});
+
+/* Listem önizlemesi: tek ortak çalar; başka bir öğeye basınca öncekini keser. */
+let listeCalar;
+document.addEventListener('click', async (olay) => {
+  const b = olay.target.closest('.lo-cal');
+  if (!b) return;
+  if (!listeCalar) listeCalar = new Audio();
+  if (b.classList.contains('caliyor')) {
+    listeCalar.pause();
+    b.classList.remove('caliyor'); b.textContent = '▶';
+    return;
+  }
+  document.querySelectorAll('.lo-cal.caliyor').forEach((x) => { x.classList.remove('caliyor'); x.textContent = '▶'; });
+  b.textContent = '…';
+  try {
+    const yanit = await fetch(`/api/medya/${b.dataset.aday}`, { cache: 'no-store' });
+    const m = await yanit.json();
+    if (!m.onizleme) throw new Error('yok');
+    listeCalar.src = m.onizleme;
+    await listeCalar.play();
+    b.classList.add('caliyor'); b.textContent = '❚❚';
+    listeCalar.onended = () => { b.classList.remove('caliyor'); b.textContent = '▶'; };
+  } catch (_) {
+    b.textContent = '▶';
+    bildir(t('Bunun önizlemesi yok', 'No preview for this one'));
+  }
+});
+
+/* Kapak yüklenemezse (ölü adres, CSP) yer tutucu görünür kalsın. */
+document.addEventListener('error', (olay) => {
+  const img = olay.target;
+  if (img.tagName === 'IMG' && img.dataset.kapak !== undefined) img.remove();
+}, true);
+
+/* ---------------------------------------------------------------------------
+ * Liste içi arama — `data-suz` taşıyan kutu, hedef öğeleri `data-ara`
+ * metnine göre süzer (Müzisyenler). Türkçe küçük harf: İ→i, I→ı.
+ * ------------------------------------------------------------------------- */
+document.addEventListener('input', (olay) => {
+  const kutu = olay.target.closest('[data-suz]');
+  if (!kutu) return;
+  const q = kutu.value.toLocaleLowerCase(document.documentElement.lang || 'tr').trim();
+  document.querySelectorAll(kutu.dataset.suz).forEach((o) => {
+    o.hidden = q !== '' && !(o.dataset.ara || '').includes(q);
+  });
+});
+
+/* Müzisyenler: "bu müzisyen gibi çalan" kartındaki ♥ — destedeki sağa
+ * kaydırmayla aynı kayıt. */
+document.addEventListener('click', async (olay) => {
+  const b = olay.target.closest('.mz-ekle');
+  if (!b || b.classList.contains('eklendi')) return;
+  b.disabled = true;
+  try {
+    const v = await jsonGonder('/api/liste/ekle', { aday_id: b.dataset.aday });
+    b.classList.add('eklendi');
+    b.textContent = t('✓ Listende', '✓ Saved');
+    document.querySelectorAll('[data-liste-sayac]').forEach((e) => { e.textContent = v.liste; e.hidden = !v.liste; });
+    bildir(t(`♥ ${b.dataset.sanatci} listene eklendi`, `♥ ${b.dataset.sanatci} saved to your list`));
+  } catch (_) {
+    b.disabled = false;
+    bildir(t('Eklenemedi', 'Couldn\'t save it'));
+  }
+});
+
+/* Kapağı olmayan aday kartları görünür olunca kapağı çözdür (Müzisyenler).
+ * `/api/medya` ilk çağrıda Deezer'a sorar ve sonucu saklar; sonraki
+ * ziyaretlerde kapak sunucudan doğrudan gelir. */
+(() => {
+  const kartlar = [...document.querySelectorAll('.mz-kart[data-aday]')]
+    .filter((k) => !k.querySelector('.mz-kart-kapak img'));
+  if (!kartlar.length || !('IntersectionObserver' in window)) return;
+  const gozcu = new IntersectionObserver((girdiler) => {
+    girdiler.forEach(async (g) => {
+      if (!g.isIntersecting) return;
+      gozcu.unobserve(g.target);
+      try {
+        const m = await (await fetch(`/api/medya/${g.target.dataset.aday}`)).json();
+        if (!m.kapak) return;
+        const img = new Image();
+        img.alt = ''; img.decoding = 'async'; img.dataset.kapak = '';
+        img.onload = () => g.target.querySelector('.mz-kart-kapak').insertBefore(
+          img, g.target.querySelector('.mz-kart-kapak .lo-cal'));
+        img.src = m.kapak;
+      } catch (_) { /* yer tutucu kalır */ }
+    });
+  }, { rootMargin: '200px' });
+  kartlar.forEach((k) => gozcu.observe(k));
 })();

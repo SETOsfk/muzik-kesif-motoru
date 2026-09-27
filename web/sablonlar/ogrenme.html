@@ -1,13 +1,11 @@
 {% extends "taban.html" %}
-{% block baslik %}Ne öğrendik — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Ne öğrendik", "What we learned") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>Ne öğrendik</h1>
-  <p>{{ karar_sayisi }} aday hakkında {{ satir }} karar-strateji eşleşmesi.
-     <strong>«Zaten biliyorum» bir zevk kararı değildir</strong> — zevk isabetinin
-     paydasına girmez, keşif oranının paydasına girer. Bir strateji zevkte
-     mükemmel olup keşifte tamamen başarısız olabilir.</p>
+  <h1>{{ t("Ne öğrendik", "What we learned") }}</h1>
+  <p>{{ t(karar_sayisi ~ " sanatçı hakkında verdiğin kararlar, kaynağa göre. Her sanatçı bir kez sayılıyor. «Zaten biliyorum» bir zevk kararı değil: zevk isabetine girmiyor, keşif oranına giriyor. Bir kaynak zevkte kusursuz olup keşifte tamamen başarısız olabilir.",
+          "Your decisions on " ~ karar_sayisi ~ " artists, by source. Each artist counts once. \"Already know it\" isn't a taste decision: it's left out of the hit rate but counts toward the discovery rate. A source can be spot-on for your taste and still fail completely at discovery.") }}</p>
 </div>
 
 <ul class="madde">
@@ -15,19 +13,17 @@
 </ul>
 
 <section class="bolum">
-  <h2>Keşif oranı</h2>
-  <p class="aciklama">Önerilen şey senin için <em>yeni</em> miydi?
-     Aralıklar Wilson skor aralığı (%90) — ham oran bu boyutta yanıltıcı:
-     1/1 = %100 ile 80/80 = %100 aynı şey değil. Aralık genişse sonuç henüz yok.</p>
+  <h2>{{ t("Keşif oranı", "Discovery rate") }}</h2>
+  <p class="aciklama">{{ t("Önerilen şey senin için yeni miydi? Aralıklar %90 Wilson skor aralığı; bu örneklem boyutunda ham oran yanıltıcı olur (1/1 = %100 ile 80/80 = %100 aynı şey değil). Aralık genişse henüz bir sonuç yok.",
+                           "Was the pick new to you? The bands are 90% Wilson score intervals; at this sample size a raw rate would mislead (1/1 = 100% is not the same as 80/80 = 100%). A wide band means there's no verdict yet.") }}</p>
   <div class="kart">{{ g_kesif }}</div>
 </section>
 
 {% if g_zevk %}
 <section class="bolum">
-  <h2>Zevk isabeti</h2>
-  <p class="aciklama">Yeni olanların içinde beğendiklerinin payı.
-     «Zaten biliyorum» bu hesaba girmiyor — o albümü beğenip beğenmediğini
-     söylemedin.</p>
+  <h2>{{ t("Zevk isabeti", "Hit rate") }}</h2>
+  <p class="aciklama">{{ t("Yeni olanların içinde beğendiklerinin payı. «Zaten biliyorum» bu hesaba girmiyor, çünkü o albümü beğenip beğenmediğini söylemedin.",
+                           "Of the picks that were new to you, the share you liked. \"Already know it\" is left out, since you didn't say whether you liked it.") }}</p>
   <div class="kart">{{ g_zevk }}</div>
 </section>
 {% endif %}
@@ -35,17 +31,17 @@
 <section class="bolum">
   <div class="tablo-sarmal">
     <table>
-      <thead><tr><th>strateji</th><th class="sayi">toplam</th>
-        <th class="sayi">beğendim</th><th class="sayi">tutmadı</th>
-        <th class="sayi">zaten biliyorum</th><th class="sayi">zevk isabeti</th>
-        <th class="sayi">keşif oranı</th></tr></thead>
+      <thead><tr><th>{{ t("kaynak", "source") }}</th><th class="sayi">{{ t("toplam", "total") }}</th>
+        <th class="sayi">{{ t("beğendim", "liked") }}</th><th class="sayi">{{ t("tutmadı", "passed") }}</th>
+        <th class="sayi">{{ t("zaten biliyorum", "already knew") }}</th><th class="sayi">{{ t("zevk isabeti", "hit rate") }}</th>
+        <th class="sayi">{{ t("keşif oranı", "discovery") }}</th></tr></thead>
       <tbody>
       {% for _, r in isabet.iterrows() %}
-        <tr><td>{{ r.strateji.replace('_',' ') }}</td>
+        <tr><td>{{ strateji_adi(r.strateji) }}</td>
           <td class="sayi">{{ r.toplam }}</td><td class="sayi">{{ r.begendim }}</td>
           <td class="sayi">{{ r.tutmadi }}</td><td class="sayi">{{ r.zaten_biliyorum }}</td>
-          <td class="sayi">{{ '%.0f%%'|format(r.zevk_isabeti * 100) if r.zevk_isabeti is not none else '—' }}</td>
-          <td class="sayi">{{ '%.0f%%'|format(r.kesif_orani * 100) }}</td></tr>
+          <td class="sayi">{{ r.zevk_isabeti|yuzde if r.zevk_isabeti is not none else '—' }}</td>
+          <td class="sayi">{{ r.kesif_orani|yuzde }}</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -54,22 +50,22 @@
 
 {% if not uzaklik.empty %}
 <section class="bolum">
-  <h2>Ne kadar uzağa gitmeye hazırsın?</h2>
-  <p class="aciklama">Beğendiğin adayların ses uzaklığı, tutmayanlarınkinden
-     yüksekse daha uzağa gidilebilir demektir. Karar başına en az 3 ölçüm arıyor.</p>
+  <h2>{{ t("Ne kadar uzağa gitmeye hazırsın?", "How far are you willing to go?") }}</h2>
+  <p class="aciklama">{{ t("Beğendiğin önerilerin ses uzaklığı tutmayanlarınkinden yüksekse daha uzağa gidilebilir demektir. Karar başına en az 3 ölçüm aranıyor.",
+                           "If the picks you liked sit further away in sound than the ones you passed on, the engine can take bigger steps. It needs at least 3 measurements per decision type.") }}</p>
   <div class="tablo-sarmal"><table>
-    <thead><tr><th>karar</th><th class="sayi">ölçüm</th><th class="sayi">medyan uzaklık</th></tr></thead>
+    <thead><tr><th>{{ t("karar", "decision") }}</th><th class="sayi">{{ t("ölçüm", "measured") }}</th><th class="sayi">{{ t("medyan uzaklık", "median distance") }}</th></tr></thead>
     <tbody>{% for _, r in uzaklik.iterrows() %}
-      <tr><td>{{ r.karar.replace('_',' ') }}</td><td class="sayi">{{ r['count'] }}</td>
-        <td class="sayi">{{ '%.2f'|format(r['median']) }}</td></tr>
+      {% set karar_adi = {'begendim': t('beğendim', 'liked'), 'tutmadi': t('tutmadı', 'passed'), 'zaten_biliyorum': t('zaten biliyorum', 'already knew')} %}
+      <tr><td>{{ karar_adi.get(r.karar, r.karar) }}</td><td class="sayi">{{ r['count'] }}</td>
+        <td class="sayi">{{ r['median']|sayi }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
 </section>
 {% endif %}
 
 <div class="bilgi">
-  Bu ölçümler sıralamayı <strong>otomatik değiştirmiyor</strong>. Değiştirdiği tek
-  şey Öneriler sayfasındaki «bildiklerimi geri at» seçeneği — ölçülebilir bir
-  sinyali ölçülebilir biçimde kullanmak, bulanık bir ağırlık çarpanından dürüst.
+  {{ t("Bu ölçümler iki yerde iş görüyor. Keşfet destesi kaynaklar arasındaki payı buradaki beğeni oranlarından alıyor: sende tutan kaynaktan daha çok kart gelir, ama az veriyle her kaynaktan örnek gelmeye devam eder. Öneriler sayfasında da bildiğin sanatçılar sona atılıyor.",
+       "These numbers do two jobs. The Discover deck takes its share across sources from the hit rates here: the source that's landing with you gets more cards, while every source keeps getting sampled while data is thin. And on Recommendations, artists you already know are pushed to the end.") }}
 </div>
 {% endblock %}

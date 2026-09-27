@@ -30,22 +30,26 @@ import html
 import math
 from dataclasses import dataclass
 
+#: stil.css'teki Neon tokenlarıyla AYNI (SVG sayfanın değişkenlerini `fill`
+#: özniteliğinde okuyamıyor; bkz. modül başlığı). Biri değişirse öteki de.
 PALET = {
-    "vurgu": "#e0654a",
-    "ikincil": "#5b9dbf",
-    "mor": "#a97fc4",
-    "yesil": "#5fb08c",
-    "kirmizi": "#c9576b",
-    "kenar": "#2a2f3a",
-    "izgara": "#232833",
-    "metin": "#e8e9ed",
-    "soluk": "#9aa0ae",
-    "cok_soluk": "#666c7a",
+    "vurgu": "#ff2bd6",      # --vurgu (eylem)
+    "ikincil": "#22ecff",    # --ikincil (ölçüm)
+    "mor": "#9b5cff",
+    "yesil": "#3dffa2",
+    "kirmizi": "#ff3d6e",
+    "kenar": "#1d2742",
+    "izgara": "#141b2e",
+    "metin": "#e6f0ff",
+    "soluk": "#9db1d8",
+    "cok_soluk": "#5f7299",
 }
 
+#: Kategorik renkler: koyu zeminde birbirinden ayrışan neon aile. Sıra,
+#: komşu iki grubun benzer ton almayacağı şekilde dizildi.
 KATEGORIK = [
-    "#e0654a", "#5b9dbf", "#e0a34a", "#7fa85f", "#a97fc4", "#d97fa8",
-    "#4fb0a5", "#c4a55f", "#7f8fc4", "#c47f7f", "#5f9ec4", "#b0a04f",
+    "#22ecff", "#ff2bd6", "#f4ff4a", "#3dffa2", "#9b5cff", "#ff7a45",
+    "#4d8dff", "#ff5c8a", "#9dff4a", "#c77dff", "#2bd9a8", "#ffb84d",
 ]
 
 

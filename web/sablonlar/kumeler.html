@@ -1,12 +1,11 @@
 {% extends "taban.html" %}
-{% block baslik %}Kümeler — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Kümeler", "Clusters") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>Kümeler</h1>
-  <p>Yalnız <strong>stabil</strong> kümeler isimlendirmeye açıktır (bootstrap
-     Jaccard ≥ 0.60): kararsız bir kümeye isim vermek, bir daha aynı yerde
-     çıkmayacak bir şeyi kimliklendirmektir.</p>
+  <h1>{{ t("Kümeler", "Clusters") }}</h1>
+  <p>{{ t("Yalnız stabil kümeler adlandırılabilir (bootstrap Jaccard ≥ " ~ (0.6|sayi) ~ "): kararsız bir kümeye ad vermek, bir daha aynı yerde çıkmayacak bir şeye kimlik vermek olur.",
+          "Only stable clusters can be named (bootstrap Jaccard ≥ " ~ (0.6|sayi) ~ "): naming an unstable one means giving an identity to something that won't show up in the same place again.") }}</p>
 </div>
 
 {% for _, k in kumeler.iterrows() %}
@@ -16,29 +15,29 @@
       <input type="text" class="kume-adi" data-kume="{{ k.kume_id }}"
              data-calisma="{{ calisma_id }}"
              value="{{ k.kullanici_adi or '' }}"
-             placeholder="Küme {{ k.kume_id }} — bir isim ver"
+             placeholder="{{ t('Küme ' ~ k.kume_id ~ ': bir ad ver', 'Cluster ' ~ k.kume_id ~ ': give it a name') }}"
              style="width:100%;max-width:420px;font-size:1rem;font-weight:600">
       <span class="durum aciklama" style="margin-left:var(--b2)"></span>
     </div>
     <div class="aday-sag">
       <span class="rozet {{ 'yesil' if k.stabil_mi else 'gri' }}">
-        {{ 'stabil' if k.stabil_mi else 'kararsız' }} · Jaccard
-        {{ '%.2f'|format(k.stabilite) if k.stabilite else '—' }}</span>
-      <span class="rozet gri">{{ boyut.get(k.kume_id, 0) }} albüm</span>
+        {{ t('stabil', 'stable') if k.stabil_mi else t('kararsız', 'unstable') }} · Jaccard
+        {{ k.stabilite|sayi if k.stabilite else '—' }}</span>
+      <span class="rozet gri">{{ boyut.get(k.kume_id, 0) }} {{ t("albüm", "albums") }}</span>
     </div>
   </div>
 
   {% set temsil = temsilciler[temsilciler.kume_id == k.kume_id] %}
   {% if not temsil.empty %}
-  <p class="aciklama" style="margin:var(--b2) 0 0">Temsilci albümler —
-     üst üyelikten başlayıp aralarında en çeşitli olanlar:</p>
+  <p class="aciklama" style="margin:var(--b2) 0 0">{{ t("Temsilci albümler: en yüksek üyelikten başlayıp birbirinden en farklı olanlar.",
+                                                         "Representative albums: starting from the highest membership, the ones most different from each other.") }}</p>
   <div class="tablo-sarmal" style="margin-top:var(--b2)"><table>
-    <thead><tr><th>sanatçı</th><th>albüm</th><th class="sayi">yıl</th>
-      <th class="sayi">üyelik</th></tr></thead>
-    <tbody>{% for _, t in temsil.iterrows() %}
-      <tr><td>{{ t.artist }}</td><td>{{ t.title }}</td>
-        <td class="sayi">{{ t.year|int if t.year == t.year else '—' }}</td>
-        <td class="sayi">{{ '%.2f'|format(t.uyelik) }}</td></tr>
+    <thead><tr><th>{{ t("sanatçı", "artist") }}</th><th>{{ t("albüm", "album") }}</th><th class="sayi">{{ t("yıl", "year") }}</th>
+      <th class="sayi">{{ t("üyelik", "membership") }}</th></tr></thead>
+    <tbody>{% for _, r in temsil.iterrows() %}
+      <tr><td>{{ r.artist }}</td><td>{{ r.title }}</td>
+        <td class="sayi">{{ r.year|int if r.year == r.year else '—' }}</td>
+        <td class="sayi">{{ r.uyelik|sayi }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
   {% endif %}
@@ -47,16 +46,16 @@
 
 {% if ortusen %}
 <section class="bolum">
-  <h2>İki ekseni birden besleyen albümler</h2>
-  <p class="aciklama">Bulanık kümelemenin kazancı: keskin atama bu bilgiyi
-     kaybettirirdi.</p>
+  <h2>{{ t("İki ekseni birden besleyen albümler", "Albums that feed two axes at once") }}</h2>
+  <p class="aciklama">{{ t("Bulanık kümelemenin kazancı: keskin atama bu bilgiyi kaybettirirdi.",
+                           "This is what fuzzy clustering buys you: a hard assignment would throw this away.") }}</p>
   <div class="tablo-sarmal"><table>
-    <thead><tr><th>sanatçı</th><th>albüm</th><th>eksen 1</th><th class="sayi">üyelik</th>
-      <th>eksen 2</th><th class="sayi">üyelik</th></tr></thead>
+    <thead><tr><th>{{ t("sanatçı", "artist") }}</th><th>{{ t("albüm", "album") }}</th><th>{{ t("eksen 1", "axis 1") }}</th><th class="sayi">{{ t("üyelik", "membership") }}</th>
+      <th>{{ t("eksen 2", "axis 2") }}</th><th class="sayi">{{ t("üyelik", "membership") }}</th></tr></thead>
     <tbody>{% for o in ortusen %}
       <tr><td>{{ o.artist }}</td><td>{{ o.title }}</td>
-        <td>{{ o.a }}</td><td class="sayi">{{ o.ua }}</td>
-        <td>{{ o.b }}</td><td class="sayi">{{ o.ub }}</td></tr>
+        <td>{{ o.a }}</td><td class="sayi">{{ o.ua|sayi }}</td>
+        <td>{{ o.b }}</td><td class="sayi">{{ o.ub|sayi }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
 </section>

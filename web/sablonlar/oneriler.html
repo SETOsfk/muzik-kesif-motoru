@@ -1,124 +1,118 @@
 {% extends "taban.html" %}
-{% block baslik %}Öneriler — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Öneriler", "Recommendations") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>Hangi tarafını beslemek istiyorsun?</h1>
-  <p>Bir kart = bir sanatçı. Dinle, karar ver.
-     <a href="/sozluk" style="font-size:.9em">terimler ne demek?</a></p>
+  <h1>{{ t("Zevkinin hangi tarafını beslemek istiyorsun?", "Which side of your taste do you want to feed?") }}</h1>
+  <p>{{ t("Her kart bir sanatçı. Dinle, sonra karar ver.", "One card per artist. Listen, then decide.") }}
+     <a href="/sozluk" style="font-size:.9em">{{ t("Terimler ne demek?", "What do these terms mean?") }}</a></p>
 </div>
 
-{# Dört filtre grubu birden fazlaydı. Eksen ana seçim, görünür kalıyor;
-   geri kalanı katlanmış "ayarlar"da. Strateji çoklu-onay yerine tek seçim:
-   kullanıcı çoğunlukla ya hepsini ister ya birini. #}
+{# Dört filtre grubu fazlaydı. Eksen ana seçim, görünür kalıyor; geri kalanı
+   katlanmış "ayarlar"da. Strateji çoklu onay yerine tek seçim. #}
 <form class="denetim" method="get" action="/oneriler">
   <input type="hidden" name="calisma" value="{{ calisma_id }}">
 
   <div class="alan">
-    <label for="eksen">Eksen</label>
+    <label for="eksen">{{ t("Eksen", "Axis") }}</label>
     <select id="eksen" name="eksen" onchange="this.form.submit()">
       {% for e in eksenler %}
-        <option value="{{ e }}" {{ 'selected' if e == secili }}>
-          {{ eksen_adlari.get(e, 'Küme ' ~ e) }}</option>
+        <option value="{{ e }}" {{ 'selected' if e == secili }}>{{ eksen_adlari.get(e) }}</option>
       {% endfor %}
     </select>
   </div>
 
   <div class="alan">
-    <label for="tek_strateji">Nereden</label>
-    {% set adlandir = {'melez':'liste + ses (en isabetli)',
-                       'liste_birlikteligi':'çalma listelerinden',
-                       'ses_benzerligi':'kulağa benzeyenler',
-                       'kredi_sicramasi':'kadrondaki müzisyenler',
-                       'sahne_komsulugu':'1 adım — komşuların',
-                       'bilincli_uzaklik':'2 adım — komşunun komşusu'} %}
+    <label for="tek_strateji">{{ t("Kaynak", "Source") }}</label>
     <select id="tek_strateji" name="strateji" onchange="this.form.submit()">
-      <option value="">ana yolların hepsi</option>
+      <option value="">{{ t("ana yolların hepsi", "all main sources") }}</option>
       {# İki grup: ölçülüp tutanlar ile kadro grafiği. Ayrım kozmetik değil —
          alttaki üçü 147 gizlemenin tamamında 55–81 sanatçı görebildi. #}
-      <optgroup label="ölçüldü ve tuttu">
+      <optgroup label="{{ t('ölçüldü, ana akış', 'measured, main feed') }}">
         {% for st in ana_stratejiler %}
-          <option value="{{ st }}"
-            {{ 'selected' if secili_strateji|length == 1 and st in secili_strateji }}>
-            {{ adlandir.get(st, st) }}</option>
+          <option value="{{ st }}" {{ 'selected' if secili_strateji|length == 1 and st in secili_strateji }}>{{ strateji_adi(st) }}</option>
         {% endfor %}
       </optgroup>
-      <optgroup label="niş — kadro grafiği">
+      <optgroup label="{{ t('niş: kadro grafiği', 'niche: lineup graph') }}">
         {% for st in nis_stratejiler %}
-          <option value="{{ st }}"
-            {{ 'selected' if secili_strateji|length == 1 and st in secili_strateji }}>
-            {{ adlandir.get(st, st) }}</option>
+          <option value="{{ st }}" {{ 'selected' if secili_strateji|length == 1 and st in secili_strateji }}>{{ strateji_adi(st) }}</option>
         {% endfor %}
       </optgroup>
     </select>
   </div>
 
   <details class="ayarlar">
-    <summary>⚙ ayarlar</summary>
+    <summary>⚙ {{ t("ayarlar", "settings") }}</summary>
     <div class="ayar-govde">
       <div class="alan">
-        <label for="sirala">Sıralama</label>
+        <label for="sirala">{{ t("Sıralama", "Sort by") }}</label>
         <select id="sirala" name="sirala" onchange="this.form.submit()">
-          <option value="skor" {{ 'selected' if sirala == 'skor' }}>strateji skoru</option>
-          <option value="uzaklik" {{ 'selected' if sirala == 'uzaklik' }}>ses uzaklığı</option>
+          <option value="skor" {{ 'selected' if sirala == 'skor' }}>{{ t("kaynağın skoru", "source score") }}</option>
+          <option value="uzaklik" {{ 'selected' if sirala == 'uzaklik' }}>{{ t("ses uzaklığı", "sound distance") }}</option>
         </select>
       </div>
       <label class="onay"><input type="checkbox" name="gizle" value="1"
         {{ 'checked' if gizle }} onchange="this.form.submit()">
-        karar verdiklerimi gizle</label>
+        {{ t("karar verdiklerimi gizle", "hide ones I've decided on") }}</label>
       <label class="onay"><input type="checkbox" name="bilinen" value="1"
         {{ 'checked' if geri_at }} onchange="this.form.submit()">
-        bildiklerimi geri at</label>
+        {{ t("bildiklerimi sona at", "push artists I know to the end") }}</label>
     </div>
   </details>
 </form>
 
 {% if nis_secili %}
 <div class="aciklama" style="border-left:3px solid var(--kenar);padding-left:.8em">
-  <b>Niş yol.</b> Bu, kütüphanendeki müzisyenlerin ve komşularının başka
-  kayıtlarını getiriyor — kadro grafiğinden. Ölçümde erişimi çok dar çıktı:
-  147 sanatçı gizleme denemesinin tamamında yalnız
-  {{ {'kredi_sicramasi':81,'sahne_komsulugu':61,'bilincli_uzaklik':55}
-     .get(nis_secili[0], '—') }} tekil sanatçı görebildi (havuzda 10.396 var).
-  Ama ölçüt bu yolun işini tam ölçmüyor: «müzisyen paylaşan başka kayıt»
-  tanım gereği sahip <i>olmadığın</i> bir şey.
-  <a href="/sozluk">nasıl ölçüldü?</a>
+  {% set gorulen = {'kredi_sicramasi':81,'sahne_komsulugu':61,'bilincli_uzaklik':55}.get(nis_secili[0], '—') %}
+  {{ t("<b>Niş yol.</b> Kütüphanendeki müzisyenlerin ve komşularının başka kayıtlarını kadro grafiğinden getiriyor. Ölçümde erişimi dar çıktı: 147 sanatçı gizleme denemesinin tamamında yalnız " ~ gorulen ~ " farklı sanatçıya ulaşabildi (havuzda 10.396 sanatçı var). Ama ölçüt bu yolun işini tam ölçmüyor: «aynı müzisyenin başka kaydı» tanım gereği senin sahip olmadığın bir şey.",
+       "<b>Niche source.</b> It pulls in other records by the musicians in your library and their neighbours, via the lineup graph. Its reach measured narrow: across all 147 hide-an-artist trials it only ever saw " ~ gorulen ~ " distinct artists (the pool has 10,396). But the test doesn't really measure what this source is for: \"another record by the same musician\" is, by definition, something you don't own.")|safe }}
+  <a href="/sozluk">{{ t("Nasıl ölçüldü?", "How was this measured?") }}</a>
 </div>
 {% endif %}
 
-<p class="aciklama">
-  <strong>{{ sanatci_sayisi }}</strong> sanatçı, {{ toplam }} öneri.
+<p class="aciklama" style="display:flex; flex-wrap:wrap; align-items:center; gap:var(--b2)">
+  <span>{{ t("<strong>" ~ sanatci_sayisi ~ "</strong> sanatçı, " ~ toplam ~ " öneri.",
+             "<strong>" ~ sanatci_sayisi ~ "</strong> artists, " ~ toplam ~ " picks.")|safe }}</span>
   {% if geri_bildirim_etkin %}
-    <span class="ipucu" title="Verdiğin «beğendim» ve «tutmadı» kararları sıralamayı kaydırıyor: beğendiğine ses olarak benzeyenler yukarı, tutmadığına benzeyenler aşağı. Etki en fazla yarım standart sapma — kararların sayısı arttıkça bu tavan ölçülüp yeniden seçilecek.">↻ kararların sıralamaya işliyor</span>
+    <span class="ipucu" title="{{ t('Verdiğin «beğendim» ve «tutmadı» kararları sıralamayı kaydırıyor: beğendiğine sesçe yakın olanlar yukarı, tutmadığına yakın olanlar aşağı. Etki en fazla yarım standart sapma; karar sayısı arttıkça bu tavan ölçülüp yeniden seçilecek.',
+                                     'Your likes and passes shift the order: picks that sound closer to what you liked move up, closer to what you passed on move down. The effect is capped at half a standard deviation; the cap will be re-measured as decisions pile up.') }}">↻ {{ t("kararların sıralamayı etkiliyor", "your decisions shape this order") }}</span>
   {% endif %}
   {% if taban %}
-    <span class="ipucu" title="Kütüphanenin kendi albümlerinin bu eksene uzaklığı: kendi üyeleri {{ '%.2f'|format(taban.ic) }}, diğer eksenler {{ '%.2f'|format(taban.dis) }}. Aday bu ikisinin arasındaysa tanıdık ama aynısı değil.">🔊 kıyas ölçeği</span>
+    <span class="ipucu" title="{{ t('Kütüphanendeki albümlerin bu eksene uzaklığı: kendi üyeleri ' ~ (taban.ic|sayi) ~ ', diğer eksenlerinkiler ' ~ (taban.dis|sayi) ~ '. Aday bu ikisinin arasındaysa tanıdık ama aynısı değil.',
+                                     'How far your own albums sit from this axis: its members ' ~ (taban.ic|sayi) ~ ', albums from other axes ' ~ (taban.dis|sayi) ~ '. A pick between the two is familiar without being the same.') }}">🔊 {{ t("kıyas ölçeği", "reference scale") }}</span>
   {% endif %}
+  <span style="margin-left:auto; display:inline-flex; gap:6px;">
+    <a href="/kesfet?calisma={{ calisma_id }}&eksen={{ secili }}" class="dis-link"
+       title="{{ t('Bu ekseni kart kart, kaydırarak dinle', 'Go through this axis card by card') }}">◈ {{ t("Kaydırarak keşfet", "Swipe through") }}</a>
+    <a href="/listem" class="dis-link" title="{{ t('👍 dediklerin: dinle, işaretle, dışa aktar', 'Your 👍 picks: listen, mark, export') }}">♥ {{ t("Listem", "My list") }}</a>
+  </span>
 </p>
 
 {% if not gruplar %}
-  <div class="bos">Bu eksende gösterilecek aday kalmadı.</div>
+  <div class="bos">{{ t("Bu eksende gösterilecek aday kalmadı.", "No picks left on this axis.") }}</div>
 {% endif %}
 
 {% for g in gruplar %}
 <article class="aday grup {{ 'karar-verildi' if g.kararlar }} {{ 'bilinen' if g.bilinen and not g.kararlar }}">
   <div class="aday-bas">
-    <div class="aday-ad">{{ g.sanatci }}
-      <span class="yil">{{ g.albumler|length }}
-        {{ "parça" if g.birim == "parca" else "albüm" }}</span></div>
+    <div class="aday-kimlik">
+      <div class="aday-kapak">
+        {{ yer_tutucu(g.sanatci, g.albumler[0].title) }}
+        {% if g.kapak %}<img src="{{ g.kapak }}" alt="" loading="lazy" decoding="async" data-kapak>{% endif %}
+      </div>
+      <div class="aday-ad">{{ g.sanatci }}
+        <span class="yil">{{ g.albumler|length }}
+          {{ t("parça", "tracks" if g.albumler|length > 1 else "track") if g.birim == "parca" else t("albüm", "albums" if g.albumler|length > 1 else "album") }}</span></div>
+    </div>
     <div class="aday-sag">
-      {% set rozet = {'kredi_sicramasi': ('turuncu','kadrondan'),
-                      'sahne_komsulugu': ('mavi','1 adım'),
-                      'bilincli_uzaklik': ('mor','2 adım'),
-                      'liste_birlikteligi': ('yesil','listelerden'),
-                      'ses_benzerligi': ('turuncu','kulağa benziyor'),
-                      'melez': ('mor','liste + ses')} %}
-      {% set r = rozet.get(g.strateji, ('gri', g.strateji)) %}
-      <span class="rozet {{ r[0] }}" title="{{ g.strateji }}">{{ r[1] }}</span>
+      {% set renk = {'kredi_sicramasi':'turuncu', 'sahne_komsulugu':'mavi', 'bilincli_uzaklik':'mor',
+                     'liste_birlikteligi':'yesil', 'ses_benzerligi':'turuncu', 'melez':'mor'} %}
+      <span class="rozet {{ renk.get(g.strateji, 'gri') }}" title="{{ g.strateji }}">{{ strateji_adi(g.strateji) }}</span>
       {% if g.uzaklik is not none %}
+        {% set nitel = {'mor': t('gerçekten uzak', 'truly far'), 'turuncu': t('eksenin içinde', 'inside the axis'), 'mavi': t('tanıdık ama farklı', 'familiar but different')} %}
         <span class="rozet {{ g.uzaklik_renk }}"
-              title="albümlerinin ortalama ses uzaklığı, kütüphane sigması">
-          🔊 {{ '%.2f'|format(g.uzaklik) }} · {{ g.uzaklik_nitel }}</span>
+              title="{{ t('albümlerinin ortalama ses uzaklığı, kütüphane sigması cinsinden', 'average sound distance of its albums, in library standard deviations') }}">
+          🔊 {{ g.uzaklik|sayi }}{% if g.uzaklik_renk %} · {{ nitel.get(g.uzaklik_renk) }}{% endif %}</span>
       {% endif %}
     </div>
   </div>
@@ -130,7 +124,7 @@
   {% if g.geri_bildirim %}
     <p class="aciklama" style="margin:-.3em 0 .6em">
       <span class="rozet {{ 'yesil' if g.geri_bildirim_yon == 'arti' else 'gri' }}"
-            title="Kararların sıralamayı en fazla yarım standart sapma kaydırır — n hâlâ küçük olduğu için etki bilerek sınırlı.">
+            title="{{ t('Kararların sıralamayı en fazla yarım standart sapma kaydırır; karar sayısı hâlâ küçük olduğu için etki bilerek sınırlı.', 'Your decisions move the order by at most half a standard deviation; the effect is deliberately capped while the number of decisions is still small.') }}">
         {{ g.geri_bildirim }}</span>
     </p>
   {% endif %}
@@ -138,12 +132,12 @@
   {% if g.baglam or g.olcum_etiket %}
   <div class="etiketler">
     {% for e in g.olcum_etiket %}
-      <span class="rozet gri" title="{{ etiket_aciklama.get(e, e) }} — adayın kendi stem ölçümünden, eşik senin kütüphanenden">{{ e }}</span>
+      <span class="rozet gri" title="{{ etiket_aciklama(e, etiket_aciklama_tr.get(e, e)) }} — {{ t('adayın kendi ölçümünden, eşik senin kütüphanenden', 'from the pick\'s own measurement, threshold taken from your library') }}">{{ e|etiket_adi }}</span>
     {% endfor %}
     {% for e in g.baglam %}
       <a href="/etiketler?etiket={{ e|urlencode }}&calisma={{ calisma_id }}"
          class="rozet mavi" style="text-decoration:none"
-         title="«{{ e }}» — çalma listesi başlıklarından; insanlar bu müziği hangi bağlama koymuş. Tıkla, aynı etiketli her şeyi gör.">◑ {{ e }}</a>
+         title="{{ t('Çalma listesi başlıklarından: insanlar bu müziği hangi bağlama koymuş. Tıkla, aynı etiketli her şeyi gör.', 'From playlist titles: the context people put this music in. Click to see everything with this tag.') }}">◑ {{ e|etiket_adi }}</a>
     {% endfor %}
   </div>
   {% endif %}
@@ -151,8 +145,8 @@
   {% if g.icra %}
   <div class="icra">
     {% for rol, kisiler in g.icra %}
-    <div class="icra-rol"><b>{{ rol }}</b><span>
-      {% for ad, skor in kisiler %}{{ ad }} <em style="color:var(--metin-3)">{{ '%+.2f'|format(skor) }}</em>{{ ' · ' if not loop.last }}{% endfor %}
+    <div class="icra-rol"><b>{{ rol|rol_adi }}</b><span>
+      {% for ad, skor in kisiler %}{{ ad }} <em style="color:var(--metin-3)">{{ skor|sayi(2, isaret=True) }}</em>{{ ' · ' if not loop.last }}{% endfor %}
     </span></div>
     {% endfor %}
   </div>
@@ -160,43 +154,48 @@
 
   <ol class="albumler">
     {% for a in g.albumler %}
+    {% set odak_ad = a.parca if a.parca else a.title %}
     <li class="{{ 'karar-verildi' if a.karar }}">
       <div class="alb-bas">
         <span class="alb-ad">{{ a.title }}</span>
         {% if a.year %}<span class="alb-yil">{{ a.year }}</span>{% endif %}
         {% if a.uzaklik is not none %}
-          <span class="alb-uz" title="bu albümün ses uzaklığı">{{ '%.2f'|format(a.uzaklik) }}</span>
+          <span class="alb-uz" title="{{ t('bu albümün ses uzaklığı', 'sound distance of this album') }}">{{ a.uzaklik|sayi }}</span>
         {% endif %}
       </div>
-      {# Parça adayının saklanmış URL'si ölü olabilir (Deezer kısa ömürlü
-         imzalıyor). Kimlik varsa taze URL istek anında çekiliyor. #}
-      {% if a.parca_id %}
-        {% if a.parca %}<div class="alb-parca">▸ {{ a.parca }}</div>{% endif %}
-        <button class="cal" data-parca="{{ a.parca_id }}">▶ dinle</button>
-        <span></span>
-      {% elif a.onizleme %}
-        {% if a.parca %}<div class="alb-parca">▸ {{ a.parca }}</div>{% endif %}
-        <audio controls preload="none" src="{{ a.onizleme }}"></audio>
-      {% else %}
-        <div class="alb-parca" style="opacity:.6">30 sn önizleme yok</div>
-      {% endif %}
+      {% if a.parca and a.parca != a.title %}<div class="alb-parca">▸ {{ a.parca }}</div>{% endif %}
+      <div class="alb-eylemler">
+        {% if a.parca_id %}
+          <button class="cal" data-parca="{{ a.parca_id }}">▶ {{ t("30 sn", "30 s") }}</button>
+          <span></span>
+        {% elif a.onizleme %}
+          <audio controls preload="none" src="{{ a.onizleme }}" class="onizleme-ses"></audio>
+        {% else %}
+          <span class="onizleme-yok">{{ t("önizleme yok", "no preview") }}</span>
+        {% endif %}
+        {# TAM DİNLEME servislerde. Gömülü YouTube oynatıcısı kaldırıldı: arama
+           ile gömme YouTube'da kapalı ("Error 153") ve masaüstünde oynatıcı
+           gizli şeridin içinde kalıyordu (karar günlüğü 2026-09-23). #}
+        <div class="dis-linkler">
+          <a href="https://open.spotify.com/search/{{ (g.sanatci ~ ' ' ~ odak_ad)|urlencode }}" target="_blank" rel="noopener" class="dis-link">Spotify</a>
+          <a href="https://music.youtube.com/search?q={{ (g.sanatci ~ ' ' ~ odak_ad)|urlencode }}" target="_blank" rel="noopener" class="dis-link">YT Music</a>
+          <a href="https://www.deezer.com/search/{{ (g.sanatci ~ ' ' ~ odak_ad)|urlencode }}" target="_blank" rel="noopener" class="dis-link">Deezer</a>
+          <a href="https://bandcamp.com/search?q={{ (g.sanatci ~ ' ' ~ a.title)|urlencode }}" target="_blank" rel="noopener" class="dis-link">Bandcamp</a>
+        </div>
+      </div>
     </li>
     {% endfor %}
   </ol>
 
-  <div class="kararlar" data-adaylar="{{ g.aday_kimlikleri|join(',') }}"
-       data-calisma="{{ calisma_id }}">
-    <button class="begendim {{ 'secili' if 'begendim' in g.kararlar }}"
-            data-karar="begendim">👍 Beğendim</button>
-    <button class="tutmadi {{ 'secili' if 'tutmadi' in g.kararlar }}"
-            data-karar="tutmadi">👎 Tutmadı</button>
-    <button class="{{ 'secili' if 'zaten_biliyorum' in g.kararlar }}"
-            data-karar="zaten_biliyorum">😐 Zaten biliyorum</button>
+  <div class="kararlar" data-adaylar="{{ g.aday_kimlikleri|join(',') }}" data-calisma="{{ calisma_id }}">
+    <button class="begendim {{ 'secili' if 'begendim' in g.kararlar }}" data-karar="begendim">👍 {{ t("Listeye ekle", "Save") }}</button>
+    <button class="tutmadi {{ 'secili' if 'tutmadi' in g.kararlar }}" data-karar="tutmadi">👎 {{ t("Tutmadı", "Not for me") }}</button>
+    <button class="{{ 'secili' if 'zaten_biliyorum' in g.kararlar }}" data-karar="zaten_biliyorum">😐 {{ t("Zaten biliyorum", "Already know it") }}</button>
     <span class="durum aciklama" style="align-self:center"></span>
   </div>
 
   <details>
-    <summary>Dayanak — gerekçedeki her sayının kaynağı</summary>
+    <summary>{{ t("Dayanak: gerekçedeki her sayının kaynağı", "Evidence: where every number in the reason comes from") }}</summary>
     <pre>{{ g.albumler[0].dayanak }}</pre>
   </details>
 </article>

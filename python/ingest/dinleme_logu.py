@@ -121,9 +121,20 @@ def tarih_coz(ham, varsayilan: str) -> tuple[str, bool]:
 # --------------------------------------------------------------------------- #
 
 def bicim_sez(dosya: Path) -> str:
-    """Dosya uzantısına ve içeriğine bakarak biçmi tahmin et."""
+    """Dosya uzantısına ve içeriğine bakarak biçimi tahmin et."""
+    ad = dosya.name.lower()
+    if "streaming" in ad or "streaming_history" in ad:
+        return "spotify"
     uzanti = dosya.suffix.lower()
     if uzanti in (".json", ".jsonl", ".ndjson"):
+        # JSON içeriğinde Spotify anahtarları var mı kontrol et
+        try:
+            with dosya.open(encoding="utf-8") as f:
+                bas = f.read(512)
+                if "master_metadata" in bas or "ms_played" in bas or "msPlayed" in bas:
+                    return "spotify"
+        except Exception:
+            pass
         return "listenbrainz"
     return "csv"
 
@@ -234,9 +245,63 @@ def csv_oku(dosya: Path, varsayilan_tarih: str, *, bicim: str = "csv") -> tuple[
     return satirlar, tarihsiz
 
 
+def spotify_oku(dosya: Path, varsayilan_tarih: str, asgari_ms: int = 30000) -> tuple[list[Dinleme], int]:
+    """Spotify GDPR dışa aktarımı: Streaming_History_Audio_*.json veya StreamingHistory*.json.
+
+    30 saniyenin altında dinlenip atlanan şarkılar (asgari_ms) filtrelenir;
+    böylece kaza eseri başlatılıp geçilen şarkılar pozitif sinyal yaratmaz.
+    """
+    satirlar: list[Dinleme] = []
+    tarihsiz = 0
+    try:
+        ham_veri = json.loads(dosya.read_text(encoding="utf-8"))
+    except Exception:
+        return [], 0
+
+    if not isinstance(ham_veri, list):
+        if isinstance(ham_veri, dict) and "items" in ham_veri:
+            ham_veri = ham_veri["items"]
+        else:
+            return [], 0
+
+    for kayit in ham_veri:
+        if not isinstance(kayit, dict):
+            continue
+        ms = kayit.get("ms_played") or kayit.get("msPlayed") or 0
+        if ms < asgari_ms:
+            continue
+
+        sanatci = (kayit.get("master_metadata_album_artist_name") or
+                   kayit.get("artistName") or "").strip()
+        album = (kayit.get("master_metadata_album_album_name") or
+                 kayit.get("albumName") or "").strip()
+        track = (kayit.get("master_metadata_track_name") or
+                 kayit.get("trackName") or "").strip()
+
+        if not sanatci:
+            continue
+
+        ham_tarih = kayit.get("ts") or kayit.get("endTime")
+        tarih, varsayilan_mi = tarih_coz(ham_tarih, varsayilan_tarih)
+        tarihsiz += varsayilan_mi
+
+        satirlar.append(
+            Dinleme(
+                artist=sanatci,
+                album=album,
+                track=track,
+                tarih=tarih,
+                adet=1,
+            )
+        )
+    return satirlar, tarihsiz
+
+
 def dosyayi_oku(dosya: Path, bicim: str, varsayilan_tarih: str) -> tuple[list[Dinleme], int]:
     if bicim == "otomatik":
         bicim = bicim_sez(dosya)
+    if bicim == "spotify":
+        return spotify_oku(dosya, varsayilan_tarih)
     if bicim == "listenbrainz":
         return listenbrainz_oku(dosya, varsayilan_tarih)
     return csv_oku(dosya, varsayilan_tarih, bicim=bicim)
@@ -368,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     ayristirici.add_argument(
         "--bicim",
         default="otomatik",
-        choices=("otomatik", "listenbrainz", "lastfm", "symfonium", "csv"),
+        choices=("otomatik", "spotify", "listenbrainz", "lastfm", "symfonium", "csv"),
     )
     ayristirici.add_argument(
         "--etiket", help="plays.kaynak değeri (varsayılan: biçim adı)"

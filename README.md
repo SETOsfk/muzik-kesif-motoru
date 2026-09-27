@@ -35,6 +35,9 @@ olmayan bir şey gelsin."*
 | **Kalabalığı dinler** | 482 çalma listesinden sanatçı birlikteliği (npmi) |
 | **Etiketler** | 40 ölçüm etiketi, dört stem dengeli, hepsi denetimden geçmiş ölçütlere dayalı |
 | **Kendini ölçer** | Leave-one-artist-out; hiçbir yöntem değişikliği ölçülmeden üretime girmez |
+| **Kaydırarak keşfettirir** | Keşfet destesi: sağa = listeye, sola = geç, yukarı = biliyorum; kapak ve 30 sn önizlemeyle. Kaynaklar arası pay senin gerçek kararlarından (Thompson) |
+| **Edinme listesi tutar** | Listem: durum (yeni / dinlendi / edindim), kütüphaneye gelince kendiliğinden «kütüphanende», Bandcamp/Qobuz bağlantıları, CSV/TXT/JSON |
+| **İki dilde konuşur** | Türkçe ve İngilizce; gerekçeler kanıttan gösterim anında kurulur ve kanıtın gücünü söyler |
 
 ## Şu anki ölçümler
 
@@ -50,8 +53,8 @@ ses benzerliği (CLAP) 104/147    2416   0.01   0.03      0.347        2
 kadro grafiği (3 yol)   1/147      81   0.01   0.01          —        —
 ```
 
-`yüzdelik` = medyan sıra / havuz boyu; **rastgele erişim 0,500 verir.** En iyi yol rastgeleden
-10 kat iyi. `görünür` = önerilen sanatçıların medyan çalma listesi sayısı, yani popülerlik vekili;
+`yüzdelik` = medyan sıra / havuz boyu; **rastgele erişim 0,500 verir.** En iyi yolda gizlenen
+sanatçının medyan sırası havuzun ilk %5,9'unda (0,059): rastgeleden ~8,5 kat iyi. `görünür` = önerilen sanatçıların medyan çalma listesi sayısı, yani popülerlik vekili;
 kütüphanenin kendi medyanı 6.
 
 **Bu sayı bir alt sınırdır ve bunu yazmak önemli:** gerçek etiketimiz yalnız sahip olunan 147
@@ -99,8 +102,12 @@ python/
   enrich/            MusicBrainz/Discogs, stem profili, öznitelik denetimi
   discover/          altı aday stratejisi, çalma listesi hasadı
   kumeleme/          FCM, Xie-Beni, bootstrap-Jaccard stabilite
-web/                 Starlette + Jinja2, elle çizilen SVG grafikler
-tests/               15 dosya, 191 test
+  kesif.py           Keşfet destesi, karar, Listem, dışa aktarım
+  medya.py           kapak + çalınabilir parça (Deezer, doğrulamalı)
+  gerekce.py         iki dilli, kanıt gücünü söyleyen gerekçe
+  dil.py             Türkçe / İngilizce, dile göre sayı
+web/                 Starlette + Jinja2 + elle SVG; Neon tasarım sistemi, deste (kesfet.js)
+tests/               17 dosya, 271 test
 docs/                mimari, veri sözleşmesi, karar günlüğü, ürün yolu
 CLAUDE.md            proje anayasası — K1..K19 mimari kararları
 ```
@@ -158,8 +165,12 @@ python -m python.discover.adaylar --tum-eksenler
 python -m python.degerlendirme --kapsam eksen --olcut npmi --buzulme 1
 python -m python.enrich.olcut_denetimi          # öznitelik denetimi
 
-# 5 — arayüz
-python -m uvicorn web.sunucu:uygulama --port 8800
+# 5 — arayüz (kök adres Keşfet destesine gider)
+python -m web.sunucu --port 8800
+
+# 6 — yerelde sürekli çalışsın (macOS launchd; isteğe bağlı)
+scripts/servis.sh kur        # durum · gunluk · yedek · kaldir
+python -m python.medya       # etkin çalışmanın kapaklarını önceden çöz
 ```
 
 Test: `python -m pytest tests -q`
@@ -175,9 +186,11 @@ kalıcı olan parça kimliğidir ve taze URL çalma anında alınır.
 
 ## Durum
 
-Tek kullanıcılık, çalışır durumda. Açık işler ve gerekçeleri
-[`docs/urun-yolu.md`](docs/urun-yolu.md) içinde. En yüksek getirili adım daha fazla geri bildirim:
-şu an 15 karar var ve bu, kararların sıralamaya etkisini ölçmeye yetmiyor.
+En çok beş kullanıcılık, çalışır durumda. Açık işler ve gerekçeleri
+[`docs/urun-yolu.md`](docs/urun-yolu.md) ve [`docs/karar-gunlugu.md`](docs/karar-gunlugu.md)
+içinde. En yüksek getirili adım daha fazla geri bildirim; Keşfet destesi bunun için var.
+Gerçek kararlar vekil ölçütle çelişiyor (melez gizleme sınamasında en iyi, gerçek
+tercihte %25): ayrıntı karar günlüğünde, 2026-09-23.
 
 ## Lisans
 

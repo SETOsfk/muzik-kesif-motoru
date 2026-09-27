@@ -1,121 +1,160 @@
 {% extends "taban.html" %}
-{% block baslik %}Müzisyenler — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Müzisyenler", "Musicians") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>Müzisyenler</h1>
-  <p>Bu ekran albüm kümelemesinden bağımsız: kişiler kendi icra profilleriyle
-     kıyaslanıyor. Ölçüm tüm miksten değil, Demucs ile
-     <strong>ayrılmış <code>{{ stem }}</code> kanalından</strong> geliyor —
-     tür ya da prodüksiyon değil, ne çalındığı ölçülüyor.</p>
+  <p class="etiket-ust" style="margin:0 0 4px">{{ t("icra profili", "performance profiles") }}</p>
+  <h1>{{ t("Müzisyenler", "Musicians") }}</h1>
+  <p>{{ t("Kütüphanendeki müzisyenler, nasıl çaldıklarına göre. Ölçüm karışık kayıttan değil, ayrılmış enstrüman kanalından geliyor: tür ya da prodüksiyon değil, çalınan şey.",
+          "The musicians in your library, by how they play. The measurement comes from the separated instrument stem, not the full mix: not the genre or the production, but the playing itself.") }}</p>
 </div>
 
-<form class="denetim" method="get" action="/muzisyenler">
-  <input type="hidden" name="calisma" value="{{ calisma_id }}">
-  <div class="alan">
-    <label for="rol">Rol</label>
-    <select id="rol" name="rol" onchange="this.form.submit()">
-      {% for r in roller %}<option value="{{ r }}" {{ 'selected' if r == rol }}>{{ r }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="alan">
-    <label for="kisi">Kişi ({{ liste|length }} gösteriliyor)</label>
-    <select id="kisi" name="kisi" onchange="this.form.submit()" style="min-width:320px">
+<nav class="cipler" aria-label="{{ t('Rol', 'Role') }}" style="margin-bottom:var(--b4)">
+  {% for r in roller %}
+    <a class="cip {{ 'etkin' if r == rol }}" href="/muzisyenler?rol={{ r }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">{{ r|rol_adi }}</a>
+  {% endfor %}
+</nav>
+
+<div class="mz-duzen">
+  {# ---------------------------------------------------------- liste #}
+  <aside class="mz-liste kart" aria-label="{{ t('Müzisyen listesi', 'Musician list') }}">
+    <input type="search" class="mz-ara" placeholder="{{ t('Müzisyen ara…', 'Search musicians…') }}"
+           aria-label="{{ t('Müzisyen ara', 'Search musicians') }}" data-suz=".mz-satir">
+    <p class="etiket-ust" style="margin:var(--b2) 0">{{ liste|length }} {{ t("kişi", "people") }} · {{ rol|rol_adi }}</p>
+    <ol>
       {% for anahtar, r in liste.iterrows() %}
-        <option value="{{ anahtar }}" {{ 'selected' if anahtar == secim }}>
-          {{ r.kisi }} — {{ r.bu_rolde_album }} albüm ({{ r.sanatcilar }})</option>
+      <li class="mz-satir {{ 'etkin' if anahtar == secim }}" data-ara="{{ r.kisi|lower }} {{ r.sanatcilar|lower }}">
+        <a href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">
+          <span class="mz-avatar">{{ yer_tutucu(r.kisi, '') }}</span>
+          <span class="mz-kim"><b>{{ r.kisi }}</b><small>{{ r.sanatcilar }}</small></span>
+          <span class="mz-sayi" title="{{ t('bu roldeki albüm', 'albums in this role') }}">{{ r.bu_rolde_album }}</span>
+        </a>
+      </li>
       {% endfor %}
-    </select>
-  </div>
-  <div class="alan">
-    <label for="agirlik">İcra ağırlığı: {{ '%.2f'|format(agirlik) }}</label>
-    <input type="range" id="agirlik" name="agirlik" min="0" max="1" step="0.05"
-           value="{{ agirlik }}" onchange="this.form.submit()" style="width:180px">
-  </div>
-</form>
+    </ol>
+  </aside>
 
-{% if secim %}
-<h2>{{ kisi_adi }}</h2>
-
-{% if profil is not none %}
-<div class="izgara bes" style="margin:var(--b4) 0">
-  <dl class="olcu"><dt>albüm</dt><dd>{{ profil.album|int }}</dd></dl>
-  <dl class="olcu"><dt>roller</dt><dd style="font-size:.95rem;font-weight:500">{{ profil.roller }}</dd></dl>
-  <dl class="olcu"><dt>kaynak</dt><dd style="font-size:.95rem;font-weight:500">{{ profil.kaynak }}</dd></dl>
-</div>
-{% endif %}
-
-{% if kendi is not none %}
-<section class="bolum">
-  <h3>İcra profili</h3>
-  <div class="izgara bes" style="margin-top:var(--b3)">
-    {% for s in sutunlar %}
-      {% if s in kendi.index and kendi[s] == kendi[s] %}
-      <dl class="olcu"><dt>{{ s.replace('_',' ') }}</dt>
-        <dd>{{ '%.2f'|format(kendi[s]) }}</dd></dl>
-      {% endif %}
-    {% endfor %}
-  </div>
-  {# `kendi.get(x) == kendi.get(x)` NaN kontrolü DEĞİL: eksik sütunda
-     ikisi de None döner ve None == None doğrudur. Sütun stem'den
-     gelen profillerde hiç yok — indekste aramak gerekiyor. #}
-  {% if 'rol_sayisi' in kendi.index and kendi['rol_sayisi'] == kendi['rol_sayisi'] %}
-    <p class="aciklama" style="margin-top:var(--b3)">
-      Kredi tanısı: {{ kendi.rol_sayisi|int }} farklı rol, bu roldeki kredi payı
-      %{{ '%.0f'|format(kendi.rol_kredi_payi * 100) }}.
-      {% if kendi.rol_sayisi >= 8 and kendi.rol_kredi_payi < 0.25 %}
-        <span class="rozet turuncu">dikkat</span>
-        Çok rollü ve bu roldeki payı düşük — asıl işi stüdyo olabilir.
-      {% endif %}
-    </p>
-  {% endif %}
-  {% if 'ornek_onizleme' in kendi.index and kendi['ornek_onizleme'] %}
-    <audio controls preload="none" src="{{ kendi.ornek_onizleme }}"></audio>
-  {% endif %}
-</section>
-
-{% if not benzer.empty %}
-<section class="bolum">
-  <h3>Benzer icracılar — dinleyerek karşılaştır</h3>
-  <p class="aciklama">Dayanak: {{ temel }}</p>
-  <div class="izgara iki">
-    {% for anahtar, r in benzer.iterrows() %}
-    <div class="kart">
-      <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <strong>{{ r.kisi_adi }}</strong>
-        <span class="rozet mavi">{{ '%+.2f'|format(r.benzerlik) }}</span>
+  {# ---------------------------------------------------------- ayrıntı #}
+  <div class="mz-ayrinti">
+  {% if secim %}
+    <section class="mz-kahraman kart hud">
+      <div class="mz-kahraman-avatar">{{ yer_tutucu(kisi_adi, '') }}</div>
+      <div class="mz-kahraman-govde">
+        <p class="etiket-ust">{{ rol|rol_adi }}{% if stem %} · {{ t("kanal", "stem") }}: {{ stem }}{% endif %}</p>
+        <h2>{{ kisi_adi }}</h2>
+        {% if profil is not none %}
+        <p class="aciklama">{{ profil.album|int }} {{ t("albüm", "albums") }} · {{ profil.roller }}</p>
+        {% endif %}
+        {% if kendi is not none and 'ornek_onizleme' in kendi.index and kendi['ornek_onizleme'] %}
+          <audio controls preload="none" src="{{ kendi.ornek_onizleme }}"></audio>
+        {% endif %}
       </div>
-      <p class="aciklama" style="margin:var(--b2) 0">
-        {% for s in sutunlar[:4] %}{% if s in r.index and r[s] == r[s] %}
-          {{ s.replace('_',' ') }} {{ '%.2f'|format(r[s]) }}{{ ' · ' if not loop.last }}
-        {% endif %}{% endfor %}
-      </p>
-      {% if 'ornek_onizleme' in r.index and r['ornek_onizleme'] %}
-        <audio controls preload="none" src="{{ r.ornek_onizleme }}"></audio>
-      {% else %}<p class="aciklama">örnek klip yok</p>{% endif %}
-    </div>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-{% else %}
-  <div class="bilgi"><strong>{{ kisi_adi }}</strong> için <code>{{ stem }}</code>
-    stem profili yok. Üretmek için:
-    <code>python -m python.enrich.icra_profili --rol {{ rol }} --limit 30</code></div>
-{% endif %}
+    </section>
 
-{% if not albumleri.empty %}
-<section class="bolum">
-  <h3>Çaldığı albümler</h3>
-  <div class="tablo-sarmal"><table>
-    <thead><tr><th>sanatçı</th><th>albüm</th><th class="sayi">yıl</th><th>roller</th></tr></thead>
-    <tbody>{% for _, r in albumleri.iterrows() %}
-      <tr><td>{{ r.artist }}</td><td>{{ r.title }}</td>
-        <td class="sayi">{{ r.year|int if r.year == r.year else '—' }}</td>
-        <td>{{ r.role }}</td></tr>
-    {% endfor %}</tbody>
-  </table></div>
-</section>
-{% endif %}
-{% endif %}
+    {% if kendi is not none %}
+    <section class="bolum" style="margin-top:var(--b5)">
+      <h3>{{ t("Nasıl çalıyor?", "How do they play?") }}</h3>
+      <p class="aciklama">{{ t("Çubuk, kütüphanendeki müzisyenlerin aralığı (%5–%95). Nokta bu kişi, çizgi medyan.",
+                               "Each bar spans the musicians in your library (5th–95th percentile). The dot is this person; the line is the median.") }}</p>
+      <div class="mz-olculer">
+        {% for c in cubuklar %}
+        <div class="mz-olcu" title="{{ c.ipucu }}">
+          <span class="mz-olcu-ad">{{ c.ad }}</span>
+          <span class="mz-olcu-iz"><i class="medyan" style="left:{{ (c.medyan*100)|round(1) }}%"></i><b style="left:{{ (c.konum*100)|round(1) }}%"></b></span>
+          <span class="mz-olcu-deger">{{ c.deger|sayi }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if 'rol_sayisi' in kendi.index and kendi['rol_sayisi'] == kendi['rol_sayisi'] %}
+        <p class="aciklama" style="margin-top:var(--b3)">
+          {{ t("Kredi tanısı: " ~ (kendi.rol_sayisi|int) ~ " farklı rol, bu roldeki kredi payı " ~ (kendi.rol_kredi_payi|yuzde) ~ ".",
+               "Credit check: " ~ (kendi.rol_sayisi|int) ~ " different roles, " ~ (kendi.rol_kredi_payi|yuzde) ~ " of credits in this role.") }}
+          {% if kendi.rol_sayisi >= 8 and kendi.rol_kredi_payi < 0.25 %}
+            <span class="rozet turuncu">{{ t("dikkat", "heads up") }}</span>
+            {{ t("Çok rollü ve bu roldeki payı düşük; asıl işi stüdyo olabilir.", "Many roles and a small share in this one; their main job may be in the studio.") }}
+          {% endif %}
+        </p>
+      {% endif %}
+    </section>
+
+    {% if not adaylar.empty %}
+    <section class="bolum">
+      <h3>{{ t(kisi_adi ~ " gibi çalan, sende olmayan albümler", "Records you don't have, played like " ~ kisi_adi) }}</h3>
+      <p class="aciklama">{{ t("Aday albümlerin kendi " ~ stem ~ " kanalından, bu kişinin profiline en yakın olanlar. İki sınırı var: havuz küçük (yalnız ölçülmüş " ~ havuz ~ " aday) ve her aday tek bir 30 saniyelik klipten ölçülüyor. Sayıya değil kulağına güven: dinle, sonra karar ver.",
+                               "Candidate records whose own " ~ stem ~ " stem sits closest to this person's profile. Two limits: the pool is small (only " ~ havuz ~ " measured candidates) and each one is measured from a single 30-second clip. Trust your ears over the number: listen, then decide.") }}</p>
+      <div class="mz-kartlar">
+        {% for _, a in adaylar.iterrows() %}
+        <article class="mz-kart" data-aday="{{ a.aday_id }}">
+          <div class="mz-kart-kapak">
+            {{ yer_tutucu(a.artist, a.title) }}
+            {% if a.kapak %}<img src="{{ a.kapak }}" alt="" loading="lazy" decoding="async" data-kapak>{% endif %}
+            <button class="lo-cal" type="button" data-aday="{{ a.aday_id }}" aria-label="{{ t('Önizlemeyi çal', 'Play preview') }}: {{ a.artist }}">▶</button>
+          </div>
+          <div class="mz-kart-govde">
+            <b>{{ a.artist }}</b>
+            <span>{{ a.title }}{% if a.year == a.year and a.year %} · {{ a.year|int }}{% endif %}</span>
+            <div class="mz-kart-alt">
+              <span class="rozet mavi" title="{{ t('icra benzerliği (kosinüs, standartlaştırılmış)', 'performance similarity (standardised cosine)') }}">≈ {{ a.benzerlik|sayi(2, isaret=True) }}</span>
+              <button type="button" class="mz-ekle" data-aday="{{ a.aday_id }}" data-sanatci="{{ a.artist }}">♥ {{ t("Listeye", "Save") }}</button>
+            </div>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if not benzer.empty %}
+    <section class="bolum">
+      <h3>{{ t("Benzer çalan müzisyenler", "Musicians who play alike") }}</h3>
+      <p class="aciklama">{{ t("Kütüphanende bu kişiye en benzer çalanlar. Dayanak:", "The players in your library closest to this person. Based on:") }} {{ temel }}</p>
+      <details class="ayarlar" style="margin:0 0 var(--b3)">
+        <summary>⚙ {{ t("icra ve tür dengesi", "playing vs. genre balance") }}</summary>
+        <form method="get" action="/muzisyenler" class="ayar-govde">
+          <input type="hidden" name="rol" value="{{ rol }}"><input type="hidden" name="kisi" value="{{ secim }}">
+          <input type="hidden" name="calisma" value="{{ calisma_id }}">
+          <label class="onay">{{ t("İcra ağırlığı", "Weight on playing") }} {{ agirlik|sayi }}
+            <input type="range" name="agirlik" min="0" max="1" step="0.05" value="{{ agirlik }}" onchange="this.form.submit()" style="width:180px"></label>
+        </form>
+      </details>
+      <div class="mz-kartlar">
+        {% for anahtar, r in benzer.iterrows() %}
+        <article class="mz-kart">
+          <a class="mz-kart-kapak" href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}">{{ yer_tutucu(r.kisi_adi, '') }}</a>
+          <div class="mz-kart-govde">
+            <a href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}"><b>{{ r.kisi_adi }}</b></a>
+            <span>{% for s in sutunlar[:3] %}{% if s in r.index and r[s] == r[s] %}{{ s.replace('_',' ') }} {{ r[s]|sayi }}{{ ' · ' if not loop.last }}{% endif %}{% endfor %}</span>
+            <div class="mz-kart-alt">
+              <span class="rozet mavi">≈ {{ r.benzerlik|sayi(2, isaret=True) }}</span>
+            </div>
+            {% if 'ornek_onizleme' in r.index and r['ornek_onizleme'] %}
+              <audio controls preload="none" src="{{ r.ornek_onizleme }}"></audio>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+    {% else %}
+      <div class="bilgi">{{ t(kisi_adi ~ " için " ~ stem ~ " kanalı profili yok. Üretmek için:", "No " ~ stem ~ " stem profile for " ~ kisi_adi ~ " yet. To build one:") }}
+        <code>python -m python.enrich.icra_profili --rol {{ rol }} --limit 30</code></div>
+    {% endif %}
+
+    {% if not albumleri.empty %}
+    <section class="bolum">
+      <h3>{{ t("Çaldığı albümler (kütüphanende)", "Albums they play on (in your library)") }}</h3>
+      <div class="tablo-sarmal"><table>
+        <thead><tr><th>{{ t("sanatçı", "artist") }}</th><th>{{ t("albüm", "album") }}</th><th class="sayi">{{ t("yıl", "year") }}</th><th>{{ t("roller", "roles") }}</th></tr></thead>
+        <tbody>{% for _, r in albumleri.iterrows() %}
+          <tr><td>{{ r.artist }}</td><td>{{ r.title }}</td>
+            <td class="sayi">{{ r.year|int if r.year == r.year else '—' }}</td>
+            <td>{{ r.role }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </section>
+    {% endif %}
+  {% endif %}
+  </div>
+</div>
 {% endblock %}

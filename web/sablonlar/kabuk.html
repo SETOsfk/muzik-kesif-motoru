@@ -2,14 +2,14 @@
    için. Uygulamanın gezinme menüsü burada olmamalı — henüz bir kütüphane, bir
    kullanıcı ve dolayısıyla gidilecek bir yer yok. #}
 <!doctype html>
-<html lang="tr">
+<html lang="{{ dil() }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block baslik %}Müzik Keşif Motoru{% endblock %}</title>
+<title>{% block baslik %}{{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ statik('stil.css') }}">
 <link rel="manifest" href="{{ statik('manifest.webmanifest') }}">
-<meta name="theme-color" content="#0e0f12">
+<meta name="theme-color" content="#05060c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Keşif">

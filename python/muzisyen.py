@@ -424,15 +424,20 @@ def benzer_icracilar(
     icra = _kosinus(sayisal, hedef_anahtar, standartlastir=True)
     tur = _kosinus(veri.tur_merkezi, hedef_anahtar) if not veri.tur_merkezi.empty else pd.Series(dtype=float)
 
+    from python.dil import t, yuzde
+
     skor = icra.mul(icra_agirligi)
     if not tur.empty:
         skor = skor.add(tur.reindex(icra.index).fillna(0.0).mul(1 - icra_agirligi), fill_value=0.0)
-        temel = (
-            f"{rol} stem'i icra profili (%{icra_agirligi*100:.0f}) + "
-            f"tür merkezi (%{(1-icra_agirligi)*100:.0f})"
+        temel = t(
+            f"{rol} stem'inden icra profili ({yuzde(icra_agirligi)}) + "
+            f"tür merkezi ({yuzde(1 - icra_agirligi)})",
+            f"performance profile from the {rol} stem ({yuzde(icra_agirligi)}) + "
+            f"genre centre ({yuzde(1 - icra_agirligi)})",
         )
     else:
-        temel = f"yalnızca {rol} stem'i icra profili"
+        temel = t(f"yalnız {rol} stem'inden icra profili",
+                  f"performance profile from the {rol} stem only")
 
     sonuc = profiller.copy()
     sonuc["benzerlik"] = skor
@@ -488,7 +493,8 @@ def aday_stem_profili(conn: sqlite3.Connection, aday_id: str, rol: str) -> pd.Se
 
 
 def adaya_benzeyen_icracilar(
-    conn: sqlite3.Connection, aday_id: str, rol: str = "drums", adet: int = 5
+    conn: sqlite3.Connection, aday_id: str, rol: str = "drums", adet: int = 5,
+    *, profiller: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, str]:
     """Adayın stem'ine en yakın KÜTÜPHANE müzisyenleri — en benzerden aza.
 
@@ -499,8 +505,13 @@ def adaya_benzeyen_icracilar(
 
     Standartlaştırma şart (bkz. `_kosinus`): bu öznitelikler tamamı pozitif ve
     az boyutlu, ham kosinüste herkes herkese ~0.95 benziyor.
+
+    `profiller`: önceden hesaplanmış `icra_profilleri(conn, rol)`. Aday
+    başına yeniden hesaplamak Öneriler sayfasında 40 kez × 0,11 sn = 4,5 sn
+    tutuyordu (ölçüldü 2026-09-23); sonuç adaya bağlı değil.
     """
-    profiller = icra_profilleri(conn, rol)
+    if profiller is None:
+        profiller = icra_profilleri(conn, rol)
     aday = aday_stem_profili(conn, aday_id, rol)
     if profiller.empty or aday is None:
         return pd.DataFrame(), "adayın ya da kütüphanenin icra profili yok"
@@ -526,3 +537,58 @@ def adaya_benzeyen_icracilar(
     sonuc = sonuc.sort_values("benzerlik", ascending=False).head(adet)
     temel = f"{rol} stem'i, {len(sutunlar)} ölçüt ({', '.join(sutunlar[:4])}…)"
     return sonuc, temel
+
+
+# --------------------------------------------------------------------------- #
+# Ters yön: bu MÜZİSYEN gibi çalan ADAY albümler (2026-09-23)
+#
+# Projenin çıkış sorusu "benzer kalibrede davulcu" idi. `adaya_benzeyen_
+# icracilar` bir adaya bakıp "davulcusu kütüphanendeki X gibi çalıyor" diyordu;
+# bu işlev tersini yapıyor: kütüphanendeki bir müzisyenden başlayıp o gibi
+# çalan, SENDE OLMAYAN albümleri buluyor. Müzisyenler sayfasının keşif ucu.
+#
+# Havuz küçük ve bu gizlenmiyor: yalnız stem'i ölçülmüş aday albümler
+# (2026-09-23'te ~175). Ölçüm, adayın 30 sn önizlemesinden.
+# --------------------------------------------------------------------------- #
+
+def muzisyene_benzeyen_adaylar(
+    conn: sqlite3.Connection, profiller: pd.DataFrame, kisi_anahtar: str,
+    rol: str = "drums", adet: int = 6,
+) -> tuple[pd.DataFrame, int]:
+    """(aday_id, artist, title, year, benzerlik) ve havuz boyu.
+
+    Standartlaştırma kütüphane müzisyenleri ile adaylar BİRLİKTE yapılır —
+    `adaya_benzeyen_icracilar` ile aynı gerekçe: ayrı ölçeklenen iki z uzayı
+    kıyaslanamaz. Sanatçı başına tek albüm (en benzeri).
+    """
+    from python.enrich.icra_profili import ROL_STEM
+
+    bos = (pd.DataFrame(), 0)
+    stem = ROL_STEM.get(rol)
+    if not stem or profiller.empty or kisi_anahtar not in profiller.index:
+        return bos
+    adaylar = pd.read_sql_query(
+        "SELECT * FROM stem_profili WHERE tur = 'aday' AND stem = ?", conn, params=(stem,))
+    sutunlar = [s for s in ROL_SUTUNLARI.get(rol, ())
+                if s in profiller.columns and s in adaylar.columns]
+    if adaylar.empty or len(sutunlar) < 3:
+        return bos
+
+    kisiler = profiller[sutunlar].astype(float)
+    medyan = kisiler.median()
+    kisiler = kisiler.fillna(medyan)
+    aday_m = adaylar.set_index("album_id")[sutunlar].astype(float).fillna(medyan)
+    aday_m.index = [f"__aday__{i}" for i in aday_m.index]
+    matris = pd.concat([kisiler, aday_m])
+    skor = _kosinus(matris, kisi_anahtar, standartlastir=True)
+    skor = skor[skor.index.str.startswith("__aday__")]
+    skor.index = skor.index.str.removeprefix("__aday__")
+
+    adlar = pd.read_sql_query(
+        "SELECT aday_id, artist, title, MAX(year) year FROM adaylar GROUP BY aday_id", conn
+    ).set_index("aday_id")
+    sonuc = (pd.DataFrame({"benzerlik": skor})
+             .join(adlar, how="inner")
+             .sort_values("benzerlik", ascending=False))
+    sonuc = sonuc[~sonuc["artist"].map(lambda a: normalize_esleme(str(a))).duplicated()]
+    return sonuc.head(adet).reset_index(names="aday_id"), len(aday_m)

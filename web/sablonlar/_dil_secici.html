@@ -1,0 +1,8 @@
+{# Dil seçici — iki bağlantı; etkin olan vurgulu. Dönüş adresi yerel yol. #}
+<nav class="dil-secici" aria-label="{{ t('Dil', 'Language') }}">
+  <a href="/dil/tr?geri={{ request.url.path|urlencode }}{% if request.url.query %}%3F{{ request.url.query|urlencode }}{% endif %}"
+     class="{{ 'etkin' if dil() == 'tr' }}" lang="tr" hreflang="tr">Türkçe</a>
+  <span aria-hidden="true">·</span>
+  <a href="/dil/en?geri={{ request.url.path|urlencode }}{% if request.url.query %}%3F{{ request.url.query|urlencode }}{% endif %}"
+     class="{{ 'etkin' if dil() == 'en' }}" lang="en" hreflang="en">English</a>
+</nav>

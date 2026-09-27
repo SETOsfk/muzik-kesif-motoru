@@ -1,32 +1,33 @@
 {% extends "kabuk.html" %}
-{% block baslik %}Üye ol — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Üye ol", "Sign up") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
-<div class="kapi">
-  <h1>Üye ol</h1>
-  <p class="kapi-alt">Kütüphaneni tanıyan bir motor için bir hesap.</p>
+<div class="kapi hud">
+  <div class="kapi-marka"><span class="logo">◈</span><b>KEŞİF</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
+  <h1>{{ t("Hesap aç", "Create an account") }}</h1>
+  <p class="kapi-alt">{{ t("Kütüphaneni tanıyacak bir motor için bir hesap.",
+                           "One account, and an engine that gets to know your library.") }}</p>
 
   {% if hata == 'dolu' %}
-    <div class="kapi-hata">
-      <b>Kontenjan dolu.</b> Bu uygulama en fazla beş hesap taşıyabiliyor —
-      sınır bizim değil, Spotify'ın geliştirici kuralı (Şubat 2026).
-    </div>
+    <div class="kapi-hata">{{ t("Kontenjan dolu. Bu uygulama en fazla beş hesap taşıyabiliyor; sınır bizim değil, Spotify'ın geliştirici kuralı (Şubat 2026).",
+                                "All seats are taken. This app can hold at most five accounts. The limit isn't ours, it's Spotify's developer rule (February 2026).") }}</div>
   {% elif hata == 'kayitli' %}
-    <div class="kapi-hata">Bu e-posta zaten kayıtlı. <a href="/giris">Giriş yap</a></div>
+    <div class="kapi-hata">{{ t("Bu e-posta zaten kayıtlı.", "That email is already registered.") }} <a href="/giris">{{ t("Giriş yap", "Sign in") }}</a></div>
   {% elif hata == 'eksik' %}
-    <div class="kapi-hata">Ad, e-posta ve en az 8 karakterli bir parola gerekiyor.</div>
+    <div class="kapi-hata">{{ t("Ad, e-posta ve en az 8 karakterli bir parola gerekiyor.",
+                                "We need a name, an email and a password of at least 8 characters.") }}</div>
   {% endif %}
 
   <form method="post" action="/uyelik" class="kapi-form">
-    <label>Adın
-      <input type="text" name="ad" required autofocus placeholder="Sertan"></label>
-    <label>E-posta
+    <label>{{ t("Adın", "Your name") }}
+      <input type="text" name="ad" required autofocus placeholder="{{ t('Deniz', 'Alex') }}"></label>
+    <label>{{ t("E-posta", "Email") }}
       <input type="email" name="eposta" required autocomplete="username"></label>
-    <label>Parola <span class="kapi-kucuk">en az 8 karakter</span>
-      <input type="password" name="parola" required minlength="8"
-             autocomplete="new-password"></label>
-    <button type="submit" class="birincil">Hesabı aç</button>
+    <label>{{ t("Parola", "Password") }} <span class="kapi-kucuk">{{ t("en az 8 karakter", "at least 8 characters") }}</span>
+      <input type="password" name="parola" required minlength="8" autocomplete="new-password"></label>
+    <button type="submit" class="birincil">{{ t("Hesabı aç", "Create account") }}</button>
   </form>
 
-  <p class="kapi-alt2">Hesabın var mı? <a href="/giris">Giriş yap</a></p>
+  <p class="kapi-alt2">{{ t("Zaten hesabın var mı?", "Already have an account?") }} <a href="/giris">{{ t("Giriş yap", "Sign in") }}</a></p>
+  {% include "_dil_secici.html" %}
 </div>
 {% endblock %}

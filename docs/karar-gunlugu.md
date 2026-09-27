@@ -2067,3 +2067,200 @@ test için geçici dosyaya yönlendiriyor. Yan kazanç: testler artık iki kez
 koşmuyor.
 
 235 test geçiyor.
+
+## 2026-09-23 — Keşfet destesi, Listem, Neon, iki dil; öneri kalitesi denetimi
+
+Kullanıcının isteği: "müzik keşfet desek, sağa sola kaydırma olsa, ekrana
+grupla/müzikle ilgili bir görsel çıksa; sağa kaydırınca bir listeye atsa,
+o listeyi sonra görüp analiz edebilsek, oradan indirme yapabilse… ayakta
+olan, aktif kullanılabilecek bir uygulama."
+
+### Önce bulunan kusurlar (hepsi düzeltildi)
+
+| kusur | kanıt | düzeltme |
+|---|---|---|
+| "Tam Şarkı" düğmesi çalışmıyordu | YouTube arama gömmesi `listType=search` → "Error 153"; oynatıcı `display:none` olan telefon şeridinin içindeydi (`</nav>` silinmişti) | gömülü oynatıcı kaldırıldı; Spotify/YT Music/Deezer/Bandcamp bağlantıları |
+| Spotify gizlilik testi hiçbir şey denetlemiyordu | gövdesi commit edilmemiş bir düzenlemede başka testle ezilmişti | geri getirildi |
+| M3U dışa aktarımı ölü adres yazıyordu | Deezer önizleme imzası ~15 dk; DAP'ta hiçbir satır çalmaz; bağlantı da kapatılmıyordu | kaldırıldı; Listem CSV/TXT/JSON |
+| `/oneriler` 1,7–3,4 sn | profilleme: müzisyen profilleri aday başına 40× yeniden (4,5 sn), bağlam 2,1 sn, CLAP havuzu her istekte ~2.600 dosya | kullanıcı anahtarlı süreli önbellek (K20), sync uç (iş parçacığı): sıcakta ~0,2 sn |
+| her istek (statik dahil) ortak DB'ye yazıyordu | `oturum_coz` her çağrıda `son_gorulme` UPDATE | 10 dk'da bir; statikte oturum çözülmüyor |
+| tanımsız CSS değişkenleri | `--yuzey`, `--yuzey-2` hiç tanımlı değildi (giriş/başla ekranları) | tasarım sistemi baştan |
+| profil saçılımının eksen başlıkları sabitti | vokal odağında bile "tekme payı / zil payı" | odağa göre |
+
+### KENDİ HATAM: gölge tablolar ikinci kez
+
+Değerlendirmeyi kum havuzunda koştururken `KULLANICI_KOK`'u yönlendirdim ama
+`--db` vermedim. `degerlendirme.py` varsayılan GERÇEK
+`data/db/kullanici/1.sqlite`'ı açtı; `baglan()`ın koruması klasörü yalnız
+`KULLANICI_KOK` değişkeniyle tanıdığı için dosyayı "kullanıcı dosyası değil"
+sandı ve TAM şemayı kurdu: 11 boş gölge tablo (2026-09-15'teki hatanın
+aynısı). Kullanıcı verisi sağlamdı (302 albüm, 2.074 aday, 129 karar).
+Yedek alındı (`1.sqlite.golge-oncesi-20260923`), yalnız satır sayısı 0 olan
+11 tablo silindi, ortak tabloların yeniden doğru yerden okunduğu doğrulandı.
+
+Koruma YAPISAL hâle getirildi: `kullanici/` adlı bir klasördeki dosyaya tam
+şema artık asla kurulmuyor; etkin köke yönlendirilir ya da `ValueError`
+(test: `test_baglan_kullanici_klasorunu_kok_disinda_reddeder`).
+
+### Sezen Aksu neden «grunge» ekseninde çıktı — ölçüldü
+
+Kullanıcının sorusu: "Sezen Aksu bu listeye nereden girdi? kümeleme ve öneri
+sistemi doğru çalışmıyor olabilir."
+
+İz: `melez`, eksen 1 («grunge»). İki sinyal:
+1. Çalma listesi: Duman ile **yalnız 3** ortak liste, npmi +0,53. Listeler:
+   «1. Çalma Listem» (135 sanatçı), «Depresif Bişiler 😪» (250 sanatçı),
+   «türkçe» (22), «Eksibirband» (27) — hepsi 0 takipçili kişisel liste,
+   içlerinde Tarkan, İbrahim Tatlıses, Müslüm Gürses. Sinyal "aynı tarz"
+   değil "aynı dil".
+2. CLAP: en yakın kütüphane albümü «Şebnem Ferah — 10 Mart 2007» (Türkçe
+   kadın vokal). Bu da dil/vokal tınısı.
+
+Gerekçe metni "İKİ SİNYAL DE işaret ediyor, tek başına hiçbir sinyal bu
+kadarını söylemiyordu" diyordu: iki sinyal bağımsız DEĞİLDİ.
+
+**Havuzun yapısı**: 100'den fazla sanatçılı listeler havuzun %10'u ama
+birliktelik çiftlerinin **%74**'ü; en büyük 30 liste (%5) tek başına %56.
+
+**Denenen düzeltme — liste boyutuyla ağırlıklandırma** (`liste_agirligi`:
+eşit / log / ters). Leave-one-artist-out (147 sanatçı, npmi, k=1, melez 1:2):
+
+    ağırlık  liste @10  @50   MRR    melez @50   görünür
+    eşit        0,17   0,29  0,075     0,12        8
+    log         0,16   0,28  0,074     0,12        8
+    ters        0,17   0,27  0,063     0,10        8
+
+Kullanıcının GERÇEK kararlarına karşı (liste/melez yolundan 12 sanatçı
+kararı, 3 beğendim 9 tutmadı): bağ gücünün beğeniyi ayırması AUC 0,30 —
+eşit, log, ters üçünde de aynı. Duman→Sezen Aksu: +0,51 / +0,50 / +0,46.
+Karışıklık liste BOYUTU değil DİL: küçük «türkçe» listesi de bağı taşıyor.
+**Üretime alınmadı** (K19). `LISTE_AGIRLIGI = "esit"`; seçenek ileride
+ölçmek için duruyor.
+
+**Asıl bulgu — kaynakların gerçek isabeti** (sanatçı düzeyinde, tüm
+çalışmalar):
+
+    kaynak               beğ  tut  bil  zevk isabeti [%90 Wilson]  keşif
+    melez                  3    9    6  %25 [10–49]                %67
+    liste_birlikteligi     1    8    4  %11 [ 3–38]                %69
+    ses_benzerligi         2    1    1  %67 [25–92]                %75
+
+Varsayılan akışın başındaki `melez` arayüzde "en isabetli" diye
+etiketliydi; gerçek tercihte değil. Vekil ölçüt (sahip olunanı geri
+bulmak) dil karışıklığını ÖDÜLLENDİRİYOR — Duman gizlenince onu Türkçe
+listeler üzerinden Şebnem Ferah geri buluyor.
+
+**Uygulanan iki değişiklik:**
+1. **Destede kaynaklar arası pay gerçek kararlardan** (Thompson örneklemesi,
+   Beta(1+beğendim, 1+tutmadı), sanatçı düzeyinde). Kaynak İÇİNDEKİ sıra
+   ölçülmüş skorda kalıyor. Az veride her kaynaktan örnek gelir (ölçüm
+   birikir), veri biriktikçe tutana kayar. Rastgelelik çalışma + karar
+   sayısıyla tohumlanır (K2, tekrarlanabilir). Test:
+   `test_thompson_tutan_kaynagi_one_alir`.
+2. **Gerekçe kanıtın gücünü söylüyor**: ≤3 ortak listeye dayanan bağ
+   "Zayıf kanıt: yalnız N listeye dayanıyor ve bu tür bağlar dil ya da ruh
+   hâli listelerinden de gelebiliyor" diye işaretleniyor; "iki bağımsız
+   sinyal" iddiası kaldırıldı. `/oneriler`deki "(en isabetli)" etiketi
+   kaldırıldı.
+
+"Ne öğrendik" sayfası da SANATÇI düzeyine geçti (eskiden satır: dört
+albümlük sanatçının tek kararı dört sayılıyordu).
+
+**Kümeleme gözlemi (düzeltilmedi, not)**: eksenlerin bir kısmı tutarlı
+(metal, grunge, TOOL/prog, Rush, 80'ler hard rock), bir kısmı karma
+(eksen 3: Eminem + Kendrick + MF DOOM ile Dave Weckl + Holdsworth +
+Casiopea; eksen 6: Plini ile Françoise Hardy). Dört eksen kararsız. Rush
+tek başına bir eksen (13 albüm, üyelik 0,98). Yeniden kümeleme bir yöntem
+kararı; ölçülmeden yapılmadı.
+
+### Keşfet destesi (`python/kesif.py`, `web/statik/kesfet.js`)
+
+Tek hareketle karar: sağ = listeye (beğendim), sol = geç (tutmadı), yukarı =
+zaten biliyorum; klavye ←→↑, boşluk, Z (geri al), M (ses). Kart sesle gelir
+(ilk dokunuştan sonra otomatik), arka plan çalan kapağın bulanık hâli, kilit
+ekranında kapak (Media Session). Karar SANATÇI düzeyinde yazılır (sanatçının
+bu çalışmadaki tüm aday satırları); herhangi bir çalışmada karar verilmiş
+sanatçı bir daha gelmez. Önce ekranda uygulanır, sunucu reddederse kart GERİ
+GELİR ve söylenir. Deste biterse "daha derinden getir": üç ana strateji
++20 sıra (tavan 50 = ölçülmüş ufuk), yerel veriyle ~7 sn (ölçüldü: 10 → 30
+derinlikte melez tekil sanatçı 80 → 227).
+
+Neden: README'nin kendi tespiti "en yüksek getirili adım daha fazla geri
+bildirim" ve 23 günde 129 karar vardı. Deste ölçüm düzeneğinin yakıtı.
+
+### Listem (`liste` tablosu)
+
+`feedback`ten AYRI: feedback "zevkime uydu mu" (ölçüm), liste "edinmek
+istiyorum" (iş). Listeden silmek beğeniyi geri almaz. Durum: yeni /
+dinlendi / edinildi. Kütüphane taraması albümü okuyunca "kütüphanende"
+rozeti kendiliğinden çıkar (durumu otomatik değiştirmez). "Nereden edinirim":
+önce Bandcamp ve Qobuz (kayıpsız dosya satışı; DAP kullanıcısı için edinmenin
+asıl yolu), sonra akış servisleri. Dışa aktarım: CSV (UTF-8 BOM, Excel
+Türkçe karakterleri bozmasın), alışveriş listesi TXT, JSON.
+
+**Bilinçli olarak YAPILMAYAN**: listeden otomatik indirme. Ana dizinde bir
+Qobuz toplu indirici var; belgelenmemiş uçlardan akış dosyası indirmek
+K10'un "onaysız uç nokta kullanılmaz" ilkesine ve servis koşullarına aykırı.
+Dışa aktarılan düz liste her yere yapıştırılabilir; ne yapılacağı
+kullanıcının kararı.
+
+### Görsel: `python/medya.py` + üretken yer tutucu
+
+Deezer anahtarsız API: parça adayında `track/{id}`, albüm adayında
+`search/album` (sanatçı + albüm `onizleme.py` kurallarıyla DOĞRULANIR) ve
+albümün en popüler parçası (`rank`; ilk parça çoğu zaman intro). Kapak
+kalıcı, önizleme imzalı → kapak saklanır, önizleme her seferinde taze.
+Önizlemesi olmayan parçada (lisans) sanatçının en popüler çalınabilir parçası
+konur ve `yedek=1` ile "yerine bu çalıyor" diye YAZILIR. Sonuç paylaşımlı
+`medya` tablosunda.
+
+Görsel bulunamazsa gri kutu değil, sanatçı adından türeyen bir kapak
+(`web/yer_tutucu.py`: dalga formu + plak halkaları + baş harfler), tema
+renklerinden; aynı sanatçı her yerde aynı kapağı alır.
+
+### Tasarım: Neon, tek tema, üç sekme
+
+Altı preset gösterildi (Neon, Krom, Aurora, Synthwave, Kâğıt, Klasik);
+kullanıcı Neon'u seçti ve "kullanıcı preset seçmesin, uygulama o yapıya göre
+kurulsun" dedi. Tek tema; token disiplini korunuyor (bileşende sabit renk
+yok). Anlam korunuyor: macenta eylem, camgöbeği ölçüm.
+
+Gezinti: yan menüdeki on bir düz bağlantı → üç sekme (Keşfet · Listem ·
+Kütüphane), altında seçenekler. Sistem menüsü: çalışma, veri durumu, dil,
+çıkış. Telefonda üç sekme alt şeritte. Sayfalar arası geçiş View
+Transitions ile (desteklemeyen tarayıcıda normal gezinti). Kart girişi CSS
+animasyonu: ilk sürüm rAF'e bağlıydı ve arka plan sekmesinde deste görünmez
+kalıyordu (ölçüldü).
+
+### İki dil (`python/dil.py`)
+
+"Kulağa senin X albümüne benziyor" doğal Türkçe değil ("sounds like"ın
+kelime kelime çevirisi). Anahtar kataloğu yerine satır içi `t("tr", "en")`:
+iki cümle yan yana durur. Etkin dil bağlam değişkeninde (kullanıcı gibi);
+çerez, yoksa `Accept-Language`. Sayılar dile göre (0,53 / 0.53; %25 / 25%),
+Türkçe büyük harf (i→İ). Önbelleğe dile bağlı METİN girmiyor, yalnız sayı
+ve ham ad (dil hâli K20 önbellek hatası sınıfının). Gerekçeler gösterim
+anında `dayanak`tan kuruluyor (`python/gerekce.py`), etiket/bağlam/rol/
+profil/sözlük İngilizceleri ayrı modüllerde (`ceviri.py`, `sozluk_en.py`,
+`profil.py:*_EN`). Veritabanında Türkçe ad KİMLİK olarak kalıyor.
+
+### Müzisyenler
+
+Rol çipleri (yalnız ayrılmış kanalı olan roller), aranabilir kişi listesi,
+kişinin ölçüleri kütüphanedeki müzisyenlerin p5–p95 aralığında (K13), benzer
+çalanlar ve yeni: **"X gibi çalan, sende olmayan albümler"**
+(`muzisyene_benzeyen_adaylar`; `adaya_benzeyen_icracilar`ın tersi, aynı
+ortak standartlaştırma). Havuz küçük (~175 ölçülmüş aday) ve her aday tek
+30 sn klipten; sayfa bunu yazıyor. Neil Peart için Travis Scott'ın çıkması
+bu sınırın bir örneği — süzgeç uydurulmadı (K19), kart dinlenebilir.
+
+### Güvenlik ve işletim
+
+İçerik güvenlik politikası (betik yalnız kendi kökenden; görsel/ses yalnız
+Deezer, iTunes, Cover Art Archive), `nosniff`, `frame-ancestors 'none'`,
+izin politikası. `/api/*` oturumsuzken 401 (fetch giriş HTML'ini JSON
+sanmasın). `/saglik` veritabanını da denetliyor (503). Dil dönüş adresi
+yalnız yerel yol (açık yönlendirme yok). Açılışta kullanıcı önbellekleri
+arka planda ısıtılıyor: ilk deste isteği 1,9 sn → 0,17 sn.
+
+271 test geçiyor (237'den; biri hiçbir şey denetlemiyordu).

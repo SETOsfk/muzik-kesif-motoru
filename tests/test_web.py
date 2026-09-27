@@ -106,7 +106,7 @@ def test_tum_sayfalar_acilir():
 
 
 def test_kok_yonlendirir():
-    """Oturumsuz kök girişe, oturumlu kök önerilere gider."""
+    """Oturumsuz kök girişe, oturumlu kök Keşfet'e gider (2026-09-23)."""
     import tempfile
 
     from starlette.testclient import TestClient
@@ -119,7 +119,7 @@ def test_kok_yonlendirir():
 
     with tempfile.TemporaryDirectory() as tmp:
         yanit = _oturumlu_istemci(tmp).get("/", follow_redirects=False)
-        assert yanit.headers["location"].endswith("/oneriler"), yanit.headers
+        assert yanit.headers["location"].endswith("/kesfet"), yanit.headers
 
 
 def test_gecersiz_karar_reddedilir():
@@ -560,12 +560,30 @@ def test_spotify_paylasilan_onbellegi_kullanmiyor():
     özel olduğu için iki kullanıcının /v1/me çağrısı aynı dosyaya düşer ve
     biri ötekinin kütüphanesini görür. Bu, çok kullanıcılığa geçerken dört
     `lru_cache` işlevinde yakalanan sızıntının aynısı.
+
+    (2026-09-23: bu testin gövdesi commit edilmemiş bir düzenlemede başka bir
+    testle üzerine yazılıp SİLİNMİŞTİ; test hiçbir şey denetlemeden "geçiyordu".
+    Geri getirildi.)
     """
     from pathlib import Path as _P
 
     kaynak = (_P(__file__).resolve().parents[1] / "python" / "spotify.py").read_text()
     assert "ApiIstemci" not in kaynak.split('"""', 2)[2], \
         "Spotify istekleri paylaşılan disk önbelleğinden geçiyor"
+
+
+def test_eski_m3u_ucu_kaldirildi():
+    """M3U dışa aktarımı kaldırıldı: içine Deezer'ın 15 dakikada ölen imzalı
+    önizleme adreslerini yazıyordu, yani DAP'ta hiçbir satır çalmıyordu.
+    Dışa aktarım artık Listem'de (CSV / TXT / JSON)."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci = _oturumlu_istemci(tmp)
+        assert istemci.get("/disa-aktar/m3u").status_code == 404
+        yanit = istemci.get("/listem/disa-aktar/csv")
+        assert yanit.status_code == 200
+        assert yanit.text.startswith("\ufeff"), "Excel için UTF-8 BOM şart"
+        assert "text/csv" in yanit.headers["content-type"]
 
 
 # Betik olarak çalıştırma (`python tests/x.py`). Koşulsuz olsaydı pytest

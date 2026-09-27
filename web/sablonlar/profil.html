@@ -1,24 +1,21 @@
 {% extends "taban.html" %}
-{% block baslik %}Dinleyici profili — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Dinleyici profili", "Listener profile") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>Dinleyici profili</h1>
+  <h1>{{ t("Dinleyici profilin", "Your listener profile") }}</h1>
 
-  {# ODAK SEÇİCİ. Aynı ekran herkese aynı şeyi göstermemeli. Varsayılan
-     «Genel» ve enstrüman jargonu içermiyor — «zil payı» bilmek gerekmiyor.
-     İsteyen davula, basa, gitara ya da vokale iniyor. #}
-  <nav class="odaklar" aria-label="Profil odağı">
+  {# ODAK SEÇİCİ. Varsayılan «Genel» enstrüman jargonu içermiyor; isteyen
+     davula, basa, gitara ya da vokale iniyor. #}
+  <nav class="odaklar" aria-label="{{ t('Profil odağı', 'Profile focus') }}">
     {% for anahtar, (ad, _aciklama, _e) in odaklar.items() %}
       <a href="/profil?odak={{ anahtar }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}"
          class="{{ 'etkin' if odak == anahtar }}">{{ ad }}</a>
     {% endfor %}
   </nav>
   <p class="aciklama">{{ odaklar[odak][1] }}</p>
-  <p>{{ albom_sayisi }} albümün ayrılmış stem'lerinden ölçüldü.
-     <strong>Uydurma bir "ortalama dinleyici" normuyla kıyaslanmıyor</strong> —
-     öyle bir veri yok. Konum, bu kütüphanede gerçekten ölçülmüş uçlara göre
-     veriliyor (Eminem'in programlanmış beat'i, Meshuggah'ın ride ağırlığı gibi).</p>
+  <p>{{ t(albom_sayisi ~ " albümün ayrılmış enstrüman kanallarından ölçüldü. Uydurma bir \"ortalama dinleyici\" normuyla kıyaslanmıyor, çünkü öyle bir veri yok. Konum, bu kütüphanede gerçekten ölçülmüş uçlara göre veriliyor (Eminem'in programlanmış beat'i, Meshuggah'ın ride ağırlığı gibi).",
+          "Measured from the separated instrument stems of " ~ albom_sayisi ~ " albums. Nothing here is compared with a made-up \"average listener\", because no such data exists. Positions are given relative to extremes actually measured in this library (Eminem's programmed beats, Meshuggah's ride-heavy drumming).") }}</p>
 </div>
 
 <ul class="madde">
@@ -27,23 +24,22 @@
 
 <div class="izgara iki bolum">
   <section class="kart">
-    <h3>Enstrüman dengesi</h3>
-    <p class="aciklama">Stem'in mikste kapladığı yer (medyan). Dördü 1'e toplanmaz —
-       Demucs artığı ve örtüşme var; okunacak şey stem'ler arası denge.</p>
+    <h3>{{ t("Enstrüman dengesi", "Instrument balance") }}</h3>
+    <p class="aciklama">{{ t("Her kanalın mikste kapladığı yer (medyan). Dördü 1'e toplanmaz, çünkü ayrıştırma artığı ve örtüşme var; okunacak şey kanallar arasındaki denge.",
+                             "How much room each stem takes in the mix (median). The four don't add up to 1, because separation leaves residue and overlap; what matters is the balance between them.") }}</p>
     {{ g_denge }}
     <p class="aciklama" style="margin:var(--b2) 0 0">
-      Kapsama:
-      {% for _, r in denge.iterrows() %}<code>{{ r.stem }}</code>
-        %{{ '%.0f'|format(r.kapsama * 100) }}{{ ' · ' if not loop.last }}{% endfor %}
-      — ölçülemeyen stem o albümde yok ya da çok kısık demek.
+      {{ t("Kapsama:", "Coverage:") }}
+      {% for _, r in denge.iterrows() %}<code>{{ stem_adi(r.stem) }}</code>
+        {{ r.kapsama|yuzde }}{{ ' · ' if not loop.last }}{% endfor %}.
+      {{ t("Ölçülemeyen kanal, o albümde yok ya da çok kısık demek.", "A stem that couldn't be measured is either absent from that album or very quiet.") }}
     </p>
   </section>
 
   <section class="kart">
-    <h3>Hangi eksende geniş bir dinleyicisin</h3>
-    <p class="aciklama">Yayılım = (p95−p5)/medyan. Geniş = o boyutta her şeyi
-       dinliyorsun; dar = belirli bir zevkin var, ve dar eksende sapan bir aday
-       riskli demektir.</p>
+    <h3>{{ t("Hangi eksende geniş bir dinleyicisin?", "Where are you a wide listener?") }}</h3>
+    <p class="aciklama">{{ t("Yayılım = (p95−p5)/medyan. Geniş, o boyutta her şeyi dinlediğin anlamına gelir; dar ise belirli bir zevkin olduğunu gösterir ve dar eksende sapan bir öneri risklidir.",
+                             "Spread = (p95−p5)/median. Wide means you listen to everything on that dimension; narrow means you have a specific taste, and a pick that strays on a narrow axis is a risky one.") }}</p>
     {{ g_cesit }}
   </section>
 </div>
@@ -58,25 +54,24 @@
 
 {% if g_imza %}
 <section class="bolum">
-  <h2>Kümelerinin ses imzası</h2>
-  <p class="aciklama">Kümeleri kredi ve tür verisinden çıkıp sen isimlendirdin;
-     burada <em>nasıl seslendikleri</em> görünüyor. Mavi = kütüphane medyanının
-     üstünde, turuncu = altında. Hücrenin üstüne gel, sayılar çıksın.</p>
+  <h2>{{ t("Kümelerinin ses imzası", "The sound signature of your clusters") }}</h2>
+  <p class="aciklama">{{ t("Kümeler kredi ve tür verisinden çıktı, adlarını sen verdin; burada nasıl seslendikleri görünüyor. Camgöbeği kütüphane medyanının üstünde, macenta altında demek. Sayılar için hücrenin üzerine gel.",
+                           "Your clusters came from credits and genre data, and you named them; this shows how they actually sound. Cyan means above the library median, magenta below. Hover a cell for the numbers.") }}</p>
   <div class="kart">{{ g_imza }}</div>
 </section>
 {% endif %}
 
 {% if uclar %}
 <section class="bolum">
-  <h2>Uçları dinle</h2>
-  <p class="aciklama">Her albüm için <strong>tek bir 30 sn klip</strong> ölçülüyor.
-     Klip albümün atipik bir yerine denk gelirse sayı albümü temsil etmez. Uç
-     değerler bu yüzden en şüpheli olanlar — dinleyip kendin karar ver.</p>
+  <h2>{{ t("Uçları dinle", "Listen to the extremes") }}</h2>
+  <p class="aciklama">{{ t("Her albüm için tek bir 30 saniyelik klip ölçülüyor. Klip albümün alışılmadık bir yerine denk gelirse sayı albümü temsil etmez; uç değerler bu yüzden en şüpheli olanlar. Dinle ve kendin karar ver.",
+                           "Each album is measured from a single 30-second clip. If the clip lands on an unusual part of the album, the number won't represent it, which is why the extremes are the most suspect values. Listen and judge for yourself.") }}</p>
 
   <form method="get" action="/profil" class="denetim" style="border:none;padding:0">
     <input type="hidden" name="calisma" value="{{ calisma_id }}">
+    <input type="hidden" name="odak" value="{{ odak }}">
     <div class="alan">
-      <label for="uc">Eksen</label>
+      <label for="uc">{{ t("Eksen", "Axis") }}</label>
       <select id="uc" name="uc" onchange="this.form.submit()">
         {% for e in eksen_listesi %}
           <option value="{{ e }}" {{ 'selected' if e == uclar.eksen }}>{{ e }}</option>
@@ -89,34 +84,34 @@
     <div class="kart">
       <h4>{{ uclar.dusuk_anlam }}</h4>
       <p style="margin:var(--b2) 0"><strong>{{ uclar.en_dusuk }}</strong>
-        <span style="color:var(--metin-3)">— {{ '%.3f'|format(uclar.en_dusuk_deger) }}</span></p>
+        <span style="color:var(--metin-3)">· {{ uclar.en_dusuk_deger|sayi(3) }}</span></p>
       {% if uclar.dusuk_klip %}<audio controls preload="none" src="{{ uclar.dusuk_klip }}"></audio>
-      {% else %}<p class="aciklama">klip yok</p>{% endif %}
+      {% else %}<p class="aciklama">{{ t("klip yok", "no clip") }}</p>{% endif %}
     </div>
     <div class="kart">
       <h4>{{ uclar.yuksek_anlam }}</h4>
       <p style="margin:var(--b2) 0"><strong>{{ uclar.en_yuksek }}</strong>
-        <span style="color:var(--metin-3)">— {{ '%.3f'|format(uclar.en_yuksek_deger) }}</span></p>
+        <span style="color:var(--metin-3)">· {{ uclar.en_yuksek_deger|sayi(3) }}</span></p>
       {% if uclar.yuksek_klip %}<audio controls preload="none" src="{{ uclar.yuksek_klip }}"></audio>
-      {% else %}<p class="aciklama">klip yok</p>{% endif %}
+      {% else %}<p class="aciklama">{{ t("klip yok", "no clip") }}</p>{% endif %}
     </div>
   </div>
 </section>
 {% endif %}
 
 <section class="bolum">
-  <h2>Bütün eksenler</h2>
+  <h2>{{ t("Bütün eksenler", "All axes") }}</h2>
   <div class="tablo-sarmal">
     <table>
-      <thead><tr><th>eksen</th><th class="sayi">n</th><th class="sayi">p5</th>
-        <th class="sayi">medyan</th><th class="sayi">p95</th>
-        <th>en düşük</th><th>en yüksek</th></tr></thead>
+      <thead><tr><th>{{ t("eksen", "axis") }}</th><th class="sayi">n</th><th class="sayi">p5</th>
+        <th class="sayi">{{ t("medyan", "median") }}</th><th class="sayi">p95</th>
+        <th>{{ t("en düşük", "lowest") }}</th><th>{{ t("en yüksek", "highest") }}</th></tr></thead>
       <tbody>
       {% for _, r in ozet.iterrows() %}
         <tr><td>{{ r.eksen }}</td><td class="sayi">{{ r.n }}</td>
-          <td class="sayi">{{ '%.2f'|format(r.p5) }}</td>
-          <td class="sayi">{{ '%.2f'|format(r.medyan) }}</td>
-          <td class="sayi">{{ '%.2f'|format(r.p95) }}</td>
+          <td class="sayi">{{ r.p5|sayi }}</td>
+          <td class="sayi">{{ r.medyan|sayi }}</td>
+          <td class="sayi">{{ r.p95|sayi }}</td>
           <td>{{ r.en_dusuk }}</td><td>{{ r.en_yuksek }}</td></tr>
       {% endfor %}
       </tbody>

@@ -1,28 +1,27 @@
 {% extends "taban.html" %}
-{% block baslik %}Sözlük — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Sözlük", "Glossary") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 <div class="sayfa-basi">
-  <h1>Sözlük</h1>
-  <p>Ekranlardaki her sayının ne olduğu, nasıl ölçüldüğü ve <strong>bu
-     kütüphanede</strong> hangi uçlara denk geldiği. Referanslar uydurma değil,
-     ölçülmüş örnekler.</p>
+  <h1>{{ t("Sözlük", "Glossary") }}</h1>
+  <p>{{ t("Ekranlardaki her sayının ne olduğu, nasıl ölçüldüğü ve bu kütüphanede hangi uçlara denk geldiği. Örnekler uydurma değil, ölçülmüş.",
+          "What every number on these screens means, how it's measured, and where the extremes fall in this library. The examples are measured, not made up.") }}</p>
 </div>
 
 {% for baslik, anahtarlar in gruplar.items() %}
 <section class="bolum">
   <h2>{{ baslik }}</h2>
-  {% for a in anahtarlar %}{% set t = sozluk.get(a) %}{% if t %}
-  <div class="kart" style="margin-bottom:var(--b3)">
+  {% for a in anahtarlar %}{% set terim = sozluk.get(a) %}{% if terim %}
+  <div class="kart" style="margin-bottom:var(--b3)" id="{{ a }}">
     <div style="display:flex;align-items:baseline;gap:var(--b2);flex-wrap:wrap">
-      <h3>{{ t.ad }}</h3><code style="color:var(--metin-3)">{{ a }}</code>
+      <h3>{{ terim.ad }}</h3><code style="color:var(--metin-3)">{{ a }}</code>
     </div>
-    <p style="margin:var(--b2) 0 0">{{ t.kisa }}</p>
-    {% if t.nasil %}<p class="aciklama" style="margin:var(--b2) 0 0">
-      <strong>Nasıl ölçülüyor:</strong> {{ t.nasil }}</p>{% endif %}
-    {% if t.capalar %}<p class="aciklama" style="margin:6px 0 0">
-      <strong>Bu kütüphanede:</strong> {{ t.capalar }}</p>{% endif %}
-    {% if t.uyari %}<p class="aciklama" style="margin:6px 0 0;color:#e8cfa4">
-      <strong>Sınırı:</strong> {{ t.uyari }}</p>{% endif %}
+    <p style="margin:var(--b2) 0 0">{{ terim.kisa }}</p>
+    {% if terim.nasil %}<p class="aciklama" style="margin:var(--b2) 0 0">
+      <strong>{{ t("Nasıl ölçülüyor:", "How it's measured:") }}</strong> {{ terim.nasil }}</p>{% endif %}
+    {% if terim.capalar %}<p class="aciklama" style="margin:6px 0 0">
+      <strong>{{ t("Bu kütüphanede:", "In this library:") }}</strong> {{ terim.capalar }}</p>{% endif %}
+    {% if terim.uyari %}<p class="aciklama" style="margin:6px 0 0;color:var(--sari)">
+      <strong>{{ t("Sınırı:", "Caveat:") }}</strong> {{ terim.uyari }}</p>{% endif %}
   </div>
   {% endif %}{% endfor %}
 </section>

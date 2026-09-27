@@ -39,6 +39,8 @@ _SCRYPT = {"n": 2 ** 14, "r": 8, "p": 1, "dklen": 32}
 #: kullanıcıyı sürekli giriş yapmaya zorlamak anlamsız.
 CEREZ_ADI = "kesif_oturum"
 OTURUM_GUN = 30
+#: `son_gorulme` en fazla bu sıklıkla yazılır (bkz. `oturum_coz`).
+GUNCELLEME_ARALIGI_SN = 600
 
 
 # --------------------------------------------------------------------------- #
@@ -224,12 +226,19 @@ def oturum_coz(conn: sqlite3.Connection, jeton: str | None) -> int | None:
         gorulme = datetime.fromisoformat(kayit["son_gorulme"])
     except ValueError:
         gorulme = datetime.now(timezone.utc)
-    if (datetime.now(timezone.utc) - gorulme).days > OTURUM_GUN:
+    gecen = datetime.now(timezone.utc) - gorulme
+    if gecen.days > OTURUM_GUN:
         oturum_kapat(conn, jeton)
         return None
-    with conn:
-        conn.execute("UPDATE oturum SET son_gorulme = ? WHERE jeton = ?",
-                     (_simdi(), jeton))
+    # Yalnız GÜNCELLEME_ARALIGI geçtiyse yaz. Eskiden her istek (statik
+    # dosyalar dahil) paylaşılan veritabanına bir yazma işlemi açıyordu;
+    # Keşfet destesi saniyede birkaç istek atarken bu, arka plandaki aktarım
+    # sürecinin yazmalarıyla kilit yarışına giriyordu. Süre dolumu gün
+    # ölçeğinde olduğu için on dakikalık hassasiyet hiçbir şey kaybettirmez.
+    if gecen.total_seconds() > GUNCELLEME_ARALIGI_SN:
+        with conn:
+            conn.execute("UPDATE oturum SET son_gorulme = ? WHERE jeton = ?",
+                         (_simdi(), jeton))
     return int(kayit["kullanici_id"])
 
 

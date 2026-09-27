@@ -960,6 +960,15 @@ def melez(
             gerekce = s.gerekce
 
         dayanak = dict(kaynak.dayanak)
+        # İki kaynağın kanıtı da YAPISAL olarak saklanır: gerekçe gösterim
+        # anında ve iki dilde bundan kuruluyor (`python/gerekce.py`). Eskiden
+        # benzediği albüm yalnız Türkçe cümlenin içindeydi.
+        if s is not None:
+            dayanak["benzedigi"] = s.dayanak.get("benzedigi")
+            dayanak["clap_skor"] = s.dayanak.get("clap_skor")
+        if l is not None:
+            for alan in ("pmi", "birlikte_liste", "kaynak_sanatcilar"):
+                dayanak.setdefault(alan, l.dayanak.get(alan))
         dayanak["melez_basamak"] = basamak
         dayanak["kaynaklar"] = [
             ad for ad, var in (("liste_birlikteligi", l), ("ses_benzerligi", s)) if var

@@ -1,55 +1,48 @@
 {% extends "taban.html" %}
-{% block baslik %}Ses kümeleri — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Ses kümeleri", "Sound clusters") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>Ses kümeleri</h1>
-  <p>Bunlar tür etiketinden gelmiyor. Kütüphanenin <strong>sesi</strong>
-     kümelendi — hangi tür yazıyor, kim çalmış, ne zaman çıkmış hiç
-     bakılmadan. Bir kümeyi seç, o sese en yakın ama <em>sende olmayan</em>
-     kayıtları getireyim.</p>
+  <h1>{{ t("Ses kümeleri", "Sound clusters") }}</h1>
+  <p>{{ t("Bunlar tür etiketinden gelmiyor. Kütüphanenin sesi kümelendi; hangi tür yazdığına, kimin çaldığına, ne zaman çıktığına hiç bakılmadı. Bir küme seç, o sese en yakın ama sende olmayan kayıtları getireyim.",
+          "These don't come from genre tags. Your library's sound was clustered without looking at genre, who played, or when it came out. Pick a cluster and I'll bring you records closest to that sound that you don't have yet.") }}</p>
 </div>
 
 <div class="bilgi">
-  Kümeler CLAP gömü uzayında bulundu (630 bin ses–metin çiftiyle eğitilmiş bir
-  model). <strong>Kredi ve tür temelli kümelerinle aynı şeyi görmüyorlar</strong> —
-  ikisinin uyumu ARI 0.073, yani neredeyse ilgisiz. Bu bir çelişki değil, iki
-  ayrı bakış: biri «kim çalmış», bu «kulağa nasıl geliyor».
+  {{ t("Kümeler CLAP gömü uzayında bulundu (630 bin ses–metin çiftiyle eğitilmiş bir model). Kredi ve tür temelli kümelerinle aynı şeyi görmüyorlar: ikisinin uyumu ARI " ~ (0.073|sayi(3)) ~ ", yani neredeyse ilgisiz. Bu bir çelişki değil, iki ayrı bakış: biri «kim çalmış», öteki «kulağa nasıl geliyor».",
+       "The clusters were found in CLAP embedding space (a model trained on 630k audio–text pairs). They don't see what your credit- and genre-based clusters see: the agreement between the two is ARI " ~ (0.073|sayi(3)) ~ ", almost unrelated. That isn't a contradiction, it's two different lenses: one asks \"who played\", the other \"what does it sound like\".") }}
 </div>
 
 <div class="izgara iki bolum">
   {% for k in kumeler %}
   <a href="/ses-kumeleri?kume={{ k.kume }}&calisma={{ calisma_id }}"
      class="kart" style="text-decoration:none;color:inherit;display:block;
-     {{ 'border-color:var(--vurgu)' if k.kume == secili }}">
-    <div style="display:flex;justify-content:space-between;align-items:baseline">
+     {{ 'border-color:var(--vurgu);box-shadow:var(--parilti)' if k.kume == secili }}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:var(--b2)">
       <strong style="font-size:1rem">{{ k.kullanici_adi or k.ad }}</strong>
-      <span class="rozet gri">{{ k.sayi }} albüm</span>
+      <span class="rozet gri">{{ k.sayi }} {{ t("albüm", "albums") }}</span>
     </div>
     {% if k.kullanici_adi %}
-      <p class="aciklama" style="margin:2px 0 0">{{ k.ad }} gibi</p>{% endif %}
-    <p class="aciklama" style="margin:var(--b2) 0 0">
-      {{ k.uyeler[:4]|join(' · ') }}</p>
+      <p class="aciklama" style="margin:2px 0 0">{{ t(k.ad ~ " gibi", "like " ~ k.ad) }}</p>{% endif %}
+    <p class="aciklama" style="margin:var(--b2) 0 0">{{ k.uyeler[:4]|join(' · ') }}</p>
   </a>
   {% endfor %}
 </div>
 
 {% if secili is not none %}
 <section class="bolum">
-  <h2>Bu sese yakın, sende olmayanlar</h2>
-  <p class="aciklama">Sıralama, kaydın kütüphanenin GENELİNE benzerliği
-     çıkarılarak yapıldı — yoksa her şeye benzeyen kayıtlar başa geçiyordu.
-     «Benzediği» sütunu senin hangi albümüne yakın olduğunu söylüyor;
-     ikisini arka arkaya dinleyip yargılayabilirsin.</p>
+  <h2>{{ t("Bu sese yakın, sende olmayanlar", "Close to this sound, not in your library") }}</h2>
+  <p class="aciklama">{{ t("Sıralama, kaydın kütüphanenin geneline benzerliği çıkarılarak yapıldı; yoksa her şeye benzeyen kayıtlar başa geçiyordu. Her satır senin hangi albümüne yakın olduğunu söylüyor; ikisini arka arkaya dinleyip yargılayabilirsin.",
+                           "Ranked after subtracting each record's similarity to your library as a whole; otherwise tracks that resemble everything would float to the top. Each row names the album of yours it's closest to, so you can play the two back to back and judge.") }}</p>
 
   {% if not oneriler %}
-    <div class="bos">Bu küme için havuzda henüz yeterli ölçüm yok.</div>
+    <div class="bos">{{ t("Bu küme için havuzda henüz yeterli ölçüm yok.", "Not enough measurements in the pool for this cluster yet.") }}</div>
   {% else %}
   <div style="display:flex;justify-content:space-between;align-items:center;
               gap:var(--b3);margin-bottom:var(--b3);flex-wrap:wrap">
     <input type="text" class="ses-kume-adi" data-kume="{{ secili }}"
            value="{{ secili_ad or '' }}"
-           placeholder="Bu sese bir isim ver — «j-fusion» gibi"
+           placeholder="{{ t('Bu sese bir ad ver, «j-fusion» gibi', 'Name this sound, like \"j-fusion\"') }}"
            style="flex:1;min-width:260px;font-size:.95rem">
     <span class="durum aciklama"></span>
   </div>
@@ -61,19 +54,19 @@
         <span class="yil">{{ o.ad }}</span></div>
       <div class="aday-sag">
         <span class="rozet {{ 'mavi' if o.tur == 'parca' else 'gri' }}">
-          {{ 'parça' if o.tur == 'parca' else 'albüm' }}</span>
+          {{ t('parça', 'track') if o.tur == 'parca' else t('albüm', 'album') }}</span>
       </div>
     </div>
     <p class="aciklama" style="margin:0 0 6px">
-      senin <strong style="color:var(--metin-2)">{{ o.benzedigi }}</strong>
-      albümüne benziyor · yakınlık {{ '%.3f'|format(o.skor) }}</p>
+      {{ t("Sesi, kütüphanendeki", "Its sound is close to") }} <strong style="color:var(--metin-2)">{{ o.benzedigi }}</strong>
+      {{ t("albümünü andırıyor", "from your library") }} · {{ t("yakınlık", "closeness") }} {{ o.skor|sayi(3) }}</p>
     {% if o.tur == 'parca' %}
-      <button class="cal" data-parca="{{ o.kimlik }}">▶ dinle</button>
+      <button class="cal" data-parca="{{ o.kimlik }}">▶ {{ t("dinle", "play") }}</button>
       <span class="calar"></span>
     {% elif o.onizleme %}
       <audio controls preload="none" src="{{ o.onizleme }}"></audio>
     {% else %}
-      <p class="aciklama" style="margin:0">önizleme yok</p>
+      <p class="aciklama" style="margin:0">{{ t("önizleme yok", "no preview") }}</p>
     {% endif %}
   </article>
   {% endfor %}

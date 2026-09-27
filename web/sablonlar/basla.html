@@ -1,101 +1,97 @@
 {% extends "taban.html" %}
-{% block baslik %}Başla — Müzik Keşif Motoru{% endblock %}
+{% block baslik %}{{ t("Başla", "Get started") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
+{% set asama_adi = {
+  'spotify': t('Spotify kütüphanen okunuyor', 'Reading your Spotify library'),
+  'eslesme': t("Deezer'da önizlemeler aranıyor", 'Looking up previews on Deezer'),
+  'gomu': t('Ses gömüleri çıkarılıyor', 'Listening and computing sound embeddings'),
+  'hasat': t('Çalma listeleri toplanıyor', 'Gathering playlists'),
+  'kume': t('Zevk eksenlerin çıkarılıyor', 'Working out your taste axes'),
+  'aday': t('Öneriler hazırlanıyor', 'Preparing recommendations'),
+} %}
 <div class="sayfa-basi">
-  <h1>Hoş geldin{% if ad %}, {{ ad }}{% endif %}</h1>
-  <p>Motorun çalışabilmesi için önce neyi sevdiğini bilmesi gerekiyor —
-     aşağıdaki yollardan biri yeter.</p>
+  <h1>{{ t("Hoş geldin", "Welcome") }}{% if ad %}, {{ ad }}{% endif %}</h1>
+  <p>{{ t("Motorun sana öneri yapabilmesi için önce neyi sevdiğini bilmesi gerekiyor. Aşağıdaki yollardan biri yeter.",
+          "Before the engine can recommend anything, it needs to know what you love. Any one of the options below will do.") }}</p>
 </div>
 
 {% if hata == 'spotify_baskasinda' %}
-<div class="kapi-hata">
-  Bu Spotify hesabı başka bir kullanıcıya bağlı. Önce oradan çözülmesi gerekir.
-</div>
+<div class="kapi-hata">{{ t("Bu Spotify hesabı başka bir kullanıcıya bağlı. Önce oradan ayrılması gerekiyor.",
+                            "This Spotify account is already linked to another user. It needs to be unlinked there first.") }}</div>
 {% elif hata == 'spotify_yok' %}
-<div class="kapi-hata">
-  Aktarım için Spotify bağlantısı gerekiyor; bu hesapta saklı bir Spotify
-  yetkisi yok. Aşağıdan yeniden bağlan.
-</div>
+<div class="kapi-hata">{{ t("Aktarım için Spotify bağlantısı gerekiyor ve bu hesapta kayıtlı bir Spotify yetkisi yok. Aşağıdan yeniden bağlan.",
+                            "Importing needs a Spotify connection, and this account doesn't have one saved. Reconnect below.") }}</div>
 {% elif bagli_yeni %}
-<div class="kapi-not">Spotify bağlandı ✓</div>
+<div class="kapi-not">{{ t("Spotify bağlandı ✓", "Spotify connected ✓") }}</div>
 {% endif %}
 
 <div class="baslangic">
   {% if spotify_hazir and not spotify_bagli %}
   <article class="adim">
-    <h2>Spotify hesabını bağla <span class="rozet yesil">en kolay</span></h2>
-    <p>Kayıtlı albümlerini, en çok dinlediğin sanatçıları ve son çaldıklarını
-       okurum; eksenlerini kendim çıkarırım. Dosya yüklemen gerekmez.</p>
-    <a class="spotify-dugme" href="/giris/spotify">Spotify ile bağlan</a>
+    <h2>{{ t("Spotify hesabını bağla", "Connect your Spotify account") }} <span class="rozet yesil">{{ t("en kolayı", "easiest") }}</span></h2>
+    <p>{{ t("Kayıtlı albümlerini, en çok dinlediğin sanatçıları ve son çaldıklarını okurum; eksenlerini kendim çıkarırım. Dosya yüklemen gerekmez.",
+            "I'll read your saved albums, your top artists and what you've played lately, and work out your taste axes myself. No file uploads needed.") }}</p>
+    <a class="spotify-dugme" href="/giris/spotify">{{ t("Spotify ile bağlan", "Connect with Spotify") }}</a>
   </article>
   {% elif spotify_bagli %}
-  <article class="adim" id="aktarim"
-           data-calisiyor="{{ 'evet' if calisiyor else 'hayir' }}">
+  <article class="adim" id="aktarim" data-calisiyor="{{ 'evet' if calisiyor else 'hayir' }}">
     {% if calisiyor %}
-    <h2>Kütüphanen aktarılıyor <span class="rozet mavi">çalışıyor</span></h2>
-    <p>Sayfayı kapatabilirsin; aktarım arka planda sürüyor. Bitince bu
-       sayfa seni önerilere götürür.</p>
+    <h2>{{ t("Kütüphanen aktarılıyor", "Importing your library") }} <span class="rozet mavi">{{ t("çalışıyor", "running") }}</span></h2>
+    <p>{{ t("Sayfayı kapatabilirsin, aktarım arka planda sürüyor. Bitince bu sayfa seni önerilere götürür.",
+            "You can close this page; the import keeps running in the background. When it's done, this page will take you to your recommendations.") }}</p>
     <ol class="asamalar">
       {% for kod, ad_ in asamalar %}
       <li class="{% if loop.index0 < asama_sira %}bitti{% elif loop.index0 == asama_sira %}simdi{% endif %}">
-        {{ ad_ }}
+        {{ asama_adi.get(kod, ad_) }}
         {% if loop.index0 == asama_sira and aktarim.toplam %}
         <span class="sayac" id="aktarim-sayac">{{ aktarim.adim }}/{{ aktarim.toplam }}</span>
         {% endif %}
       </li>
       {% endfor %}
     </ol>
-    <p class="kapi-ipucu">En uzun adım ses gömüleri: albüm başına bir 30 sn
-       önizleme indirilip dinleniyor (~2,5 sn). Ölçüldü: 52 albüm 3,5 dakika
-       sürdü; 300 albüm için 15–20 dakika bekle.</p>
+    <p class="kapi-ipucu">{{ t("En uzun adım ses gömüleri: her albüm için 30 saniyelik bir önizleme indirilip dinleniyor (~2,5 sn). Ölçtük: 52 albüm 3,5 dakika sürdü; 300 albüm için 15–20 dakika bekle.",
+                               "The longest step is the sound embeddings: a 30-second preview is downloaded and analysed for each album (~2.5 s). Measured: 52 albums took 3.5 minutes, so expect 15–20 minutes for 300.") }}</p>
     {% else %}
       {% if aktarim and aktarim.durum == 'hata' %}
-      <h2>Aktarım durdu</h2>
+      <h2>{{ t("Aktarım durdu", "The import stopped") }}</h2>
       <div class="kapi-hata">{{ aktarim.hata }}</div>
       {% elif albom %}
-      <h2>Spotify bağlı ✓</h2>
-      <p>Kütüphanende {{ albom }} albüm var ama henüz öneri üretilmedi.</p>
+      <h2>{{ t("Spotify bağlı ✓", "Spotify connected ✓") }}</h2>
+      <p>{{ t("Kütüphanende " ~ albom ~ " albüm var ama henüz öneri hazırlanmadı.",
+              "There are " ~ albom ~ " albums in your library, but no recommendations yet.") }}</p>
       {% else %}
-      <h2>Spotify bağlı ✓</h2>
-      <p>Kayıtlı albümlerini, son çaldıklarını ve en çok dinlediğin
-         sanatçıları okuyup her biri için bir 30 sn önizleme dinlerim;
-         eksenlerini sesten çıkarırım.</p>
+      <h2>{{ t("Spotify bağlı ✓", "Spotify connected ✓") }}</h2>
+      <p>{{ t("Kayıtlı albümlerini, son çaldıklarını ve en çok dinlediğin sanatçıları okuyup her biri için 30 saniyelik bir önizleme dinlerim; eksenlerini sesten çıkarırım.",
+              "I'll read your saved albums, recent plays and top artists, listen to a 30-second preview of each, and work out your axes from the sound.") }}</p>
       {% endif %}
       <form method="post" action="/api/aktar">
         <button class="spotify-dugme" type="submit">
-          {% if aktarim %}Aktarımı yeniden başlat{% else %}Kütüphanemi aktar{% endif %}
+          {% if aktarim %}{{ t("Aktarımı yeniden başlat", "Restart the import") }}{% else %}{{ t("Kütüphanemi aktar", "Import my library") }}{% endif %}
         </button>
       </form>
     {% endif %}
     <details class="neler-eksik">
-      <summary>Spotify'dan gelen kütüphanede neler farklı?</summary>
-      <p>Eksenlerin <b>yalnız sesten</b> çıkar: her albümün Deezer'daki
-         30 sn önizlemesi CLAP ile dinlenir. Ölçtük — senin yerine
-         geliştiricinin kütüphanesiyle: yalnız sesle kümeleme, kredi ve
-         etiketlerle yapılan kümeleme kadar iyi öneri buluyor.</p>
-      <p>Olmayanlar: <b>kredi grafiği</b> (kim çalmış) ve ondan gelen
-         «kredi sıçraması», «sahne komşuluğu», «bilinçli uzaklık» yolları;
-         icra ölçümü (davulcu, basçı profili). Bunlar dosya ve saatler
-         süren zenginleştirme istiyor. Önizlemesi bulunamayan albüm
-         kümelemeye girmez.</p>
+      <summary>{{ t("Spotify'dan gelen kütüphanede neler farklı?", "What's different with a library from Spotify?") }}</summary>
+      <p>{{ t("Eksenlerin yalnız sesten çıkar: her albümün Deezer'daki 30 saniyelik önizlemesi CLAP ile dinlenir. Geliştiricinin kütüphanesiyle ölçtük: yalnız sesle kümeleme, kredi ve etiketlerle yapılan kümeleme kadar iyi öneri buluyor.",
+              "Your axes come from sound alone: each album's 30-second Deezer preview is analysed with CLAP. Measured on the developer's library, sound-only clustering finds recommendations as good as clustering with credits and tags.") }}</p>
+      <p>{{ t("Olmayanlar: kredi grafiği (kim çalmış) ve ondan beslenen «kadrondaki müzisyenler», «komşular», «bilinçli uzaklık» yolları; icra ölçümü (davulcu, basçı profili). Bunlar dosya ve saatler süren zenginleştirme istiyor. Önizlemesi bulunamayan albüm kümelemeye girmez.",
+              "What's missing: the credits graph (who played on what) and the sources built on it (musicians you know, neighbours, deliberate distance), plus performance profiles (drummer, bassist). Those need files and hours of enrichment. Albums without a preview are left out of the clustering.") }}</p>
     </details>
   </article>
   {% endif %}
 
   <article class="adim">
-    <h2>Yerel kütüphaneni tara</h2>
-    <p>FLAC/MP3 klasörün varsa en zengin sonucu o verir: etiketlerden
-       başlayıp kredilere, oradan ayrılmış stem ölçümüne kadar iniyoruz.</p>
-    <pre>python -m python.ingest.kutuphane_tara --kaynak /yol/muzik</pre>
+    <h2>{{ t("Yerel kütüphaneni tara", "Scan your local library") }}</h2>
+    <p>{{ t("FLAC/MP3 klasörün varsa en zengin sonucu o verir: etiketlerden başlayıp kredilere, oradan ayrılmış enstrüman kanallarının ölçümüne kadar iniyoruz.",
+            "If you have a FLAC/MP3 folder, that gives the richest result: we go from tags to credits, and all the way down to measurements on separated instrument stems.") }}</p>
+    <pre>python -m python.ingest.kutuphane_tara --kaynak /path/to/music</pre>
   </article>
 
   <article class="adim">
-    <h2>Nasıl çalışıyor</h2>
-    <p>Kütüphanen <b>pozitif sinyal</b> sayılıyor: sahip olduğun her albüm bir
-       "evet". Motor onları bulanık kümelerle zevk eksenlerine ayırıyor, sonra
-       her eksen için <i>sende olmayan</i> ama o sese yakın kayıtları getiriyor.
-       Tür etiketine değil, sesin kendisine ve insanların çalma listelerine bakıyor.</p>
-    <p><a href="/sozluk">Terimler ne demek?</a></p>
+    <h2>{{ t("Nasıl çalışıyor?", "How does it work?") }}</h2>
+    <p>{{ t("Kütüphanen olumlu sinyal sayılıyor: sahip olduğun her albüm bir \"evet\". Motor onları bulanık kümelerle zevk eksenlerine ayırıyor, sonra her eksen için sende olmayan ama o sese yakın kayıtları getiriyor. Tür etiketine değil, sesin kendisine ve insanların çalma listelerine bakıyor.",
+            "Your library counts as a positive signal: every album you own is a \"yes\". The engine splits them into taste axes with fuzzy clustering, then, for each axis, brings you records you don't have that sit close to that sound. It looks at the sound itself and at people's playlists, not at genre tags.") }}</p>
+    <p><a href="/sozluk">{{ t("Terimler ne demek?", "What do these terms mean?") }}</a></p>
   </article>
 </div>
 {% endblock %}

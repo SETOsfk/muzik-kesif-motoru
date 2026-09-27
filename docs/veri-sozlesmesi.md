@@ -329,3 +329,41 @@ gelebilir ve ikisinin gerekçesi farklıdır — ikisi de saklanır.
 | stabil_mi | INTEGER | 0/1 — eşik 0.6 |
 
 
+
+## liste (kullanıcıya özel, 2026-09-23)
+Keşfet'te sağa kaydırılan ya da Öneriler'de 👍 denen öğeler: bir EDİNME
+listesi. `feedback`ten ayrı: feedback ölçüm girdisi, liste iş listesi.
+Listeden silmek beğeniyi geri almaz. Adayın alanları KOPYALANIR (yeniden
+kümeleme `adaylar`dan satır silebilir; liste kümelemeden uzun yaşar).
+
+| Alan | Tip | Not |
+|---|---|---|
+| aday_id | TEXT | PK — gösterilen öğe (albüm ya da parça adayı) |
+| calisma_id / eksen / strateji | | hangi çalışmanın hangi ekseninden, hangi yoldan |
+| artist / title / year | | adaydan kopya |
+| birim | TEXT | album / parca |
+| parca_id | INTEGER | Deezer parça kimliği (parça adayında) |
+| mbid | TEXT | varsa |
+| gerekce | TEXT | saklanan Türkçe metin (yedek) |
+| dayanak | TEXT | JSON kanıt; gerekçe gösterimde, iki dilde bundan kurulur |
+| durum | TEXT | yeni / dinlendi / edinildi |
+| eklenme / guncelleme | TEXT | ISO 8601, UTC |
+
+"Kütüphanende" SÜTUN DEĞİL, gösterimde hesaplanır: normalize sanatçı +
+albüm `albums`ta var mı.
+
+## medya (paylaşımlı, 2026-09-23)
+Adayın görseli ve çalınabilir parçası (Deezer). Bir albümü tarif eder,
+kullanıcıyı değil; `aday_id` `album_kimligi()` ile türetildiği için
+kullanıcılar arası ortak.
+
+| Alan | Tip | Not |
+|---|---|---|
+| aday_id | TEXT | PK |
+| kapak | TEXT | albüm kapağı (1000 px, kalıcı CDN adresi) |
+| sanatci_gorsel | TEXT | sanatçı fotoğrafı |
+| parca_id / parca_adi | | çalınacak parça; önizleme URL'si SAKLANMAZ (imzalı, ~15 dk) |
+| album_adi / deezer_album | | parça adayında parçanın albümü |
+| yedek | INTEGER | 1: önerilen parçanın önizlemesi yoktu, sanatçının başka parçası konuldu (arayüz söyler) |
+| durum | TEXT | bulundu / yok — "yok" da saklanır, ikinci kez sorulmaz |
+| tarih | TEXT | ISO 8601, UTC |

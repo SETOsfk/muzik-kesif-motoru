@@ -1,5 +1,5 @@
 {% extends "taban.html" %}
 {% block govde %}
-  <div class="sayfa-basi"><h1>Müzik Keşif Motoru</h1></div>
+  <div class="sayfa-basi"><h1>{{ baslik_metni or t("Henüz burada bir şey yok", "Nothing here yet") }}</h1></div>
   <div class="bilgi">{{ mesaj|safe }}</div>
 {% endblock %}

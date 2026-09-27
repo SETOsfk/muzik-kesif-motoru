@@ -143,7 +143,7 @@ def eksen_haritasi(
 
 def pmi_tablosu(
     conn: sqlite3.Connection, tohumlar: set[str], *, olcut: str = "pmi",
-    buzulme: float = 0.0,
+    buzulme: float = 0.0, agirlik: str = "esit",
 ) -> dict[str, dict[str, float]]:
     """{tohum: {aday: pmi}} — kütüphane kısıtı OLMADAN.
 
@@ -162,29 +162,38 @@ def pmi_tablosu(
     ):
         listeler[liste_id].add(anahtar)
 
-    toplam = len(listeler)
-    if toplam < 5:
+    if len(listeler) < 5:
         return {}
 
+    # Liste ağırlığı ÜRETİMİN işleviyle (K19: değerlendirme üretimi çağırır,
+    # kopyalamaz). Eşik ve büzülme ham liste sayısıyla — üretimle aynı.
+    from python.discover.calma_listesi import liste_agirligi
+    w = {lid: liste_agirligi(len(u), agirlik) for lid, u in listeler.items()}
+    toplam = sum(w.values())
+
     gorulme: Counter = Counter()
-    for uyeler in listeler.values():
-        gorulme.update(uyeler)
+    for lid, uyeler in listeler.items():
+        for x in uyeler:
+            gorulme[x] += w[lid]
 
     birlikte: Counter = Counter()
-    for uyeler in listeler.values():
+    ham: Counter = Counter()
+    for lid, uyeler in listeler.items():
         icerdeki = uyeler & tohumlar
         if not icerdeki:
             continue
         for a in icerdeki:
             for b in uyeler:
                 if a != b:
-                    birlikte[(a, b)] += 1
+                    birlikte[(a, b)] += w[lid]
+                    ham[(a, b)] += 1
 
     tablo: dict[str, dict[str, float]] = defaultdict(dict)
-    for (a, b), adet in birlikte.items():
+    for (a, b), agirlikli in birlikte.items():
+        adet = ham[(a, b)]
         if adet < ASGARI_BIRLIKTE:
             continue
-        p_ab = adet / toplam
+        p_ab = agirlikli / toplam
         p_a, p_b = gorulme[a] / toplam, gorulme[b] / toplam
         if p_a <= 0 or p_b <= 0:
             continue
@@ -506,6 +515,7 @@ def ozet(
 def calistir(
     conn: sqlite3.Connection, *, limit: int | None = None, ayrinti: bool = False,
     kapsam: str = "eksen", olcut: str = "pmi", buzulme: float = 0.0,
+    liste_agirlik: str = "esit",
     calisma: str | None = None,
     melez_agirlik: tuple[float, float] = (1.0, 1.0), ag: bool = False,
     ag_genis: bool = False,
@@ -581,7 +591,8 @@ def calistir(
     }
 
     print("PMI tablosu hesaplanıyor…", file=sys.stderr)
-    tablo = pmi_tablosu(conn, sahip_tam, olcut=olcut, buzulme=buzulme)
+    tablo = pmi_tablosu(conn, sahip_tam, olcut=olcut, buzulme=buzulme,
+                        agirlik=liste_agirlik)
 
     print("CLAP gömüleri okunuyor…", file=sys.stderr)
     kutup_gomu, havuz_gomu = gomu_haritalari(conn)
@@ -751,6 +762,9 @@ def main(argv: list[str] | None = None) -> int:
                              help="hangi kümeleme çalışmasına göre ölçülsün")
     ayristirici.add_argument("--buzulme", type=float, default=0.0,
                              help="kanıt gücü çarpanı n/(n+k); k=0 kapalı")
+    ayristirici.add_argument("--liste-agirlik", choices=("esit", "log", "ters"),
+                             default="esit",
+                             help="liste başına ağırlık (büyük karışık listeleri kısar)")
     ayristirici.add_argument("--olcut", choices=("pmi", "npmi"), default="pmi",
                              help="birliktelik ölçütü")
     ayristirici.add_argument("--ses-kural", choices=("en_yakin_eksen", "eksen"),
@@ -768,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
                          melez_agirlik=tuple(
                              float(x) for x in args.melez_agirlik.split(",")),
                          buzulme=args.buzulme, calisma=args.calisma,
+                         liste_agirlik=args.liste_agirlik,
                          ag=args.ag or args.ag_genis, ag_genis=args.ag_genis)
         print(rapor(sonuc))
         if args.en_kotu:

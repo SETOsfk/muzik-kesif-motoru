@@ -10,10 +10,12 @@
 // ÖNCE ÖNBELLEKTEN veriyordu ve hiç tazelemiyordu: SW'yi bir kez kurmuş
 // telefon uygulama.js/stil.css'in eski hâlinde sonsuza dek kalıyordu
 // (2026-09-21'de aktarım ekranı ve eşleştirme denetimi eklenince fark edildi).
-const SURUM = "kesif-v2";
+// v3 (2026-09-23): tema sistemi, Keşfet destesi (`kesfet.js`) kabuğa girdi.
+const SURUM = "kesif-v3";
 const KABUK = [
   "/statik/stil.css",
   "/statik/uygulama.js",
+  "/statik/kesfet.js",
   "/statik/ikon-192.png",
   "/statik/manifest.webmanifest",
 ];
@@ -64,7 +66,7 @@ self.addEventListener("fetch", (olay) => {
     fetch(istek).catch(() =>
       new Response(
         "<!doctype html><meta charset=utf-8><title>Çevrimdışı</title>" +
-        "<body style='background:#0e0f12;color:#e6e6e6;font:15px/1.6 system-ui;" +
+        "<body style='background:#05060c;color:#e6f0ff;font:15px/1.6 system-ui;" +
         "display:grid;place-items:center;height:100vh;margin:0;text-align:center;padding:2rem'>" +
         "<div><h1 style='font-size:1.3rem'>Bağlantı yok</h1>" +
         "<p style='color:#9aa'>Keşif Motoru sunucuya bağlı çalışıyor — öneriler " +

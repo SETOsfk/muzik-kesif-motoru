@@ -219,7 +219,7 @@ stabilite yordamı yerine kendi kodumuz. Karşılığında algoritmalar görün�
 | Davul ayrıştırma | Python (demucs htdemucs, MPS) | K12 — davulcu karakteri yalnız stem'den ölçülebiliyor |
 | Kümeleme | Python (numpy — FCM, Xie-Beni, PE, bootstrap Jaccard elde yazılı) | K8 — tek çalışma zamanı |
 | Boyut indirgeme | Python (numpy SVD/PCA; `umap-learn` opsiyonel) | Aynı |
-| Arayüz | Starlette + Jinja2 + elle SVG | K15 — Streamlit her etkileşimde betiği yeniden çalıştırıp çalan önizlemeyi kesiyordu |
+| Arayüz | Starlette + Jinja2 + elle SVG + vanilla JS (deste) | K15, K23 — Neon tek tema, üç sekme; iki dil (K22) |
 | Kalıcılık | SQLite | Tek dosya, taşınabilir |
 | Özetleme | Çıkarımsal (varsayılan) / Ollama / Anthropic API | K2 — takılıp çıkarılabilir, varsayılan 0 TL |
 
@@ -417,48 +417,91 @@ yolu girişe zorlar (önek eşleşmesi: `/giris/*` açıktır).
 
 Ayrıntı: `docs/karar-gunlugu.md` 2026-09-15 bölümleri.
 
-## Güncel durum (son güncelleme 2026-09-21)
+### K21 — Keşfet destesi ölçümün yakıtıdır; kaynaklar arası pay gerçek kararlardan (2026-09-23)
+Kaydırmalı deste (`python/kesif.py`, `/kesfet`) kararı tek harekete indiriyor:
+sağ = listeye (beğendim), sol = geç (tutmadı), yukarı = zaten biliyorum.
+Karar SANATÇI düzeyinde; bir kez karar verilen sanatçı bir daha gelmez.
 
-- **Testler:** `.venv/bin/python -m pytest` — 235 test geçiyor. Test gerçek
-  `ortak.sqlite`'a YAZMAMALI; `tests/test_web.py` ve `tests/test_aktarim.py`
-  geçici yol kullanıyor.
-- **Sunucu:** `.venv/bin/python -m web.sunucu --port 8800` (yerel). Sağlık: `/saglik`.
-- **Yeni kullanıcı aktarımı YAZILDI** (`python/aktarim.py`, 2026-09-21):
-  Spotify → Deezer önizlemesi → CLAP → hasat + npmi → yalnız-ses FCM
-  (`c_secimi="en_ince_stabil"`) → melez/liste/ses adayları. `/basla`'daki
-  «Kütüphanemi aktar» ayrı süreç başlatır, ilerleme canlı. Yalnız-ses kümeleme
-  ölçüldü, metadata kadar iyi (karar günlüğü 2026-09-21). Kredi stratejileri
-  bu kullanıcılarda YOK — arayüzde yazılı.
-- **Seto'nun aktif çalışması `20260921T092024-c12-m1.4-pca`** (yeni kredilerle,
-  ölçülerek daha iyi; adlar ve kararlar `python/kumeleme/tasi.py` ile taşındı).
-  Yeniden kümelemede HER ZAMAN `tasi` çalıştırılır, yoksa adlar eskide kalır.
-- **Yayın:** ERTELENDİ (kullanıcı kararı). Sunmak için 47 MB yeter
-  (`ortak.sqlite`, `kullanici/`, `data/cache/clap`, `clap_parca`); torch/demucs
-  yalnız çevrimdışı — AMA Spotify aktarımı CLAP için torch istiyor, yani
-  yayında aktarım ya sunucuda torch ister ya yerelde çalıştırılıp DB taşınır.
-  Streamlit Cloud elendi (K15 + veritabanları git'te yok + kalıcı disk yok).
-  Seçenekler: Oracle Always Free, HF Spaces + DB eşitleme, küçük ücretli VPS.
-  Kısıt: SQLite geri bildirim yazıyor → kalıcı disk şart; Turso ATTACH'i bozar.
+Sıralama: kaynak İÇİNDE ölçülmüş skor (+ geri bildirim kayması, ETKI_TAVANI);
+kaynaklar ARASINDA Thompson örneklemesi, Beta(1+beğendim, 1+tutmadı), sanatçı
+düzeyinde, gerçek kararlardan. Sebep ölçüldü: vekil ölçütün "en iyisi" melez,
+gerçek tercihte %25 [10–49]; ses %67 [25–92] (n küçük). Tohum çalışma + karar
+sayısı: aynı durum aynı deste (K2). Deste derinliği tavanı 50 (ölçülmüş ufuk).
+
+**Listem** (`liste` tablosu) feedback'ten ayrıdır: biri ölçüm, öteki iş listesi.
+Listeden otomatik indirme YAPILMAZ (belgelenmemiş uçlar, K10); dışa aktarım +
+satın alma bağlantıları (Bandcamp, Qobuz önce).
+
+### K22 — İki dil: satır içi `t("tr", "en")` (2026-09-23)
+Etkin dil `AKTIF_DIL` bağlam değişkeninde (çerez, yoksa Accept-Language).
+Her kullanıcı metni iki dilde, ikisi de DOĞAL yazılır — çeviri değil
+("Kulağa senin X albümüne benziyor" kalıbı yasak: "Sesi, kütüphanendeki X
+albümünü andırıyor" / "Its sound is close to X from your library").
+Gerekçe saklanan metinden değil `dayanak`tan gösterimde kurulur
+(`python/gerekce.py`) ve kanıtın gücünü söyler (≤3 liste = zayıf kanıt).
+Sayı dile göre (`sayi`, `yuzde`). **Önbelleğe dile bağlı metin girmez** —
+yalnız sayı ve ham ad (K20 hatasının dil hâli). Veritabanındaki Türkçe
+etiket/ad bir KİMLİK; İngilizcesi gösterimde (`ceviri.py`, `sozluk_en.py`).
+
+### K23 — Tasarım: Neon, tek tema, üç sekme (2026-09-23)
+Altı preset gösterildi, kullanıcı Neon'u seçti ve "kullanıcı preset seçmesin"
+dedi. Tek tema; `stil.css` token disiplini: bileşende sabit renk yok, macenta
+eylem / camgöbeği ölçüm anlamı korunur. SVG paleti (`web/grafik.py:PALET`)
+tokenlarla aynı tutulur. Gezinti: Keşfet · Listem · Kütüphane, altında
+seçenekler; telefonda alt şerit. Görsel yoksa `web/yer_tutucu.py`
+(sanatçıdan türeyen kapak). Animasyon DURUMU taşımaz: kart girişi CSS,
+durum `data-sira`da (rAF'e bağlı sürüm arka plan sekmesinde desteyi
+görünmez bırakıyordu).
+
+## Güncel durum (son güncelleme 2026-09-23)
+
+- **Testler:** `.venv/bin/python -m pytest` — 271 test geçiyor. Test gerçek
+  `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
+  ağsız sahte Deezer istemcisi kullanıyor.
+- **Sunucu:** `.venv/bin/python -m web.sunucu --port 8800`. Kök `/kesfet`e
+  gider. Sağlık: `/saglik` (veritabanını da denetler). Açılışta önbellekler
+  arka planda ısıtılır.
+- **Performans (ölçüldü):** `/oneriler` 1,7–3,4 sn → ~0,2 sn (sıcak); deste
+  partisi 0,14 sn; açılıştan sonraki ilk deste 0,17 sn.
+- **Seto'nun etkin çalışması `20260923T103819-c12-m1.4-pca`.** Yeniden
+  kümelemede HER ZAMAN `python -m python.kumeleme.tasi` çalıştırılır.
+- **2026-09-23 olayı:** kum havuzunda koşan bir değerlendirme gerçek
+  `1.sqlite`'a 11 boş gölge tablo kurdu; onarıldı, yedek
+  `data/db/kullanici/1.sqlite.golge-oncesi-20260923`. `baglan()` artık
+  `kullanici/` klasöründeki dosyaya tam şema kurmuyor.
+- **Yayın:** ERTELENDİ (kullanıcı kararı). Yerelde sürekli çalışması için
+  `scripts/servis.sh` (launchd) hazır ama KURULMADI — kurmak kullanıcının
+  kararı.
 
 ### Kullanıcının yapması gereken (Claude YAPAMAZ — hesap/parola/cihaz)
-- Spotify panelinde Redirect URI: `http://127.0.0.1:8800/giris/spotify/donus`
-- Panelde en çok 5 kullanıcıyı e-postayla ekle, gerçek bir girişle akışı VE
-  «Kütüphanemi aktar»ı uçtan uca doğrula (hat `--json` ile sınandı, Spotify
-  okuması sınanamadı).
-- Telefonda SW: yalnız https ya da localhost'ta kaydolur; LAN IP'si üzerinden
-  http ile açılırsa SW ve «ana ekrana ekle» çalışmaz. Denetim listesi karar
-  günlüğünde (2026-09-21 (3)).
-- 13 albümün MBID'si `/eslestirme`'de insan kararı bekliyor (gerçek belirsizlik).
+- Spotify panelinde Redirect URI: `http://127.0.0.1:8800/giris/spotify/donus`;
+  en çok 5 kullanıcıyı e-postayla ekle; «Kütüphanemi aktar»ı uçtan uca dene.
+- Telefonda SW yalnız https ya da localhost'ta kaydolur (`scripts/tunnel.sh`).
+- 13 albümün MBID'si `/eslestirme`'de karar bekliyor.
+- `~/.qobuz_gui_config.json` parolayı DÜZ METİN tutuyor (başka bir araç);
+  parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
-1. Gerçek Spotify girişiyle aktarımı uçtan uca sınamak (yukarıda, kullanıcı).
-2. 13 albümün MBID kararı (`/eslestirme`), ardından `krediler` + `matris_kur`
-   + `kumeleme.calistir --c 12 12` + `kumeleme.tasi` (adlar/kararlar taşınır).
-3. Yayın: aktarım torch istiyor — sunucuda mı, yerelde mi çalışacağı kararı.
+1. Kaydırarak karar biriktir: kaynak payı (K21) ve geri bildirim tavanı
+   (ETKI_TAVANI) ancak n büyüyünce ölçülebilir. Hedef: kaynak başına ≥30
+   sanatçı kararı, sonra Thompson'ın getirdiği payı gizleme sınamasıyla kıyasla.
+2. Dil karışıklığı (Sezen Aksu vakası): çalma listesi ve CLAP aynı dil
+   sinyalini taşıyabiliyor. Ölçülecek aday düzeltme: bağın, dil/ruh hâli
+   başlıklı listeler DIŞINDA da var olup olmadığı. Önce ölçüm, sonra karar.
+3. Karma eksenler (3 ve 6) ve kararsız dört eksen: yeniden kümeleme bir
+   yöntem kararı; önce kullanıcıyla konuşulur.
+4. `python -m python.medya` ile etkin çalışmanın kapaklarını önceden ısıt
+   (şu an kart açıldıkça çözülüyor).
 
 ### Değişmez kısıtlar
 - `.env` değerleri asla yazdırılmaz; yalnız "tanımlı/değil" söylenir.
-- Reddit onaysız uç nokta yok; RYM kazıma yok; Apple Music API yok; FMA'dan ses indirilmez.
+- Reddit onaysız uç nokta yok; RYM kazıma yok; Apple Music API yok; FMA'dan ses
+  indirilmez; akış servislerinden dosya indirilmez.
 - Kullanıcı adına hesap açılmaz, parola girilmez (Spotify, Oracle, gh, Discogs).
-- Arayüz tutulamayacak söz vermez (404 veren düğme, "okuyorum" diyen sahte metin).
-- Spotify yenileme jetonları ŞİFRELİ saklanır (`python/sifre.py`); anahtar `.env`'de, veritabanında DEĞİL.
+- Arayüz tutulamayacak söz vermez (404 veren düğme, çalışmayan oynatıcı,
+  ölçülmemiş "en isabetli" etiketi).
+- Spotify yenileme jetonları ŞİFRELİ saklanır (`python/sifre.py`).
+- Kum havuzu ya da deneme betiği gerçek `data/` yoluna VARSAYILANLA gitmez:
+  `--db` ve kökler açıkça verilir.
+- Kullanıcıya görünen her metin iki dilde (`t()`); tema seçimi kullanıcıya
+  sunulmaz (K23).
