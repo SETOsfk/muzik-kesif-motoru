@@ -46,8 +46,6 @@
        title="{{ t('Kadro grafiği: kütüphanendeki müzisyenlerin ve komşularının başka kayıtları. Ölçümde erişimi dar çıktı, bu yüzden ana akışta değil.',
                    'Lineup graph: other records by the musicians in your library and their neighbours. Its reach measured narrow, so it stays out of the main feed.') }}">
       {{ t('← ana akış', '← main feed') if kaynak == 'cesur' else t('Cesur mod ↗', 'Bold mode ↗') }}</a>
-    <a class="cip" href="/muzisyenler?rol=drums"
-       title="{{ t('Bir müzisyen seç, onun gibi çalanları kaydır', 'Pick a musician and swipe through people who play like them') }}">🥁 {{ t("Müzisyene göre", "By musician") }}</a>
   </nav>
   {% endif %}
 

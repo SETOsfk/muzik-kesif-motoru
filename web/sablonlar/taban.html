@@ -22,21 +22,33 @@
    sekizi gizleniyordu. Kullanıcının üç işi var: yeni bir şey bul (Keşfet),
    bulduğunu işle (Listem), kendine bak (Kütüphane). Her sayfa bu üçünden
    birinin altında; sekme adresi o grubun ilk sayfası. #}
+{# GEZİNTİ (2026-09-28 sadeleştirme): ÜÇ SEKME — Keşfet · Listem · Sen.
+   Eskiden 3 sekmenin altında 13 sayfa vardı. Günlük kullanım üç iş: yeni
+   bir şey bul, bulduğunu işle, kendine bak. Ayrıntılı/teknik sayfalar
+   silinmedi; menüde «Gelişmiş» altında. Her sekme: (kimlik, ad, simge,
+   görünen alt seçenekler, sekmeye ait sayfalar — ilki sekmenin adresi). #}
 {% set sekmeler = [
-  ('kesfet', t('Keşfet', 'Discover'), '◈', [
-      ('/kesfet', t('Kaydır', 'Swipe')), ('/oneriler', t('Öneriler', 'Recommendations')),
-      ('/ses-kumeleri', t('Ses kümeleri', 'Sound clusters'))]),
-  ('listem', t('Listem', 'My list'), '♥', [
-      ('/listem', t('Liste', 'List')), ('/ogrenme', t('Ne öğrendik', 'What we learned'))]),
-  ('kutuphane', t('Kütüphane', 'Library'), '◍', [
-      ('/sen', t('Sen', 'You')), ('/etiketler', t('Etiketler', 'Tags')),
-      ('/profil', t('Ölçümler', 'Measurements')), ('/muzisyenler', t('Müzisyenler', 'Musicians')),
-      ('/kumeler', t('Kümeler', 'Clusters')), ('/veri', t('Veri seti', 'Dataset')),
-      ('/eslestirme', t('Eşleştirme', 'Matching')), ('/sozluk', t('Sözlük', 'Glossary'))]),
+  ('kesfet', t('Keşfet', 'Discover'), '◈',
+      [('/kesfet', t('Kaydır', 'Swipe')), ('/muzisyenler', t('Müzisyene göre', 'By musician'))],
+      ['/kesfet', '/muzisyenler', '/oneriler', '/ses-kumeleri']),
+  ('listem', t('Listem', 'My list'), '♥', [], ['/listem', '/ogrenme']),
+  ('sen', t('Sen', 'You'), '◍', [],
+      ['/sen', '/etiketler', '/profil', '/kumeler', '/veri', '/eslestirme', '/sozluk']),
+] %}
+{% set gelismis = [
+  ('/oneriler', t('Öneriler (liste)', 'Recommendations (list)')),
+  ('/ses-kumeleri', t('Ses aileleri', 'Sound families')),
+  ('/etiketler', t('Etiketler', 'Tags')),
+  ('/profil', t('Ölçümler', 'Measurements')),
+  ('/kumeler', t('Zevk eksenleri', 'Taste axes')),
+  ('/ogrenme', t('Ne öğrendik', 'What we learned')),
+  ('/veri', t('Veri seti', 'Dataset')),
+  ('/eslestirme', t('Eşleştirme', 'Matching')),
+  ('/sozluk', t('Sözlük', 'Glossary')),
 ] %}
 {% set ns = namespace(aktif=None, alt=[]) %}
-{% for kimlik, ad, simge, alt in sekmeler %}
-  {% if alt|selectattr(0, 'equalto', yol)|list %}{% set ns.aktif = kimlik %}{% set ns.alt = alt %}{% endif %}
+{% for kimlik, ad, simge, alt, uyeler in sekmeler %}
+  {% if yol in uyeler %}{% set ns.aktif = kimlik %}{% set ns.alt = alt %}{% endif %}
 {% endfor %}
 {% macro adres(yol_) -%}
   {{ yol_ }}{% if calisma_id and yol_ not in ('/listem', '/sozluk') %}?calisma={{ calisma_id }}{% endif %}
@@ -48,8 +60,8 @@
   </a>
 
   <nav class="ana-sekmeler" aria-label="{{ t('Ana bölümler', 'Main sections') }}">
-    {% for kimlik, ad, simge, alt in sekmeler %}
-      <a href="{{ adres(alt[0][0]) }}" class="{{ 'etkin' if ns.aktif == kimlik }}"
+    {% for kimlik, ad, simge, alt, uyeler in sekmeler %}
+      <a href="{{ adres(uyeler[0]) }}" class="{{ 'etkin' if ns.aktif == kimlik }}"
          {% if ns.aktif == kimlik %}aria-current="page"{% endif %}>
         <i aria-hidden="true">{{ simge }}</i><span>{{ ad }}</span>
         {% if kimlik == 'listem' %}<b class="sayac-rozet" data-liste-sayac {{ 'hidden' if not liste_sayisi }}>{{ liste_sayisi or 0 }}</b>{% endif %}
@@ -67,14 +79,14 @@
     <div class="menu-govde">
       {% include "_dil_secici.html" %}
       <nav class="menu-baglantilar">
-        <a href="/listem">♥ {{ t("Listem", "My list") }}</a>
-        <a href="/sen">◍ {{ t("Sen", "You") }}</a>
         <a href="/gizlilik">🔒 {{ t("Gizlilik ve hesap", "Privacy & account") }}</a>
         <a href="/cikis">↩ {{ t("Çıkış yap", "Sign out") }}</a>
       </nav>
-      {% if calismalar or boru %}
       <details class="menu-ayrinti">
-        <summary>{{ t("Ayrıntılar", "Details") }}</summary>
+        <summary>{{ t("Gelişmiş", "Advanced") }}</summary>
+        <nav class="menu-baglantilar kucuk">
+          {% for adres_, ad in gelismis %}<a href="{{ adres(adres_) }}">{{ ad }}</a>{% endfor %}
+        </nav>
         {% if calismalar %}
         <form method="get" action="{{ yol }}" class="menu-bolum">
           <label class="etiket-ust" for="calisma-sec">{{ t("kümeleme çalışması", "clustering run") }}</label>
@@ -94,7 +106,6 @@
         </dl>
         {% endif %}
       </details>
-      {% endif %}
       <small class="surum">v{{ surum }}</small>
     </div>
   </details>
@@ -116,8 +127,8 @@
 {# TELEFON: üç sekme alt şeritte, başparmağın olduğu yerde. Alt seçenekler
    üstteki kaydırılabilir satırda kalıyor — "Daha" menüsü artık yok. #}
 <nav class="alt-serit" aria-label="{{ t('Ana bölümler', 'Main sections') }}">
-  {% for kimlik, ad, simge, alt in sekmeler %}
-    <a href="{{ adres(alt[0][0]) }}" class="{{ 'etkin' if ns.aktif == kimlik }}">
+  {% for kimlik, ad, simge, alt, uyeler in sekmeler %}
+    <a href="{{ adres(uyeler[0]) }}" class="{{ 'etkin' if ns.aktif == kimlik }}">
       <i aria-hidden="true">{{ simge }}</i><span>{{ ad }}</span>
       {% if kimlik == 'listem' %}<b class="sayac-rozet" data-liste-sayac {{ 'hidden' if not liste_sayisi }}>{{ liste_sayisi or 0 }}</b>{% endif %}
     </a>

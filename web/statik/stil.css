@@ -1295,3 +1295,4 @@ kbd, .kisayol kbd { font-family: var(--font-govde); border: 1.5px solid var(--ke
 .sen-not, .sen-dipnot { color: var(--metin-3); font-size: .95rem; }
 .sen-dipnot { margin-top: var(--b5); }
 @media (max-width: 700px) { .sen-bas { padding-right: 0; } .sen-bas .cizim { width: 80px; top: -6px; } }
+.menu-baglantilar.kucuk a { font-size: .98rem; padding: 4px 8px; color: var(--metin-2); }

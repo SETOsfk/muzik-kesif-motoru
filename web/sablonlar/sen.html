@@ -67,6 +67,7 @@
       <p class="sen-buyuk">{{ p.kesif.sanatci }} {{ t("sanatçı", "artists") }}</p>
       <p>{{ t("Listene eklediğin: " ~ p.kesif.begendim ~ " · geçtiğin: " ~ p.kesif.tutmadi ~ " · zaten bildiğin: " ~ p.kesif.biliyorum,
               "You saved " ~ p.kesif.begendim ~ ", passed on " ~ p.kesif.tutmadi ~ " and already knew " ~ p.kesif.biliyorum ~ ".") }}</p>
+      <p><a href="/ogrenme">{{ t("Hangi öneriler tuttu? →", "Which picks worked? →") }}</a></p>
       {% if p.kesif.liste %}<p><a href="/listem">{{ t("Listende bekleyen albüm: " ~ p.kesif.liste ~ " →", p.kesif.liste ~ " albums waiting in your list →") }}</a></p>{% endif %}
     </section>
     {% else %}

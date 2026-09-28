@@ -2482,3 +2482,12 @@ Neyin söylenmediği kadar önemli:
   cümlesi hiç kurulmaz.
 - Türkçe ekler sayıya göre değiştiği için sayıya ek getiren kuruluşlardan
   kaçınıldı; on yıl eki okunuşa göre tablodan ("1990'lar", "1980'ler").
+
+## 2026-09-28 (8) — Gezinti: üç sekme, gelişmiş sayfalar menüde
+
+Kullanıcı: "Menüyü azaltalım, daha kullanıcı dostu." Önce: 3 sekme altında 13
+sayfa + menü. Şimdi: Keşfet (Kaydır · Müzisyene göre) · Listem · Sen. Menü:
+dil, gizlilik, çıkış; «Gelişmiş» katlı: öneriler listesi, ses aileleri,
+etiketler, ölçümler, zevk eksenleri, ne öğrendik, veri seti, eşleştirme,
+sözlük, kümeleme çalışması ve sayaçlar. Hiçbir sayfa silinmedi; gelişmiş
+sayfalar ait oldukları sekmeyi işaretlemeye devam ediyor.
