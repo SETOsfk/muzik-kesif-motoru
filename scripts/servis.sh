@@ -44,6 +44,23 @@ tailscale_cli() {
   else echo ""; fi
 }
 
+# launchd'de bir ajanı yeniden yükle. `bootout` EŞZAMANSIZ: eski ajan
+# kapanmadan `bootstrap` çağrılırsa "Bootstrap failed: 5: Input/output error"
+# (ölçüldü 2026-09-28, ikinci `yayinla`). Kapanmasını bekle, gerekirse yeniden dene.
+ajan_yukle() {
+  local etiket="$1" plist="$2" alan="gui/$(id -u)"
+  launchctl bootout "$alan/$etiket" 2>/dev/null || true
+  for _ in $(seq 1 40); do
+    launchctl print "$alan/$etiket" >/dev/null 2>&1 || break
+    sleep 0.25
+  done
+  for _ in 1 2 3 4 5; do
+    launchctl bootstrap "$alan" "$plist" 2>/dev/null && return 0
+    sleep 1
+  done
+  launchctl bootstrap "$alan" "$plist"   # son deneme: hatayı göster
+}
+
 sunucu_kur() {
   mkdir -p "$AJANLAR" "$(dirname "$GUNLUK")"
   # caffeinate -s: şarjdayken Mac uyumasın (kapak kapalıyken yine uyur).
@@ -75,8 +92,7 @@ sunucu_kur() {
 </dict>
 </plist>
 PLIST
-  launchctl bootout "gui/$(id -u)/$ETIKET" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$AJANLAR/$ETIKET.plist"
+  ajan_yukle "$ETIKET" "$AJANLAR/$ETIKET.plist"
   for _ in $(seq 1 40); do
     curl -s -m 1 "http://127.0.0.1:$PORT/saglik" | grep -q ayakta && { echo "✓ Uygulama çalışıyor"; return; }
     sleep 0.5
@@ -110,8 +126,7 @@ yedek_kur() {
 </dict>
 </plist>
 PLIST
-  launchctl bootout "gui/$(id -u)/$YEDEK_ETIKET" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$AJANLAR/$YEDEK_ETIKET.plist"
+  ajan_yukle "$YEDEK_ETIKET" "$AJANLAR/$YEDEK_ETIKET.plist"
   echo "✓ Yedek 6 saatte bir: $klasor"
 }
 
