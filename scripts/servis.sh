@@ -20,6 +20,7 @@ YEDEK_ETIKET="com.kesif.yedek"
 AJANLAR="$HOME/Library/LaunchAgents"
 PORT="${KESIF_PORT:-8800}"
 GUNLUK="$KOK/data/log/sunucu.log"
+GENEL_ADRES=""
 #: Drive'da en çok bu kadar yedek tutulur (6 saatte bir → ~1 hafta).
 SAKLA=28
 
@@ -63,6 +64,12 @@ ajan_yukle() {
 
 sunucu_kur() {
   mkdir -p "$AJANLAR" "$(dirname "$GUNLUK")"
+  # Link biliniyorsa Spotify dönüş adresi ona; bilinmiyorsa .env'deki kalır
+  # (boş bir değer yazmak .env'dekini ezerdi).
+  local SPOTIFY_SATIRI=""
+  if [[ -n "$GENEL_ADRES" ]]; then
+    SPOTIFY_SATIRI="    <key>KESIF_SPOTIFY_DONUS</key><string>$GENEL_ADRES/giris/spotify/donus</string>"
+  fi
   # caffeinate -s: şarjdayken Mac uyumasın (kapak kapalıyken yine uyur).
   # KESIF_HTTPS=1: link HTTPS; oturum çerezi yalnız şifreli bağlantıda gider.
   cat > "$AJANLAR/$ETIKET.plist" <<PLIST
@@ -83,6 +90,7 @@ sunucu_kur() {
   <dict>
     <key>KESIF_HTTPS</key><string>1</string>
     <key>KESIF_AZAMI_KULLANICI</key><string>${KESIF_AZAMI_KULLANICI:-25}</string>
+$SPOTIFY_SATIRI
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -142,15 +150,23 @@ link_ac() {
   "$ts" funnel --bg "$PORT"
   local ad
   ad="$("$ts" status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
-  echo "✓ Link: https://$ad"
+  GENEL_ADRES="https://$ad"
+  echo "✓ Link: $GENEL_ADRES"
 }
 
 yayinla() {
+  # Önce link: Spotify'ın dönüş adresi herkese açık adresten kuruluyor.
+  # Eskiden varsayılan http://127.0.0.1:8800/... kalıyordu ve telefondan
+  # "Allow"a basan kullanıcı kendi cihazına gönderilip siyah ekran görüyordu.
+  link_ac
   sunucu_kur
   yedek_kur
-  link_ac
   echo
   echo "Bu linki paylaşabilirsin. Mac şarjda ve kapağı açıkken uygulama açık kalır."
+  echo
+  echo "Spotify girişi için Spotify panelinde (developer.spotify.com/dashboard →"
+  echo "uygulaman → Settings → Redirect URIs) şu adres ekli olmalı:"
+  echo "  $GENEL_ADRES/giris/spotify/donus"
 }
 
 yedek() {
