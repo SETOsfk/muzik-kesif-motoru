@@ -12,7 +12,8 @@
 // (2026-09-21'de aktarım ekranı ve eşleştirme denetimi eklenince fark edildi).
 // v3 (2026-09-23): tema sistemi, Keşfet destesi (`kesfet.js`) kabuğa girdi.
 // v4 (2026-09-28): İKİ AY teması; eski yazı dosyaları önbellekten silinsin.
-const SURUM = "kesif-v4";
+// v5 (2026-09-28): çevrimdışı sayfası açıklayıcı ve kendiliğinden yeniden deniyor.
+const SURUM = "kesif-v5";
 const KABUK = [
   "/statik/stil.css",
   "/statik/uygulama.js",
@@ -62,18 +63,36 @@ self.addEventListener("fetch", (olay) => {
     return;
   }
 
-  // Sayfalar: HER ZAMAN ağdan. Çevrimdışıysa açıklayıcı bir yanıt.
-  olay.respondWith(
-    fetch(istek).catch(() =>
-      new Response(
-        "<!doctype html><meta charset=utf-8><title>Çevrimdışı</title>" +
-        "<body style='background:#05060c;color:#e6f0ff;font:15px/1.6 system-ui;" +
-        "display:grid;place-items:center;height:100vh;margin:0;text-align:center;padding:2rem'>" +
-        "<div><h1 style='font-size:1.3rem'>Bağlantı yok</h1>" +
-        "<p style='color:#9aa'>Keşif Motoru sunucuya bağlı çalışıyor — öneriler " +
-        "senin kütüphanenden hesaplanıyor ve telefonda saklanmıyor.</p></div>",
-        { headers: { "Content-Type": "text/html; charset=utf-8" } }
-      )
-    )
-  );
+  // Sayfalar: HER ZAMAN ağdan. Ulaşılamazsa açıklayıcı bir sayfa.
+  // Bu sayfa telefonun interneti yokken DE, sunucu (Mac) kapalı ya da
+  // uykudayken DE çıkar; ikisini ayırt etmek için `navigator.onLine`
+  // sayfanın içinde okunur. Sayfa 15 sn'de bir kendiliğinden yeniden dener.
+  olay.respondWith(fetch(istek).catch(() => cevrimdisi()));
 });
+
+function cevrimdisi() {
+  const govde = `<!doctype html><html lang="tr"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keşif — ulaşılamıyor</title>
+<body style="background:#f3efe7;color:#20232c;font:16px/1.6 Georgia,serif;display:grid;
+place-items:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box;text-align:center">
+<div style="max-width:26rem">
+<h1 style="font-weight:400;font-size:1.5rem;margin:0 0 .6rem" id="b">Sunucuya ulaşılamıyor</h1>
+<p id="m" style="color:#4d515c">Keşif Motoru bir bilgisayarda çalışıyor; o bilgisayar şu an uykuda ya da kapalı olabilir. Birkaç dakika içinde kendiliğinden yeniden denenecek.</p>
+<p><button onclick="location.reload()" style="font:inherit;background:#bb4628;color:#fff;border:0;
+border-radius:999px;padding:.6rem 1.4rem;cursor:pointer">Tekrar dene</button></p>
+<p style="color:#6c6f7a;font-size:.9rem" id="e">Server unreachable — the computer running it may be asleep. Retrying automatically.</p>
+</div>
+<script>
+if (!navigator.onLine) {
+  document.getElementById("b").textContent = "İnternet bağlantın yok";
+  document.getElementById("m").textContent = "Telefonun internete bağlı değil. Bağlanınca sayfa kendiliğinden açılacak.";
+  document.getElementById("e").textContent = "You're offline. The page will reload once you're connected.";
+  addEventListener("online", () => location.reload());
+}
+setTimeout(() => location.reload(), 15000);
+</script>`;
+  return new Response(govde, {
+    status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}

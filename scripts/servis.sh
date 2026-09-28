@@ -70,7 +70,8 @@ sunucu_kur() {
   if [[ -n "$GENEL_ADRES" ]]; then
     SPOTIFY_SATIRI="    <key>KESIF_SPOTIFY_DONUS</key><string>$GENEL_ADRES/giris/spotify/donus</string>"
   fi
-  # caffeinate -s: şarjdayken Mac uyumasın (kapak kapalıyken yine uyur).
+  # caffeinate -i -s: Mac boşta uyumasın (pilde de), şarjdayken hiç uyumasın.
+  # Kapak kapalıyken yine uyur — o zaman link «sunucuya ulaşılamıyor» der.
   # KESIF_HTTPS=1: link HTTPS; oturum çerezi yalnız şifreli bağlantıda gider.
   cat > "$AJANLAR/$ETIKET.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -81,7 +82,7 @@ sunucu_kur() {
   <key>WorkingDirectory</key><string>$KOK</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/caffeinate</string><string>-s</string>
+    <string>/usr/bin/caffeinate</string><string>-i</string><string>-s</string>
     <string>$KOK/.venv/bin/python</string><string>-m</string><string>web.sunucu</string>
     <string>--host</string><string>127.0.0.1</string>
     <string>--port</string><string>$PORT</string>
@@ -229,7 +230,20 @@ durum() {
   curl -s -m 3 "http://127.0.0.1:$PORT/saglik" | grep -q ayakta && echo "Uygulama: çalışıyor" || echo "Uygulama: KAPALI"
   local ts
   ts="$(tailscale_cli)"
-  [[ -n "$ts" ]] && "$ts" funnel status 2>/dev/null | head -3
+  if [[ -n "$ts" ]]; then
+    "$ts" funnel status 2>/dev/null | head -3
+    local genel
+    genel="$("$ts" funnel status 2>/dev/null | grep -o 'https://[^ ]*' | head -1)"
+    if [[ -n "$genel" ]]; then
+      curl -s -m 8 "${genel%/}/saglik" | grep -q ayakta \
+        && echo "Genel link: ulaşılıyor ($genel)" \
+        || echo "Genel link: ULAŞILAMIYOR — Tailscale açık mı? 'scripts/servis.sh yayinla' yeniden kurar."
+    else
+      echo "Genel link: Funnel kapalı — 'scripts/servis.sh yayinla'"
+    fi
+  else
+    echo "Tailscale bulunamadı — uygulamayı açıp giriş yap."
+  fi
   local klasor
   klasor="$(yedek_klasoru)"
   [[ -n "$klasor" ]] && echo "Son yedek: $(ls -1d "$klasor"/20*/ 2>/dev/null | sort | tail -1)"
