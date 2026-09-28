@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import warnings
+
 import numpy as np
 
 from python.kumeleme.fcm import fcm
@@ -96,6 +98,9 @@ def bootstrap_jaccard(
                 continue
             skorlar[tur, kume] = max(_jaccard(orijinal, yeni_k) for yeni_k in yeni_kumeler)
 
-    with np.errstate(invalid="ignore"):
+    # Bir kümenin HİÇBİR turda üyesi kalmadıysa sütun tamamen NaN olur;
+    # nanmean uyarı basıyordu (zararsız: o küme 0 alır ve kararsız sayılır).
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
         ortalama = np.nanmean(skorlar, axis=0)
     return StabiliteSonuc(jaccard=np.nan_to_num(ortalama), tekrar=tekrar, esik=esik)
