@@ -1,5 +1,9 @@
 {% extends "taban.html" %}
 {% block govde %}
-  <div class="sayfa-basi"><h1>{{ baslik_metni or t("Henüz burada bir şey yok", "Nothing here yet") }}</h1></div>
-  <div class="bilgi">{{ mesaj|safe }}</div>
+  <div class="bos-sayfa">
+    <img class="cizim" src="{{ statik('cizim/iki-ay.svg') }}" alt="" width="320" height="200">
+    <h1>{{ baslik_metni or t("Henüz burada bir şey yok", "Nothing here yet") }}</h1>
+    <div class="bos-mesaj">{{ mesaj|safe }}</div>
+    <a class="dugme" href="/kesfet">{{ t("Keşfet'e dön", "Back to Discover") }}</a>
+  </div>
 {% endblock %}

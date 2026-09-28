@@ -4,6 +4,8 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- Telefon: Keşfet ekrana tam oturuyor (karar düğmeleri alt şeridin arkasında kalmıyor); üst çubuk aşağı kaydırınca çekiliyor; alt sekmeler etkin olanı gösteriyor ve taşınca kenarı soluyor; basılma geri bildirimi; boş sayfalar çizimli.
+
 ## 0.2.0 — 2026-09-28 · güçlü kümeleme, pano, çok sesli öneri
 
 - Etkin kümeleme spektral gömmeyle yeniden kuruldu (12 tarz, hepsi bootstrap'ta sağlam); eski PCA çalışması geçersizdi.

@@ -387,3 +387,31 @@ document.addEventListener('click', async (olay) => {
   }, { rootMargin: '200px' });
   kutular.forEach((k) => gozcu.observe(k));
 })();
+
+/* Telefon: aşağı kaydırınca üst çubuk çekilir, yukarı kaydırınca döner.
+ * Alt sekmeler taşıyorsa kenarları solar; etkin sekme görünür kaydırılır. */
+(() => {
+  const dar = window.matchMedia('(max-width: 900px)');
+  let son = window.scrollY;
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    if (!dar.matches || document.querySelector('.kesfet')) return;
+    if (y > son + 8 && y > 120) document.body.classList.add('bas-gizli');
+    else if (y < son - 8 || y < 60) document.body.classList.remove('bas-gizli');
+    son = y;
+  }, { passive: true });
+
+  const serit = document.querySelector('.alt-sekmeler');
+  if (!serit) return;
+  const etkin = serit.querySelector('a.etkin');
+  if (etkin && serit.scrollWidth > serit.clientWidth) {
+    serit.scrollLeft = etkin.offsetLeft - (serit.clientWidth - etkin.offsetWidth) / 2;
+  }
+  const kenar = () => {
+    serit.classList.toggle('sol-var', serit.scrollLeft > 4);
+    serit.classList.toggle('sag-var', serit.scrollLeft + serit.clientWidth < serit.scrollWidth - 4);
+  };
+  kenar();
+  serit.addEventListener('scroll', kenar, { passive: true });
+  window.addEventListener('resize', kenar);
+})();
