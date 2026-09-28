@@ -760,3 +760,84 @@ def desteyi_buyut(conn: sqlite3.Connection, calisma_id: str) -> dict:
     sonra = conn.execute("SELECT COUNT(*) FROM adaylar WHERE calisma_id = ?",
                          (calisma_id,)).fetchone()[0]
     return {"durum": "tamam", "derinlik": hedef, "yeni": int(sonra - once)}
+
+
+# --------------------------------------------------------------------------- #
+# Müzisyene göre deste — "Mario Duplantier gibi çalan davulcular" (2026-09-28)
+# --------------------------------------------------------------------------- #
+
+#: Bu benzerliğin altındaki adaylar desteye girmez; deste "bundan daha
+#: benzeri yok" diyerek biter. Ölçü: standartlaştırılmış icra profillerinde
+#: kosinüs (`muzisyen.muzisyene_benzeyen_adaylar`), −1…1. ÖLÇÜLMEDİ — başlangıç
+#: değeri; kararlar biriktikçe beğeni oranına göre ayarlanacak (K19).
+MUZISYEN_ESIGI = 0.5
+
+
+def muzisyen_destesi(
+    conn: sqlite3.Connection, profiller, kisi_anahtar: str, rol: str, *,
+    adet: int = 8, haric: set[str] | frozenset[str] = frozenset(),
+    esik: float = MUZISYEN_ESIGI,
+) -> dict:
+    """Seçilen müzisyen gibi çalan, sende olmayan albümler — deste biçiminde.
+
+    Kart biçimi `deste` ile aynı; tek fark her kartın KENDİ çalışma kimliğini
+    taşıması (`calisma_id`): stem profili olan aday eski bir çalışmadan da
+    gelebilir ve karar o çalışmaya yazılmalı. `bitis`: 'esik' ise kalan
+    adayların hepsi eşiğin altında.
+    """
+    from python.ceviri import rol_adi
+    from python.muzisyen import muzisyene_benzeyen_adaylar
+
+    sonuc, havuz = muzisyene_benzeyen_adaylar(conn, profiller, kisi_anahtar, rol, adet=10_000)
+    kisi_adi = (str(profiller.loc[kisi_anahtar, "kisi_adi"])
+                if "kisi_adi" in getattr(profiller, "columns", ()) and kisi_anahtar in profiller.index
+                else kisi_anahtar)
+    bos = {"kartlar": [], "kalan": 0, "toplam": 0, "havuz": havuz, "kisi_adi": kisi_adi,
+           "bitis": "esik" if havuz else "profil_yok", "esik": esik}
+    if sonuc.empty:
+        return bos
+
+    engelli = yargilanan_anahtarlar(conn) | set(kutuphane_adlari(conn))
+    engelli |= {normalize_esleme(r[0]) for r in conn.execute(
+        f"SELECT artist FROM adaylar WHERE aday_id IN ({','.join('?' * len(haric)) or 'NULL'})",
+        tuple(haric))}
+    uygun = sonuc[~sonuc["artist"].map(lambda a: normalize_esleme(str(a))).isin(engelli)]
+    ustunde = uygun[uygun["benzerlik"] >= esik]
+    secilen = ustunde.head(adet)
+
+    adlar = kutuphane_adlari(conn)
+    rol_ad = rol_adi(rol)
+    kartlar = []
+    for r in secilen.itertuples():
+        satir = conn.execute(
+            """SELECT aday_id, calisma_id, eksen, strateji, artist, title, year, birim,
+                      parca_id, onizleme_parca, gerekce, skor, dayanak
+                 FROM adaylar WHERE aday_id = ? ORDER BY calisma_id DESC LIMIT 1""",
+            (r.aday_id,)).fetchone()
+        if satir is None:
+            continue
+        s = _Satir(satir["aday_id"], int(satir["eksen"] if satir["eksen"] is not None else -1),
+                   satir["strateji"], satir["artist"], satir["title"],
+                   int(satir["year"]) if satir["year"] else None, satir["birim"] or "album",
+                   int(satir["parca_id"]) if satir["parca_id"] else None,
+                   satir["onizleme_parca"], satir["gerekce"] or "", float(satir["skor"] or 0),
+                   satir["dayanak"])
+        kart = _kart(conn, satir["calisma_id"], s, {}, {}, {}, {}, adlar)
+        yuzde_ = round(float(r.benzerlik) * 100)
+        kart.update(
+            calisma_id=satir["calisma_id"],
+            benzerlik=round(float(r.benzerlik), 3),
+            eksen_ad=t(f"%{yuzde_} benzer", f"{yuzde_}% alike"),
+            strateji_ad=t(f"{kisi_adi} gibi", f"like {kisi_adi}"),
+            gerekce=t(
+                f"{rol_ad.capitalize()} kanalı {kisi_adi} gibi çalıyor: ayrılmış kanaldan "
+                f"ölçülen profil %{yuzde_} yakın. Ölçüm tek 30 sn klipten; dinleyip karar ver.",
+                f"The {rol_ad} part plays like {kisi_adi}: the profile measured from the "
+                f"separated stem is {yuzde_}% close. It comes from a single 30 s clip, "
+                f"so have a listen and decide."),
+        )
+        kartlar.append(kart)
+    kalan = len(ustunde) - len(secilen)
+    return {"kartlar": kartlar, "kalan": max(0, kalan), "toplam": len(ustunde),
+            "havuz": havuz, "kisi_adi": kisi_adi, "esik": esik,
+            "bitis": "esik" if kalan <= 0 else None}

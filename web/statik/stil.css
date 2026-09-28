@@ -1262,3 +1262,8 @@ kbd, .kisayol kbd { font-family: var(--font-govde); border: 1.5px solid var(--ke
   .egitim .yon { width: 34px; height: 34px; }
   .egitim .aciklama { display: none; }
 }
+
+/* Müzisyene göre deste başlığı. */
+.muzisyen-modu { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b2) var(--b3);
+                 margin: 0 0 var(--b3); }
+.muzisyen-modu p { margin: 0; display: flex; align-items: baseline; gap: var(--b2); font-size: 1.15rem; }

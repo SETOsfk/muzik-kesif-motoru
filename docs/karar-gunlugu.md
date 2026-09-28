@@ -2425,3 +2425,26 @@ her kullanıcının son çalışmasının görsellerini önceden çözüyor.
 
 Menü: dil, Listem, Profil, Gizlilik, Çıkış; kümeleme çalışması ve sayaçlar
 "Ayrıntılar"da katlı.
+
+## 2026-09-28 (5) — Keşfet'te «X gibi çalanlar» destesi
+
+Kullanıcı: "Benzer sanatçı önerme de keşfette olmalı, kaydırarak. Mario
+Duplantier benzeri davulcular. Belirli bir benzerliğin altına düşünce 'daha
+fazla benzer davulcu yok' uyarısı gitsin."
+
+`kesif.muzisyen_destesi`: `muzisyen.muzisyene_benzeyen_adaylar` (ayrılmış
+kanaldan icra profili, kütüphane + adaylar BİRLİKTE standartlaştırılmış
+kosinüs) ana destenin kart biçimine çevriliyor. Kaydırma, karar, Listem,
+geri al aynı. Karar verilmiş ve kütüphanedeki sanatçılar gelmez.
+
+- Kart KENDİ çalışma kimliğini taşır: stem profili olan aday eski bir
+  çalışmadan olabilir; karar o çalışmaya yazılır (yoksa `karar_kaydet`
+  adayı bulamıyordu).
+- Eşik `MUZISYEN_ESIGI = 0.5`. **Ölçülmedi** — başlangıç değeri. Altına
+  düşülünce deste "X gibi çalan başka kimse yok" diyerek biter; daha
+  uzaktakileri göstermek benzemeyeni benziyor diye sunmak olurdu.
+- Sınır (yazılı): ölçülmüş aday havuzu küçük (~175) ve her aday tek 30 sn
+  klipten; deste kısa olabilir.
+
+Giriş: Keşfet çiplerinde «🥁 Müzisyene göre» → Müzisyenler sayfası → «Bu
+müzisyen gibi çalanları kaydır».

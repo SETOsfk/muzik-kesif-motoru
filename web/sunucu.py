@@ -1997,12 +1997,22 @@ def kesfet_sayfa(istek):
     finally:
         conn.close()
     secili = istek.query_params.get("eksen")
+    muzisyen = istek.query_params.get("muzisyen") or ""
+    rol = istek.query_params.get("rol") or "drums"
+    muzisyen_adi = ""
+    if muzisyen:
+        profiller = _icra_profilleri_onbellek(AKTIF_KULLANICI.get(), rol)
+        if muzisyen in profiller.index and "kisi_adi" in profiller.columns:
+            muzisyen_adi = str(profiller.loc[muzisyen, "kisi_adi"])
+        else:
+            muzisyen_adi = muzisyen
     return SABLONLAR.TemplateResponse(istek, "kesfet.html", _ortam(
         istek, eksenler=eksenler, gunluk=gunluk,
+        muzisyen=muzisyen, muzisyen_adi=muzisyen_adi, rol=rol,
         secili_eksen=int(secili) if secili and secili.lstrip("-").isdigit() else None,
         kaynak=istek.query_params.get("kaynak") if istek.query_params.get("kaynak")
         in kesif.KAYNAKLAR else "ana",
-        buyutulebilir=derinlik < kesif.BUYUTME_TAVANI,
+        buyutulebilir=derinlik < kesif.BUYUTME_TAVANI and not muzisyen,
     ))
 
 
@@ -2021,6 +2031,8 @@ def api_deste(istek):
         adet = 8
     haric = {k for k in (q.get("haric") or "").split(",") if _KIMLIK.match(k)}
     kullanici_id = AKTIF_KULLANICI.get()
+    if q.get("muzisyen"):
+        return _muzisyen_destesi_yaniti(q, calisma_id, adet, haric, kullanici_id)
     conn = _baglanti()
     try:
         sonuc = kesif.deste(
@@ -2029,6 +2041,22 @@ def api_deste(istek):
             baglam=_baglam_onbellek(kullanici_id), olcum=_olcum_onbellek(kullanici_id),
             eksen_adlari=_eksen_adlari(calisma_id),
         )
+    finally:
+        conn.close()
+    for kart in sonuc["kartlar"]:
+        kart["yer_tutucu"] = str(yer_tutucu_svg(kart["artist"], kart["title"]))
+    sonuc["calisma_id"] = calisma_id
+    return JSONResponse(sonuc)
+
+
+def _muzisyen_destesi_yaniti(q, calisma_id, adet, haric, kullanici_id):
+    """«X gibi çalanlar» destesi (bkz. `kesif.muzisyen_destesi`)."""
+    rol = q.get("rol") or "drums"
+    profiller = _icra_profilleri_onbellek(kullanici_id, rol)
+    conn = _baglanti()
+    try:
+        sonuc = kesif.muzisyen_destesi(conn, profiller, q["muzisyen"], rol,
+                                       adet=adet, haric=haric)
     finally:
         conn.close()
     for kart in sonuc["kartlar"]:

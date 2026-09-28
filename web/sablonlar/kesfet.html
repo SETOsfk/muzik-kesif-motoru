@@ -11,6 +11,7 @@
      data-calisma="{{ calisma_id }}"
      data-eksen="{{ secili_eksen if secili_eksen is not none else '' }}"
      data-kaynak="{{ kaynak }}"
+     data-muzisyen="{{ muzisyen }}" data-rol="{{ rol }}" data-muzisyen-adi="{{ muzisyen_adi }}"
      data-buyutulebilir="{{ 'evet' if buyutulebilir else 'hayir' }}">
 
   <div class="kesfet-bas">
@@ -25,6 +26,14 @@
     </div>
   </div>
 
+  {% if muzisyen %}
+  <div class="muzisyen-modu">
+    <p><span class="etiket-ust">{{ rol|rol_adi }}</span>
+       <b>{{ t(muzisyen_adi ~ " gibi çalanlar", "Playing like " ~ muzisyen_adi) }}</b></p>
+    <a class="cip" href="/kesfet?calisma={{ calisma_id }}">✕ {{ t("Ana desteye dön", "Back to the main deck") }}</a>
+    <a class="cip" href="/muzisyenler?rol={{ rol }}">{{ t("Başka müzisyen seç", "Pick another musician") }}</a>
+  </div>
+  {% else %}
   <nav class="cipler" aria-label="{{ t('Eksen seçimi', 'Choose an axis') }}">
     <a class="cip {{ 'etkin' if secili_eksen is none }}"
        href="/kesfet?calisma={{ calisma_id }}&kaynak={{ kaynak }}">{{ t("Karışık", "Mixed") }}</a>
@@ -37,7 +46,10 @@
        title="{{ t('Kadro grafiği: kütüphanendeki müzisyenlerin ve komşularının başka kayıtları. Ölçümde erişimi dar çıktı, bu yüzden ana akışta değil.',
                    'Lineup graph: other records by the musicians in your library and their neighbours. Its reach measured narrow, so it stays out of the main feed.') }}">
       {{ t('← ana akış', '← main feed') if kaynak == 'cesur' else t('Cesur mod ↗', 'Bold mode ↗') }}</a>
+    <a class="cip" href="/muzisyenler?rol=drums"
+       title="{{ t('Bir müzisyen seç, onun gibi çalanları kaydır', 'Pick a musician and swipe through people who play like them') }}">🥁 {{ t("Müzisyene göre", "By musician") }}</a>
   </nav>
+  {% endif %}
 
   <div class="deste" id="deste" aria-live="polite" aria-label="{{ t('Öneri destesi', 'Recommendation deck') }}">
     {# İlk ziyaret eğitimi. Bir kez; "Başla" ile kapanır ve bu cihazda hatırlanır. #}

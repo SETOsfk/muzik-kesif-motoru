@@ -515,3 +515,64 @@ def test_albumu_bulunamayan_aday_sanatci_fotografiyla_gelir():
     assert m.kapak is None and m.sanatci_gorsel.endswith("1000x1000.jpg")
     assert m.parca_id == 5 and m.yedek == 1 and m.bulundu
     assert M._gercek_gorsel("https://e-cdns-images.dzcdn.net/images/artist//1000x1000.jpg") is None
+
+
+# --------------------------------------------------------------------------- #
+# Müzisyene göre deste (2026-09-28)
+# --------------------------------------------------------------------------- #
+
+def _muzisyen_kurulumu(conn):
+    """Bir hedef davulcu, dört kütüphane davulcusu ve dört aday. Adaylardan
+    ikisi hedefe çok benziyor, biri orta, biri tam tersi."""
+    import pandas as pd
+    from python.muzisyen import ROL_SUTUNLARI
+
+    sut = [s for s in ROL_SUTUNLARI["drums"]]
+    rng = np.random.default_rng(3)
+    temel = rng.normal(size=len(sut))
+    kisiler = {"duplantier": temel, **{f"k{i}": rng.normal(size=len(sut)) for i in range(4)}}
+    profiller = pd.DataFrame(kisiler, index=sut).T
+    profiller["kisi_adi"] = ["Mario Duplantier", "A", "B", "C", "D"]
+    adaylar = {"b0000001": temel + 0.05, "b0000002": temel * 0.9 + 0.1,
+               "b0000003": temel * 0.3 + rng.normal(size=len(sut)), "b0000004": -temel}
+    with conn:
+        for i, (aid, v) in enumerate(adaylar.items()):
+            conn.execute(
+                f"INSERT INTO stem_profili (album_id, tur, stem, {','.join(sut)}) "
+                f"VALUES (?, 'aday', 'drums', {','.join('?' * len(sut))})", (aid, *map(float, v)))
+            conn.execute(
+                """INSERT INTO adaylar (aday_id, calisma_id, eksen, strateji, artist, title,
+                   skor, gerekce, dayanak, birim) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (aid, CALISMA, 0, "melez", f"Grup {i}", f"Albüm {i}", 0.1, "", "{}", "album"))
+    return profiller
+
+
+import numpy as np  # noqa: E402
+
+
+def test_muzisyen_destesi_esigin_altini_gostermez(kum):
+    profiller = _muzisyen_kurulumu(kum)
+    d = kesif.muzisyen_destesi(kum, profiller, "duplantier", "drums", adet=10)
+    sanatcilar = [k["artist"] for k in d["kartlar"]]
+    assert sanatcilar[:2] == ["Grup 0", "Grup 1"], sanatcilar
+    assert "Grup 3" not in sanatcilar                  # tam tersi çalan asla
+    assert all(k["benzerlik"] >= kesif.MUZISYEN_ESIGI for k in d["kartlar"])
+    assert d["bitis"] == "esik" and d["kalan"] == 0
+    assert "Mario Duplantier" in d["kartlar"][0]["gerekce"]
+    assert d["kartlar"][0]["calisma_id"] == CALISMA
+
+
+def test_muzisyen_destesi_karari_kaydeder_ve_tekrar_gostermez(kum):
+    profiller = _muzisyen_kurulumu(kum)
+    ilk = kesif.muzisyen_destesi(kum, profiller, "duplantier", "drums", adet=1)
+    assert ilk["kalan"] >= 1 and ilk["bitis"] is None
+    kart = ilk["kartlar"][0]
+    kesif.karar_kaydet(kum, kart["calisma_id"], kart["aday_id"], "begendim")
+    sonra = kesif.muzisyen_destesi(kum, profiller, "duplantier", "drums", adet=10)
+    assert kart["artist"] not in [k["artist"] for k in sonra["kartlar"]]
+
+
+def test_muzisyen_profili_yoksa_bitis_nedeni_soylenir(kum):
+    import pandas as pd
+    d = kesif.muzisyen_destesi(kum, pd.DataFrame(), "yok", "drums")
+    assert d["kartlar"] == [] and d["bitis"] == "profil_yok"

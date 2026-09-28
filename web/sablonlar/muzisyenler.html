@@ -45,6 +45,10 @@
         {% if profil is not none %}
         <p class="aciklama">{{ profil.album|int }} {{ t("albüm", "albums") }} · {{ profil.roller }}</p>
         {% endif %}
+        {% if secim %}
+        <p><a class="dugme birincil" href="/kesfet?muzisyen={{ secim|urlencode }}&rol={{ rol }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">
+          {{ t("Bu müzisyen gibi çalanları kaydır →", "Swipe through people who play like this →") }}</a></p>
+        {% endif %}
         {% if kendi is not none and 'ornek_onizleme' in kendi.index and kendi['ornek_onizleme'] %}
           <audio controls preload="none" src="{{ kendi.ornek_onizleme }}"></audio>
         {% endif %}

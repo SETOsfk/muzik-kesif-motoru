@@ -32,6 +32,9 @@
     calisma: kok.dataset.calisma,
     eksen: kok.dataset.eksen,
     kaynak: kok.dataset.kaynak || 'ana',
+    muzisyen: kok.dataset.muzisyen || '',
+    rol: kok.dataset.rol || 'drums',
+    bitis: null,
     kuyruk: [],            // sıradaki kartlar; [0] en üstte
     gecmis: [],            // geri alma yığını: {k, eylem}
     getiriliyor: false,
@@ -59,12 +62,13 @@
       haric: d.kuyruk.map((k) => k.aday_id).join(','),
     });
     if (d.eksen !== '') q.set('eksen', d.eksen);
+    if (d.muzisyen) { q.set('muzisyen', d.muzisyen); q.set('rol', d.rol); }
     try {
       const v = await api(`/api/kesfet/deste?${q}`);
       const mevcut = new Set(d.kuyruk.map((k) => k.aday_id));
       const yeni = v.kartlar.filter((k) => !mevcut.has(k.aday_id));
       d.kuyruk.push(...yeni);
-      if (v.kalan === 0) d.bitti = true;
+      if (v.kalan === 0) { d.bitti = true; d.bitis = v.bitis || null; d.bitisBilgi = v; }
     } catch (h) {
       if (h.message !== 'oturum') bildir(t('Kartlar alınamadı. Bağlantını kontrol et.', 'Couldn\'t load cards. Check your connection.'));
     } finally {
@@ -244,11 +248,31 @@
     yukleniyor.hidden = d.kuyruk.length > 0 || !d.getiriliyor;
     const bitti = d.kuyruk.length === 0 && !d.getiriliyor;
     bos.hidden = !bitti;
-    if (bitti) { oynatici.pause(); arka.classList.remove('acik'); }
+    if (bitti) { oynatici.pause(); arka.classList.remove('acik'); bitisMetni(); }
     const ustte = d.kuyruk[0];
     if (ustte && deste.dataset.calan !== ustte.aday_id) {
       deste.dataset.calan = ustte.aday_id;
       calmayaHazirla(ustte);
+    }
+  }
+
+  /* Müzisyen destesi bittiğinde NEDEN bittiğini söyle: benzerlik eşiğin
+   * altına düştü mü, yoksa bu müzisyenin ölçülmüş profili mi yok. */
+  function bitisMetni() {
+    if (!d.muzisyen) return;
+    const ad = kok.dataset.muzisyenAdi || '';
+    const v = d.bitisBilgi || {};
+    const esik = Math.round((v.esik || 0.5) * 100);
+    const baslik = bos.querySelector('h2');
+    const metin = document.getElementById('deste-bos-metin');
+    if (d.bitis === 'profil_yok') {
+      baslik.textContent = t('Karşılaştıracak profil yok', 'Nothing to compare against');
+      metin.textContent = t(`${ad} için ayrılmış kanal profili ya da ölçülmüş aday bulunamadı.`,
+                            `There's no separated-stem profile for ${ad}, or no measured picks to compare.`);
+    } else {
+      baslik.textContent = t(`${ad} gibi çalan başka kimse yok`, `No one else plays like ${ad}`);
+      metin.textContent = t(`Kalan adayların benzerliği %${esik}'in altına düştü. Daha uzaktakileri göstermek, benzemeyenleri benziyor diye sunmak olurdu.`,
+                            `Everyone left is under ${esik}% alike. Showing them would mean passing off poor matches as similar.`);
     }
   }
 
@@ -377,7 +401,7 @@
     try {
       const v = await api('/api/kesfet/karar', {
         method: 'POST',
-        body: JSON.stringify({ aday_id: k.aday_id, calisma_id: d.calisma, karar: eylem }),
+        body: JSON.stringify({ aday_id: k.aday_id, calisma_id: k.calisma_id || d.calisma, karar: eylem }),
       });
       sayaclar(v);
       if (eylem === 'begendim') bildir(t(`♥ ${k.artist} listene eklendi`, `♥ ${k.artist} saved to your list`), t('Geri al', 'Undo'), geriAl);
@@ -397,7 +421,7 @@
     if (!son) { bildir(t('Geri alınacak bir karar yok', 'Nothing to undo')); return; }
     try {
       const v = await api('/api/kesfet/geri-al', {
-        method: 'POST', body: JSON.stringify({ aday_id: son.k.aday_id, calisma_id: d.calisma }),
+        method: 'POST', body: JSON.stringify({ aday_id: son.k.aday_id, calisma_id: son.k.calisma_id || d.calisma }),
       });
       sayaclar(v);
     } catch (_) {
