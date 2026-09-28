@@ -502,3 +502,28 @@ def test_olen_cocuk_surec_zombi_kalmaz_calisiyor_sayilmaz():
         os.waitid(os.P_PID, surec.pid, os.WEXITED | os.WNOWAIT)
         assert not calisiyor_mu(8)
         surec.returncode = 0  # Popen'in kendi wait'i ECHILD'e takılmasın
+
+
+def test_spotify_baglaninca_aktarim_kendiliginden_baslar(monkeypatch):
+    """Spotify geçmişi varken kullanıcıya sanatçı listesi sorulmaz."""
+    import web.sunucu as W
+
+    baslatilan = []
+    monkeypatch.setattr(W, "_aktarim_baslat", lambda kid, *a, **k: baslatilan.append(kid))
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci, kid, D = _istemci(tmp)
+        W._spotify_aktarimini_baslat(kid)
+        assert baslatilan == [kid]
+
+        # Önerisi olan kullanıcıda yeniden başlamaz.
+        conn = D.baglan_kullanici(kid)
+        with conn:
+            conn.execute("INSERT INTO adaylar (aday_id, calisma_id, eksen, strateji, artist, "
+                         "title, skor, gerekce) VALUES ('x', 'c', 0, 'melez', 'A', 'B', 1, '')")
+        conn.close()
+        W._spotify_aktarimini_baslat(kid)
+        assert baslatilan == [kid]
+
+        # Bağlı kullanıcının /basla sayfasında liste formu katlı (ana yol değil).
+        yanit = istemci.get("/basla")
+        assert 'class="adim elle-liste"' in yanit.text

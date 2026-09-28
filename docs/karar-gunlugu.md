@@ -2448,3 +2448,18 @@ geri al aynı. Karar verilmiş ve kütüphanedeki sanatçılar gelmez.
 
 Giriş: Keşfet çiplerinde «🥁 Müzisyene göre» → Müzisyenler sayfası → «Bu
 müzisyen gibi çalanları kaydır».
+
+## 2026-09-28 (6) — Spotify'lı kullanıcıya liste sorulmaz
+
+Kullanıcı: "Spotify ile bağlanan kullanıcıya artist sormanın mantığı ne?"
+Haklı: `/basla` liste formunu en üstte gösteriyor, Spotify aktarımı ayrı bir
+düğme bekliyordu. Artık Spotify bağlanınca (giriş ya da sonradan bağlama)
+önerisi olmayan hesapta aktarım KENDİLİĞİNDEN başlıyor; liste formu Spotify'lı
+kullanıcıda katlı, isteğe bağlı bir ek. Giriş sonrası hedef `/kesfet`.
+
+Yol boyunca bulunan iki hata:
+- Testte GERÇEK aktarım süreci açılıyordu (alt süreç KULLANICI_KOK
+  yönlendirmesini miras almaz) ve depo kökünde `data/` yarattı. `conftest`
+  artık `python.aktarim` süreçlerini testte açtırmıyor.
+- Adayı olup kümeleme çalışması olmayan hesap `/basla` ↔ `/kesfet` arasında
+  yönlendirme döngüsüne giriyordu; `/basla` artık çalışma da arıyor.

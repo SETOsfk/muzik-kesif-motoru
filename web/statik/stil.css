@@ -1267,3 +1267,7 @@ kbd, .kisayol kbd { font-family: var(--font-govde); border: 1.5px solid var(--ke
 .muzisyen-modu { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b2) var(--b3);
                  margin: 0 0 var(--b3); }
 .muzisyen-modu p { margin: 0; display: flex; align-items: baseline; gap: var(--b2); font-size: 1.15rem; }
+/* Spotify bağlı kullanıcıda elle liste isteğe bağlı: sona, katlı. */
+.elle-liste { order: 5; }
+.elle-liste > summary { cursor: pointer; color: var(--metin-2); font-size: 1.02rem; }
+.elle-liste[open] > summary { margin-bottom: var(--b3); }

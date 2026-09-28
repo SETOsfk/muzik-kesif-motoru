@@ -506,7 +506,7 @@ def test_spotify_ayni_epostayi_ikizlemiyor():
             _, durum = S.yetki_baslat()
             yanit = istemci.get(f"/giris/spotify/donus?code=k&state={durum}",
                                 follow_redirects=False)
-            assert yanit.headers["location"] == "/oneriler"
+            assert yanit.headers["location"] == "/kesfet"
 
             conn = D.baglan_ortak()
             try:

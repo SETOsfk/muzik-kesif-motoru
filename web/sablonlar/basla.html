@@ -61,6 +61,26 @@
   </article>
   {% endif %}
 
+  {% if spotify_bagli %}
+  {# Spotify bağlı kullanıcıya liste SORULMAZ: öneriler Spotify geçmişinden.
+     Elle liste yalnız isteğe bağlı bir ek, katlı duruyor. #}
+  <details class="adim elle-liste">
+    <summary>{{ t("Spotify dışında sevdiğin sanatçıları da eklemek ister misin?", "Want to add artists beyond your Spotify?") }}</summary>
+  <div>
+    <h2>{{ t("Sevdiğin sanatçıları yaz", "List the artists you love") }} <span class="rozet yesil">{{ t("Spotify gerekmez", "no Spotify needed") }}</span></h2>
+    <p>{{ t("Satır başına bir sanatçı; istersen «Sanatçı — Albüm» diye albüm de yazabilirsin. Her sanatçının en bilinen iki albümünü dinleyip eksenlerini sesten çıkarırım. En az " ~ asgari_sanatci ~ ", ideali 20–40 sanatçı.",
+            "One artist per line; you can also write «Artist — Album». I'll listen to each artist's two best-known albums and work out your axes from the sound. At least " ~ asgari_sanatci ~ ", ideally 20–40 artists.") }}</p>
+    <form method="post" action="/api/aktar/liste" class="liste-formu">
+      <textarea name="liste" rows="10" required spellcheck="false"
+                placeholder="{{ t('Tool\nCasiopea\nDuman\nKendrick Lamar\nPlini — Impulse Voices', 'Tool\nCasiopea\nDuman\nKendrick Lamar\nPlini — Impulse Voices') }}">{{ liste_metni }}</textarea>
+      <button class="birincil" type="submit">
+        {% if aktarim %}{{ t("Aktarımı yeniden başlat", "Restart the import") }}{% else %}{{ t("Önerilerimi hazırla", "Build my recommendations") }}{% endif %}
+      </button>
+    </form>
+  </div>
+
+  </details>
+  {% else %}
   <article class="adim">
     <h2>{{ t("Sevdiğin sanatçıları yaz", "List the artists you love") }} <span class="rozet yesil">{{ t("Spotify gerekmez", "no Spotify needed") }}</span></h2>
     <p>{{ t("Satır başına bir sanatçı; istersen «Sanatçı — Albüm» diye albüm de yazabilirsin. Her sanatçının en bilinen iki albümünü dinleyip eksenlerini sesten çıkarırım. En az " ~ asgari_sanatci ~ ", ideali 20–40 sanatçı.",
@@ -73,6 +93,8 @@
       </button>
     </form>
   </article>
+
+  {% endif %}
 
   {% if spotify_hazir and not spotify_bagli %}
   <article class="adim">

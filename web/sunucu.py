@@ -1709,6 +1709,20 @@ async def spotify_baslat(istek):
     return RedirectResponse(url, status_code=302)
 
 
+def _spotify_aktarimini_baslat(kullanici_id: int) -> None:
+    """Spotify bağlanan ve henüz önerisi olmayan kullanıcı için aktarımı
+    KENDİLİĞİNDEN başlat. Spotify geçmişi elimizdeyken kullanıcıya sanatçı
+    listesi sormanın ya da ayrıca "aktar" düğmesine bastırmanın anlamı yok
+    (kullanıcı geri bildirimi, 2026-09-28)."""
+    conn = baglan_kullanici(kullanici_id)
+    try:
+        aday = conn.execute("SELECT COUNT(*) FROM adaylar").fetchone()[0]
+    finally:
+        conn.close()
+    if not aday:
+        _aktarim_baslat(kullanici_id)
+
+
 async def spotify_donus(istek):
     """Spotify'dan dönüş — hesabı bul, bağla ya da aç, oturumu başlat.
 
@@ -1763,6 +1777,7 @@ async def spotify_donus(istek):
                 return RedirectResponse("/basla?hata=spotify_baskasinda",
                                         status_code=303)
             spotify_bagla(conn, mevcut, kimlik["spotify_id"], yenile)
+            _spotify_aktarimini_baslat(mevcut)
             return RedirectResponse("/basla?spotify=bagli", status_code=303)
 
         kullanici = kullanici_bul(conn, spotify_id=kimlik["spotify_id"])   # 2
@@ -1776,7 +1791,7 @@ async def spotify_donus(istek):
             kullanici_id = kullanici["kullanici_id"]
             if yenile:
                 spotify_bagla(conn, kullanici_id, kimlik["spotify_id"], yenile)
-            hedef = "/oneriler"
+            hedef = "/kesfet"
         else:                                                              # 4
             if kullanici_sayisi(conn) >= AZAMI_KULLANICI:
                 return RedirectResponse("/giris?hata=dolu", status_code=303)
@@ -1787,6 +1802,7 @@ async def spotify_donus(istek):
         jeton = oturum_ac(conn, kullanici_id)
     finally:
         conn.close()
+    _spotify_aktarimini_baslat(kullanici_id)
     return _cerez_koy(RedirectResponse(hedef, status_code=303), jeton)
 
 
@@ -1838,7 +1854,9 @@ def _basla_yaniti(istek, *, hata: str | None = None, liste_metni: str = "",
             (kullanici_id,)).fetchone()
     finally:
         conn.close()
-    if aday and not calisiyor:
+    # Keşfet çalışma (kümeleme) ister; yalnız aday sayısına bakılırsa aday
+    # olup çalışması olmayan hesap /basla ↔ /kesfet arasında döngüye giriyordu.
+    if aday and not calisiyor and _son_calisma():
         return RedirectResponse("/kesfet", status_code=303)
 
     # Durum dosyası "çalışıyor" diyor ama süreç yok: öldürülmüş ya da çökmüş.
