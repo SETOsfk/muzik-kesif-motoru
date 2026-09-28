@@ -56,3 +56,68 @@ def test_rapor_secileni_yazar():
     a = A(8, 1.4, 5, 0.3, 0.1, 1, 0.8, 20, gecerli=True, secildi=True)
     metin = arama.rapor([a], a, 100)
     assert "**seçildi**" in metin and "degerlendirme" in metin
+
+
+def test_spektral_gomme_bloklari_ayirir():
+    from python.kumeleme.boyut_indirgeme import spektral_gomme
+    # İki blok: içi benzer, arası benzemez.
+    S = np.zeros((20, 20))
+    S[:10, :10] = 0.9
+    S[10:, 10:] = 0.9
+    X = spektral_gomme(S, 2, komsu=5)
+    a, b = X[:10].mean(axis=0), X[10:].mean(axis=0)
+    assert np.linalg.norm(a - b) > 1.0                      # birim çember üstünde uzak
+    assert np.allclose(np.linalg.norm(X, axis=1), 1.0)
+
+
+def test_ortak_atama_tutarli_ciftleri_bir_yapar():
+    a1 = np.array([0, 0, 1, 1])
+    a2 = np.array([1, 1, 0, 0])                             # etiket değişse de aynı bölme
+    a3 = np.array([0, 1, 1, 1])
+    C = arama.ortak_atama([a1, a2, a3])
+    assert C[0, 1] == 2 / 3 and C[2, 3] == 1.0 and C[0, 3] == 0.0
+
+
+def test_uc_yontem_de_yarisir_ve_uzay_saklanir():
+    X, _ = _yapili_matris()
+    uzaylar = {}
+    # Konsensüs c başına ≥ 3 pca koşusu ister: 2 boyut × 2 m = 4.
+    adaylar, secilen = arama.ara(X, VARSAYILAN.ile(c_araligi=(2, 4)), bilesenler=(3, 5),
+                                 m_degerleri=(1.3, 1.4), yaz=lambda *a: None, uzaylar=uzaylar)
+    assert {a.yontem for a in adaylar} == {"pca", "spektral", "konsensus"}
+    assert secilen.c == 3 and secilen.uzay in uzaylar
+
+
+def test_goreli_tolerans_kaba_bolmeyi_esit_saymaz():
+    """Siluetler küçükken mutlak tolerans kaba bölmeyi «eşit iyi» sayıyordu."""
+    A = arama.Aday
+    adaylar = [A(8, 1.4, 6, 0.071, 0.1, 1, 0.8, 30, gecerli=True),
+               A(5, 1.6, 9, 0.055, 0.1, 1, 0.8, 12, gecerli=True)]
+    assert arama.sec(adaylar).c == 6
+
+
+def test_secileni_yaz_yeni_calisma_kurar(tmp_path, monkeypatch):
+    import python.db as D
+
+    monkeypatch.setattr(D, "KULLANICI_KOK", tmp_path / "kullanici")
+    monkeypatch.setattr(D, "VARSAYILAN_ORTAK", tmp_path / "ortak.sqlite")
+    X, _ = _yapili_matris()
+    db = D.kullanici_db(1)
+    conn = D.baglan_kullanici(1)
+    with conn:
+        for a in X.index:
+            conn.execute("INSERT INTO albums (album_id, artist, title) VALUES (?,?,?)", (a, a, a))
+    conn.close()
+    uzaylar = {}
+    _, secilen = arama.ara(X, VARSAYILAN.ile(c_araligi=(2, 4)), bilesenler=(3,),
+                           m_degerleri=(1.4,), yontemler=("spektral",), yaz=lambda *a: None,
+                           uzaylar=uzaylar)
+    calisma = arama.secileni_yaz(db, X, secilen, uzaylar[secilen.uzay],
+                                 VARSAYILAN.ile(bootstrap=5))
+    conn = D.baglan_kullanici(1)
+    try:
+        assert "spektral" in calisma
+        assert conn.execute("SELECT COUNT(*) FROM clusters WHERE calisma_id = ?", (calisma,)).fetchone()[0] == 3
+        assert conn.execute("SELECT COUNT(*) FROM memberships WHERE calisma_id = ?", (calisma,)).fetchone()[0] == 3 * len(X)
+    finally:
+        conn.close()

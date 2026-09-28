@@ -143,3 +143,38 @@ def boyut_indir(matris: pd.DataFrame, ayar) -> IndirgemeSonuc:
         azami_bilesen=ayar.bilesen,
         asgari_bilesen=ayar.asgari_bilesen,
     )
+
+
+def spektral_gomme(S: np.ndarray, bilesen: int, *, komsu: int | None = None) -> np.ndarray:
+    """Benzerlik matrisinden spektral gömme (Ng–Jordan–Weiss).
+
+    PCA'ya ALTERNATİF (2026-09-28, yöntem notundaki soru 1): matris %1,4 dolu
+    ve çoğu ikili; PCA varyansı en büyük yönleri arıyor, oysa burada soru
+    «hangi albümler birbirine benziyor». Grafik tabanlı gömme doğrudan buna
+    bakıyor: kNN benzerlik grafının normalleştirilmiş Laplace'ının en küçük
+    `bilesen` özvektörü, satırlar birim uzunluğa ölçeklenir.
+
+    `komsu` verilirse her albüm yalnız en benzer `komsu` albüme bağlanır
+    (simetrik: biri ötekinin komşusuysa bağ var). Hiç bağı olmayan albüm
+    çok küçük bir taban benzerlikle grafa tutturulur; yoksa sıfır satır
+    ölçeklenemezdi.
+    """
+    S = np.array(S, dtype=float, copy=True)
+    n = S.shape[0]
+    np.fill_diagonal(S, 0.0)
+    S = np.clip(S, 0.0, None)
+    if komsu is not None and komsu < n - 1:
+        esik = -np.sort(-S, axis=1)[:, komsu - 1:komsu]
+        S = np.where(S >= esik, S, 0.0)
+        S = np.maximum(S, S.T)
+    S += 1e-4 * (1.0 - np.eye(n))
+    d = S.sum(axis=1)
+    Dm = 1.0 / np.sqrt(d)
+    L = np.eye(n) - (Dm[:, None] * S * Dm[None, :])
+    _, vektor = np.linalg.eigh(L)
+    X = vektor[:, :bilesen].copy()
+    for j in range(X.shape[1]):               # işaret belirsizliğini sabitle (K2)
+        if X[np.argmax(np.abs(X[:, j])), j] < 0:
+            X[:, j] *= -1
+    norm = np.linalg.norm(X, axis=1, keepdims=True)
+    return X / np.maximum(norm, 1e-12)
