@@ -2711,3 +2711,24 @@ Mac'te, Seto'nun kütüphanesinde (302 albüm × 1319 öznitelik, 935 kalabalık
   ilk deneme yer tutucu kimlikle koşuldu ve boş eksen haritasıyla rastgeleye
   yakın sonuç verdi (eksen kapsamı 0/147). `degerlendirme` artık bilinmeyen
   kimlikte duruyor.
+
+## 2026-09-28 (17) — K19 kıyası: eski PCA çalışması ↔ yeni spektral çalışma
+
+Aynı havuzlar (liste 2276, ses 2540, melez 3063), aynı 147 gizleme, eksen kapsamı
+146/147 her ikisinde de.
+
+| erişim | @50 eski → yeni | MRR eski → yeni | yüzdelik eski → yeni (küçük iyi) |
+|---|---|---|---|
+| liste birlikteliği | 0,07 → **0,15** | 0,008 → **0,013** | 0,121 → **0,094** |
+| ses benzerliği | **0,05** → 0,02 | **0,005** → 0,003 | **0,076** → 0,094 |
+| melez | 0,08 → 0,08 | **0,019** → 0,017 | 0,118 → **0,105** |
+
+Okuma: liste yolu belirgin iyileşti (@50'de ~10 → ~22 sanatçı); ses yolu
+kötüleşti (~7 → ~3); melez @50'de aynı, medyan sırada daha iyi. Beklenen bir
+takas: spektral tarzlar kalabalıkla (kalabalık uyumu 2,05) daha çok, sesle
+daha az örtüşüyor. n = 147 küçük; farklar yön göstergesi, kesin değil.
+
+**Karar: spektral çalışma etkin kalır.** Gerekçe: liste yolu destedeki en
+güçlü kaynak ve kazanç büyük; melezin medyan sırası iyileşti; ses kaybı mutlak
+olarak küçük. Destede kaynak payını zaten gerçek kararlar belirliyor (K21,
+Thompson) — ses yolu kötüleştiyse daha az kart alacak.

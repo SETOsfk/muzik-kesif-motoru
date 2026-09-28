@@ -514,9 +514,10 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
--1. Yeni spektral çalışmanın K19 ölçümü: `python -m python.degerlendirme
-   --calisma 20260928T190536-c12-m1.4-spektral12`; eski çalışmanın sayıları
-   karar günlüğü (16)'da. Kötüyse spektral c=11 (en zayıf Jaccard 0,84) denenir.
+-1. Spektral çalışma ölçüldü ve etkin (karar günlüğü (17)): liste yolu belirgin
+   iyi, ses yolu kötü, melez karışık. Açık soru: ses yolunun kaybı eksen
+   tanımından mı (tarzlar artık kalabalığa yakın) — gerekirse melez ağırlığını
+   (`--melez-agirlik`) yeni çalışmada yeniden ölç.
 0. Yayını aç ve §6 denetim listesini gerçek cihazda yürüt. Sonra liste yolunun
    isabetini ilk kullanıcıların kararlarıyla ölç (ölçülmedi — karar günlüğü 2026-09-28).
 1. Kaydırarak karar biriktir: kaynak payı (K21) ve geri bildirim tavanı
