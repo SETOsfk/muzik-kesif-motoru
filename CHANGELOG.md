@@ -4,6 +4,7 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- «Senin müziğin» yeniden tasarlandı: kapak mozaiği, renkli tarz kartları, dönem histogramı, rafın yıldızları.
 - Kümeleme araması üç yöntemi yarıştırıyor: PCA, spektral gömme, konsensüs; seçim kuralında göreli tolerans.
 - Bütün grafikler tek dilde: tarayıcıda, kartın gerçek genişliğinde (Chart.js); yazı ve çizgi her yerde aynı.
 - Pano: ses imzası (radar), beğeni oranı seyri, kararlar halkası, tablo görünümü.

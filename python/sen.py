@@ -56,6 +56,8 @@ def _eksenler(conn: sqlite3.Connection, calisma_id: str | None) -> list[dict]:
     for kume, uyelik, sanatci in en_iyi.values():
         gruplar.setdefault(kume, []).append((uyelik, sanatci))
     toplam = max(1, len(en_iyi))
+    # Renk sırası panoyla aynı: TÜM tarzlar büyüklüğe göre (web/grafik.py:tarz_rengi).
+    renk = {k: i for i, k in enumerate(sorted(gruplar, key=lambda k: -len(gruplar[k])))}
     sonuc = []
     for kume, albumler in gruplar.items():
         if len(albumler) < EKSEN_ASGARI_ALBUM:
@@ -67,7 +69,8 @@ def _eksenler(conn: sqlite3.Connection, calisma_id: str | None) -> list[dict]:
             if len(sanatcilar) == 3:
                 break
         sonuc.append({"kume": kume, "ad": adlar.get(kume) or "", "album": len(albumler),
-                      "pay": len(albumler) / toplam, "sanatcilar": sanatcilar})
+                      "pay": len(albumler) / toplam, "sanatcilar": sanatcilar,
+                      "renk": renk[kume]})
     return sorted(sonuc, key=lambda e: -e["album"])
 
 
@@ -79,7 +82,8 @@ def _donem(conn: sqlite3.Connection) -> dict | None:
     onyil = Counter(y // 10 * 10 for y in yillar)
     en, adet = onyil.most_common(1)[0]
     return {"onyil": en, "pay": adet / len(yillar), "en_eski": min(yillar),
-            "en_yeni": max(yillar)}
+            "en_yeni": max(yillar),
+            "dagilim": [(o, onyil.get(o, 0)) for o in range(min(onyil), max(onyil) + 10, 10)]}
 
 
 def _turler(conn: sqlite3.Connection) -> list[dict]:
@@ -93,10 +97,12 @@ def _turler(conn: sqlite3.Connection) -> list[dict]:
             if n / etiketli >= TUR_ASGARI_PAY]
 
 
-def _sanatcilar(conn: sqlite3.Connection, adet: int = 5) -> list[dict]:
-    return [{"ad": r[0], "album": int(r[1])} for r in conn.execute(
-        """SELECT artist, COUNT(*) n FROM albums GROUP BY artist
-           HAVING n >= 2 ORDER BY n DESC, artist LIMIT ?""", (adet,))]
+def _sanatcilar(conn: sqlite3.Connection, adet: int = 8) -> list[dict]:
+    """En çok albümü olan sanatçılar + raf için birer albüm (kapak)."""
+    return [{"ad": r[0], "album": int(r[1]), "album_id": r[2], "baslik": r[3]}
+            for r in conn.execute(
+                """SELECT artist, COUNT(*) n, MIN(album_id), MIN(title) FROM albums
+                    GROUP BY artist HAVING n >= 2 ORDER BY n DESC, artist LIMIT ?""", (adet,))]
 
 
 def _kesif(conn: sqlite3.Connection) -> dict | None:
@@ -124,6 +130,36 @@ def _tablo_var(conn: sqlite3.Connection, ad: str) -> bool:
         return False
 
 
+def _vitrin(conn: sqlite3.Connection, calisma_id: str | None, adet: int = 9) -> list[dict]:
+    """Kapak mozaiği: tarzların en yüksek üyelikli albümleri, sırayla birer
+    birer (her tarzdan), sanatçı tekrarı yok. Tarz yoksa rastgele değil,
+    en çok albümü olan sanatçılardan."""
+    satirlar = []
+    if calisma_id:
+        satirlar = conn.execute(
+            """SELECT m.kume_id, a.album_id, a.artist, a.title FROM memberships m
+                 JOIN albums a USING (album_id) WHERE m.calisma_id = ?
+                ORDER BY m.uyelik DESC""", (calisma_id,)).fetchall()
+    if not satirlar:
+        satirlar = conn.execute(
+            "SELECT 0, album_id, artist, title FROM albums ORDER BY artist, year").fetchall()
+    kuyruk: dict[int, list] = {}
+    for r in satirlar:
+        kuyruk.setdefault(int(r[0]), []).append(r)
+    secilen, gorulen = [], set()
+    while len(secilen) < adet and any(kuyruk.values()):
+        for k in list(kuyruk):
+            while kuyruk[k]:
+                r = kuyruk[k].pop(0)
+                if r[2] not in gorulen:
+                    gorulen.add(r[2])
+                    secilen.append({"album_id": r[1], "artist": r[2], "title": r[3]})
+                    break
+            if len(secilen) >= adet:
+                break
+    return secilen
+
+
 def portre(conn: sqlite3.Connection, calisma_id: str | None) -> dict:
     """Sayılar ve adlar — cümleler gösterimde (`ozet_cumlesi`, şablon)."""
     return {
@@ -133,6 +169,7 @@ def portre(conn: sqlite3.Connection, calisma_id: str | None) -> dict:
         "turler": _turler(conn),
         "sanatcilar": _sanatcilar(conn),
         "kesif": _kesif(conn),
+        "vitrin": _vitrin(conn, calisma_id),
     }
 
 

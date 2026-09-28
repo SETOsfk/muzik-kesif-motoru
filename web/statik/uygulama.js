@@ -364,3 +364,26 @@ document.addEventListener('click', async (olay) => {
   const m = location.hash.match(/^#tarz-(\d+)$/);
   if (m) sec(m[1]);
 })();
+
+/* Kütüphane kapakları («Senin müziğin»): `data-kapak-yukle="<album_id>"`
+ * taşıyan kutu görünür olunca `/api/medya/<id>` sorulur (ilk seferde Deezer,
+ * sonra tablo). Kapak yoksa üretilmiş yer tutucu kalır. */
+(() => {
+  const kutular = [...document.querySelectorAll('[data-kapak-yukle]')];
+  if (!kutular.length || !('IntersectionObserver' in window)) return;
+  const gozcu = new IntersectionObserver((girdiler) => {
+    girdiler.forEach(async (g) => {
+      if (!g.isIntersecting) return;
+      gozcu.unobserve(g.target);
+      try {
+        const m = await (await fetch(`/api/medya/${g.target.dataset.kapakYukle}`)).json();
+        if (!m.kapak) return;
+        const img = new Image();
+        img.alt = ''; img.decoding = 'async'; img.dataset.kapak = '';
+        img.onload = () => { g.target.appendChild(img); g.target.classList.add('dolu'); };
+        img.src = m.kapak;
+      } catch (_) { /* yer tutucu kalır */ }
+    });
+  }, { rootMargin: '200px' });
+  kutular.forEach((k) => gozcu.observe(k));
+})();

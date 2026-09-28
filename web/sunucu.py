@@ -2346,6 +2346,12 @@ def api_medya(istek):
                 "SELECT artist, title, parca_id FROM liste WHERE aday_id = ?",
                 (aday_id,)).fetchone()
         if satir is None:
+            # Kullanıcının KENDİ kütüphanesi («Senin müziğin» kapak vitrini).
+            # album_id ile aday_id aynı kimlik uzayında (`metin.album_kimligi`).
+            satir = conn.execute(
+                "SELECT artist, title, NULL AS parca_id FROM albums WHERE album_id = ?",
+                (aday_id,)).fetchone()
+        if satir is None:
             return JSONResponse({"hata": "aday yok"}, status_code=404)
         sonuc = medya_coz(conn, {"aday_id": aday_id, **dict(satir)})
     finally:
@@ -2661,6 +2667,8 @@ SABLONLAR.env.filters["roller_adi"] = roller_adi
 SABLONLAR.env.filters["stem_adi"] = lambda s: __import__("python.profil", fromlist=["stem_adi"]).stem_adi(s)
 SABLONLAR.env.globals["etiket_aciklama"] = etiket_aciklama
 SABLONLAR.env.globals["strateji_adi"] = strateji_adi
+from web.grafik import tarz_rengi  # noqa: E402
+SABLONLAR.env.globals["tarz_rengi"] = tarz_rengi
 
 
 def main(argv: list[str] | None = None) -> int:

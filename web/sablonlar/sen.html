@@ -1,86 +1,123 @@
 {% extends "taban.html" %}
-{% block baslik %}{{ t("Sen", "You") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block baslik %}{{ t("Senin müziğin", "Your music") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
-{# «Sen» — düz dille portre. Grafik ve terim yok; her cümlenin dayanağı
-   python/sen.py belgesinde. #}
-<div class="sen">
-  <header class="sen-bas">
-    <img class="cizim" src="{{ statik('cizim/iki-ay.svg') }}" alt="" width="320" height="200">
-    <p class="etiket-ust">{{ t("sen", "you") }}</p>
-    <h1>{{ t("Senin müziğin", "Your music") }}</h1>
-    {% if ozet %}<p class="sen-ozet">{{ ozet }}</p>{% endif %}
-  </header>
+{# «Senin müziğin» — kitap kapağı dilinde portre (2026-09-28, yeniden tasarım).
+   Kapak: gece mavisi alan, portre cümlesi ve kütüphaneden kapak mozaiği.
+   Renkler panoyla aynı (grafik.tarz_rengi, büyüklük sırası). Her sayının
+   dayanağı python/sen.py'de; grafik ve teknik terim yok (ayrıntı: Sayılarla). #}
+<div class="sen3">
 
-  {% if etiketler %}
-  <ul class="sen-etiketler" aria-label="{{ t('Seni anlatan sözcükler', 'Words that describe you') }}">
-    {% for e in etiketler %}<li><a href="{{ e.adres }}">{{ e.ad }}</a></li>{% endfor %}
-  </ul>
+  <section class="sen3-kapak">
+    <div class="sen3-kapak-yazi">
+      <p class="sen3-ust">{{ t("senin müziğin", "your music") }} · {{ p.album }} {{ t("albüm", "albums") }}</p>
+      <h1>{{ ozet or t("Müziğin burada anlatılacak.", "Your music will be described here.") }}</h1>
+      {% if etiketler %}
+      <ul class="sen3-rozetler" aria-label="{{ t('Seni anlatan sözcükler', 'Words that describe you') }}">
+        {% for e in etiketler %}<li><a href="{{ e.adres }}">{{ e.ad }}</a></li>{% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% if p.vitrin %}
+    <div class="sen3-mozaik" aria-hidden="true">
+      {% for a in p.vitrin %}
+      <span class="sen3-plak" data-kapak-yukle="{{ a.album_id }}" title="{{ a.artist }} — {{ a.title }}">{{ yer_tutucu(a.artist, a.title) }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <i class="sen3-ay" aria-hidden="true"></i><i class="sen3-ay kucuk" aria-hidden="true"></i>
+  </section>
+
+  {% if p.eksenler %}
+  <section class="sen3-bolum">
+    <header class="sen3-bas">
+      <h2>{{ t("Tarzların", "Your styles") }}</h2>
+      <a href="/tarzlar">✎ {{ t("adlandır", "rename") }}</a>
+    </header>
+    <div class="sen3-serit" role="img" aria-label="{{ t('Kütüphanenin tarzlara bölünüşü', 'How your library splits into styles') }}">
+      {% for e in p.eksenler %}
+      <span style="flex: {{ e.album }}; background: {{ tarz_rengi(e.renk) }}" title="{{ eksen_adi(e) }} · {{ yuzde(e.pay) }}"></span>
+      {% endfor %}
+    </div>
+    <div class="sen3-tarzlar">
+      {% for e in p.eksenler %}
+      <a class="sen3-tarz" href="/kesfet?eksen={{ e.kume }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}" style="--renk: {{ tarz_rengi(e.renk) }}">
+        <span class="sen3-tarz-pay">{{ yuzde(e.pay) }}</span>
+        <b>{{ eksen_adi(e) }}</b>
+        {% if e.ad %}<small>{{ e.sanatcilar|join(" · ") }}</small>{% endif %}
+        <span class="sen3-tarz-git">{{ t("Bu tarzda keşfet →", "Discover in this style →") }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
   {% endif %}
 
-  <div class="sen-izgara">
-    {% if p.eksenler %}
-    <section class="adim">
-      <h2>{{ t("Tarzların", "Your styles") }} <a class="sen-duzenle" href="/tarzlar">✎ {{ t("adlandır", "name") }}</a></h2>
-      <ol class="sen-liste">
-        {% for e in p.eksenler %}
-        <li><a href="/kesfet?eksen={{ e.kume }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">{{ eksen_adi(e) }}</a>
-            <span>{{ yuzde(e.pay) }}</span></li>
-        {% endfor %}
-      </ol>
-      <p class="sen-not">{{ t("Birine dokun, o tarzda keşfe çık.", "Tap one to discover within that style.") }}</p>
-    </section>
-    {% endif %}
-
+  <div class="sen3-ikili">
     {% if p.donem %}
-    <section class="adim" id="donem">
+    <section class="sen3-bolum sen3-kart" id="donem">
       <h2>{{ t("Dönemin", "Your era") }}</h2>
-      <p class="sen-buyuk">{{ onyil_adi(p.donem.onyil) }}</p>
-      {# Sayıya ek getirmeyen kuruluş: "%41'i", "2020'ye" gibi ekler sayıya göre değişiyor. #}
-      <p>{{ t("Albümlerin arasında en kalabalık on yıl bu: " ~ yuzde(p.donem.pay) ~ ".",
+      <p class="sen3-dev">{{ onyil_adi(p.donem.onyil) }}</p>
+      <p>{{ t("Albümlerinin arasında en kalabalık on yıl: " ~ yuzde(p.donem.pay) ~ ".",
               "The busiest decade in your library: " ~ yuzde(p.donem.pay) ~ " of your albums.") }}</p>
-      <p class="sen-not">{{ t("En eski albüm: " ~ p.donem.en_eski ~ " · en yeni: " ~ p.donem.en_yeni,
-                              "Oldest: " ~ p.donem.en_eski ~ " · newest: " ~ p.donem.en_yeni) }}</p>
+      {% set en = p.donem.dagilim|map(attribute=1)|max %}
+      <div class="sen3-onyillar" aria-hidden="true">
+        {% for o, n in p.donem.dagilim %}
+        <div class="{{ 'tepe' if o == p.donem.onyil }}" title="{{ onyil_adi(o) }}: {{ n }}">
+          <i style="height: {{ (n / en * 100)|round(1) if en else 0 }}%"></i><span>{{ "%02d"|format(o % 100) }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="sen3-not">{{ t("En eski albüm " ~ p.donem.en_eski ~ ", en yeni " ~ p.donem.en_yeni ~ ".",
+                              "Oldest " ~ p.donem.en_eski ~ ", newest " ~ p.donem.en_yeni ~ ".") }}</p>
     </section>
     {% endif %}
 
     {% if p.turler %}
-    <section class="adim">
+    <section class="sen3-bolum sen3-kart">
       <h2>{{ t("Türlerin", "Your genres") }}</h2>
-      <ol class="sen-liste">
-        {% for x in p.turler %}<li><a href="/etiketler?etiket={{ x.etiket|urlencode }}">{{ x.etiket }}</a><span>{{ yuzde(x.pay) }}</span></li>{% endfor %}
-      </ol>
-    </section>
-    {% endif %}
-
-    {% if p.sanatcilar %}
-    <section class="adim">
-      <h2>{{ t("En çok albümün olanlar", "Most albums from") }}</h2>
-      <ol class="sen-liste">
-        {% for s in p.sanatcilar %}<li>{{ s.ad }}<span>{{ s.album }} {{ t("albüm", "albums") }}</span></li>{% endfor %}
-      </ol>
-    </section>
-    {% endif %}
-
-    {% if p.kesif %}
-    <section class="adim">
-      <h2>{{ t("Keşif tarzın", "How you discover") }}</h2>
-      <p class="sen-buyuk">{{ p.kesif.sanatci }} {{ t("sanatçı", "artists") }}</p>
-      <p>{{ t("Listene eklediğin: " ~ p.kesif.begendim ~ " · geçtiğin: " ~ p.kesif.tutmadi ~ " · zaten bildiğin: " ~ p.kesif.biliyorum,
-              "You saved " ~ p.kesif.begendim ~ ", passed on " ~ p.kesif.tutmadi ~ " and already knew " ~ p.kesif.biliyorum ~ ".") }}</p>
-      <p><a href="/ogrenme">{{ t("Hangi öneriler tuttu? →", "Which picks worked? →") }}</a></p>
-      {% if p.kesif.liste %}<p><a href="/listem">{{ t("Listende bekleyen albüm: " ~ p.kesif.liste ~ " →", p.kesif.liste ~ " albums waiting in your list →") }}</a></p>{% endif %}
-    </section>
-    {% else %}
-    <section class="adim">
-      <h2>{{ t("Keşif tarzın", "How you discover") }}</h2>
-      <p>{{ t("Keşfet'te kaydırdıkça burası dolacak.", "This fills up as you swipe in Discover.") }}</p>
-      <p><a href="/kesfet">{{ t("Kaydırmaya başla →", "Start swiping →") }}</a></p>
+      {% set ust = p.turler|map(attribute="pay")|max %}
+      <ul class="sen3-bulut">
+        {% for x in p.turler %}
+        <li><a href="/etiketler?etiket={{ x.etiket|urlencode }}" style="font-size: {{ (1 + 1.1 * x.pay / ust)|round(2) }}rem">{{ x.etiket }}</a><small>{{ yuzde(x.pay) }}</small></li>
+        {% endfor %}
+      </ul>
+      <p class="sen3-not">{{ t("Albümlerinin MusicBrainz etiketlerinden.", "From your albums' MusicBrainz tags.") }}</p>
     </section>
     {% endif %}
   </div>
 
-  <p class="sen-dipnot">{{ t("Kaynak: kütüphanendeki albümler (" ~ p.album ~ ") ve kaydırma kararların.",
-                             "Built from the " ~ p.album ~ " albums in your library and your decisions.") }}
-    <a href="/istatistik">{{ t("Arkasındaki sayılar ve grafikler →", "The numbers and charts behind it →") }}</a></p>
+  {% if p.sanatcilar %}
+  <section class="sen3-bolum">
+    <header class="sen3-bas"><h2>{{ t("Rafının yıldızları", "The stars of your shelf") }}</h2></header>
+    <ul class="sen3-raf">
+      {% for s in p.sanatcilar %}
+      <li>
+        <span class="sen3-plak" data-kapak-yukle="{{ s.album_id }}">{{ yer_tutucu(s.ad, s.baslik) }}</span>
+        <b>{{ s.ad }}</b><small>{{ s.album }} {{ t("albüm", "albums") }}</small>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="sen3-bolum sen3-kart sen3-kesif">
+    <h2>{{ t("Keşif tarzın", "How you discover") }}</h2>
+    {% if p.kesif %}
+    {% set k = p.kesif %}
+    <div class="sen3-sayilar">
+      <div><b>{{ k.begendim }}</b><span>{{ t("listene ekledin", "saved") }}</span></div>
+      <div><b>{{ k.tutmadi }}</b><span>{{ t("geçtin", "passed") }}</span></div>
+      <div><b>{{ k.biliyorum }}</b><span>{{ t("zaten biliyordun", "already knew") }}</span></div>
+      <div><b>{{ k.liste }}</b><span>{{ t("listende bekliyor", "waiting in your list") }}</span></div>
+    </div>
+    <div class="sen3-oran" aria-hidden="true">
+      <i class="begen" style="flex: {{ k.begendim }}"></i><i class="gec" style="flex: {{ k.tutmadi }}"></i><i class="bil" style="flex: {{ k.biliyorum }}"></i>
+    </div>
+    <p class="sen3-eylem"><a class="dugme birincil" href="/kesfet">{{ t("Kaydırmaya devam →", "Keep swiping →") }}</a>
+      <a class="dugme" href="/istatistik">{{ t("Sayılarla sen →", "You in numbers →") }}</a></p>
+    {% else %}
+    <p>{{ t("Keşfet'te kaydırdıkça burası dolacak.", "This fills up as you swipe in Discover.") }}</p>
+    <p class="sen3-eylem"><a class="dugme birincil" href="/kesfet">{{ t("Kaydırmaya başla →", "Start swiping →") }}</a></p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
