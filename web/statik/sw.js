@@ -11,7 +11,8 @@
 // telefon uygulama.js/stil.css'in eski hâlinde sonsuza dek kalıyordu
 // (2026-09-21'de aktarım ekranı ve eşleştirme denetimi eklenince fark edildi).
 // v3 (2026-09-23): tema sistemi, Keşfet destesi (`kesfet.js`) kabuğa girdi.
-const SURUM = "kesif-v3";
+// v4 (2026-09-28): İKİ AY teması; eski yazı dosyaları önbellekten silinsin.
+const SURUM = "kesif-v4";
 const KABUK = [
   "/statik/stil.css",
   "/statik/uygulama.js",

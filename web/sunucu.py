@@ -71,7 +71,7 @@ from python import kesif
 from python.dil import (
     AKTIF_DIL, DIL_CEREZI, DILLER, dil as etkin_dil, istekten_dil, sayi as dil_sayi, t, yuzde,
 )
-from web.yer_tutucu import yer_tutucu_svg
+from web.yer_tutucu import kapak_sirasi, yer_tutucu_svg
 
 KOK = Path(__file__).resolve().parent
 # Starlette 1.3 imzası: TemplateResponse(request, ad, bağlam). Eski
@@ -2163,6 +2163,7 @@ def api_deste(istek):
         conn.close()
     for kart in sonuc["kartlar"]:
         kart["yer_tutucu"] = str(yer_tutucu_svg(kart["artist"], kart["title"]))
+        kart["kapak_renk"] = kapak_sirasi(kart["artist"])
     sonuc["calisma_id"] = calisma_id
     return JSONResponse(sonuc)
 

@@ -133,6 +133,8 @@
   function kartOlustur(k) {
     const kart = el('article', 'deste-kart');
     kart.dataset.aday = k.aday_id;
+    // Kapak rengi sanatçıdan (sunucu, `kapak_sirasi`); renkler stil.css'te.
+    if (Number.isInteger(k.kapak_renk)) kart.dataset.kapak = String(k.kapak_renk);
     kart.setAttribute('aria-label', `${k.artist} — ${k.title}`);
 
     const gorsel = el('div', 'dk-gorsel');

@@ -1,8 +1,8 @@
 {% extends "kabuk.html" %}
 {% block baslik %}{{ t("Gizlilik", "Privacy") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
-<div class="kapi hud metin-sayfa">
-  <div class="kapi-marka"><span class="logo">◈</span><b>KEŞİF</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
+<div class="kapi metin-sayfa">
+  <div class="kapi-marka"><span class="logo" aria-hidden="true"></span><b>Keşif</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
   <h1>{{ t("Gizlilik", "Privacy") }}</h1>
   <p class="kapi-alt">{{ t("Kısa ve eksiksiz: neyi saklıyoruz, kime ne gidiyor, nasıl silinir.",
                            "Short and complete: what we keep, what goes where, how to delete it.") }}</p>

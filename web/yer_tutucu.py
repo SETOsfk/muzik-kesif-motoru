@@ -8,15 +8,16 @@ Türk rock). Hepsine aynı gri kutuyu koymak kartları birbirinin kopyası yapı
 ve kullanıcı arka arkaya gelen iki kartı ayırt edemiyor.
 
 Burada kapak SANATÇI ADINDAN türüyor: aynı sanatçı her yerde aynı kapağı alır
-(deste, Listem, Öneriler), farklı sanatçılar farklı. Motif müzikten: bir dalga
-formu (çubuk yükseklikleri addan) ve plak halkaları.
+(deste, Listem, Öneriler), farklı sanatçılar farklı. İKİ AY temasında
+(2026-09-28) kapak bir kitap kapağı gibi: düz renk alanı, ortada tek bir
+nesne — ay ve ufuk, ufuktan doğan plak, kuyu, tarlada bir kapı.
 
 ## Tema uyumu
 
-SVG satır içi (inline) basılıyor ve renkleri `style="…var(--vurgu)…"` ile
+SVG satır içi (inline) basılıyor ve renkleri `style="…var(--kapak-N)…"` ile
 CSS değişkenlerinden alıyor — `<img>` olarak yüklenseydi sayfanın
-değişkenlerini göremezdi. Böylece Neon'da macenta/camgöbeği, Kâğıt'ta
-mürekkep kırmızısı çıkar; tema değişince kapak da değişir.
+değişkenlerini göremezdi. Renk sayısı stil.css'teki `--kapak-N` tokenlarıyla
+aynı (`KAPAK_SAYISI`); biri değişirse öteki de.
 """
 
 from __future__ import annotations
@@ -27,21 +28,32 @@ import itertools
 
 from markupsafe import Markup
 
-#: Renk çiftleri — tema değişkenleri. Addan biri seçilir.
-_CIFTLER = (
-    ("--vurgu", "--ikincil"),
-    ("--mor", "--vurgu"),
-    ("--ikincil", "--yesil"),
-    ("--vurgu-2", "--mor"),
-    ("--yesil", "--ikincil"),
-)
+#: stil.css'teki `--kapak-0` … `--kapak-8`.
+KAPAK_SAYISI = 9
+#: Koyu zeminler (açık yazı) ve açık zeminler (koyu yazı) — stil.css ile aynı.
+_KOYU = (0, 1, 6, 7)
+_ACIK = (2, 3, 4, 5, 8)
 
-
-#: Gradyan kimlikleri sayfada BENZERSİZ olmalı. Aynı sanatçının kapağı bir
-#: sayfada birden çok kez basılabiliyor (Görünüm sayfası altı kez) ve
-#: `url(#id)` belgedeki İLK tanımı kullanıyor: tanım ilk temanın bölümünde
-#: durduğu için altı önizlemenin altısı da ilk temanın renklerini alıyordu.
+#: Clip kimlikleri sayfada BENZERSİZ olmalı. Aynı sanatçının kapağı bir
+#: sayfada birden çok kez basılabiliyor ve `url(#id)` belgedeki İLK tanımı
+#: kullanıyor.
 _SAYAC = itertools.count()
+
+
+def _ozet(sanatci: str) -> bytes:
+    return hashlib.sha1((sanatci or "?").lower().encode("utf-8")).digest()
+
+
+def kapak_sirasi(sanatci: str) -> int:
+    """Sanatçının kapak rengi (0 … KAPAK_SAYISI-1). Destede kartın zemini bu."""
+    return _ozet(sanatci)[0] % KAPAK_SAYISI
+
+
+def _yer_tutucu_sirasi(ozet: bytes) -> int:
+    """Yer tutucunun rengi kartınkinin KARŞIT parlaklığından: kartın içinde
+    kaybolmasın (koyu kartta açık kapak, açık kartta koyu kapak)."""
+    grup = _ACIK if ozet[0] % KAPAK_SAYISI in _KOYU else _KOYU
+    return grup[ozet[5] % len(grup)]
 
 
 def _bas_harfler(ad: str) -> str:
@@ -53,49 +65,50 @@ def _bas_harfler(ad: str) -> str:
     return (parcalar[0][0] + parcalar[1][0]).upper()
 
 
+def _nesne(motif: int, ozet: bytes, clip: str) -> str:
+    """Kapaktaki tek nesne. Renkler: `m` yazı rengi, `a` vurgu (koyu zeminde
+    ay sarısı, açık zeminde kiremit). `clip` ufkun üstünü kesen yol."""
+    x = 150 + ozet[3] % 100
+    y = 160 + ozet[4] % 40
+    if motif == 0:      # ay ve ufuk
+        return (f'<rect y="300" width="400" height="100" style="fill:var(--m);fill-opacity:.14"/>'
+                f'<rect y="299" width="400" height="2" style="fill:var(--m);fill-opacity:.6"/>'
+                f'<circle cx="{x}" cy="{y}" r="78" style="fill:var(--a)"/>'
+                f'<circle cx="{x + 112}" cy="{y - 84}" r="17" style="fill:var(--m);fill-opacity:.55"/>')
+    if motif == 1:      # ufuktan doğan plak
+        oluk = "".join(f'<circle cx="{x}" cy="300" r="{r}"/>' for r in (104, 88, 72, 56))
+        return (f'<g clip-path="url(#yt-{clip})">'
+                f'<circle cx="{x}" cy="300" r="120" style="fill:var(--m)"/>'
+                f'<g style="fill:none;stroke:var(--z);stroke-opacity:.28;stroke-width:1.5">{oluk}</g>'
+                f'<circle cx="{x}" cy="300" r="34" style="fill:var(--a)"/></g>'
+                f'<rect y="299" width="400" height="2" style="fill:var(--m);fill-opacity:.6"/>')
+    if motif == 2:      # kuyu: karanlık ağız, suda ayın yansıması
+        return (f'<circle cx="200" cy="{y + 20}" r="112" style="fill:none;stroke:var(--m);stroke-width:3"/>'
+                f'<circle cx="200" cy="{y + 20}" r="96" style="fill:var(--m)"/>'
+                f'<circle cx="{170 + ozet[6] % 60}" cy="{y}" r="14" style="fill:var(--a)"/>')
+    # tarlada bir kapı
+    return (f'<rect y="320" width="400" height="2" style="fill:var(--m);fill-opacity:.6"/>'
+            f'<rect x="{x - 50}" y="130" width="100" height="190" style="fill:var(--m)"/>'
+            f'<rect x="{x - 38}" y="142" width="76" height="178" style="fill:var(--z);fill-opacity:.18"/>'
+            f'<circle cx="{x + 30}" cy="232" r="6" style="fill:var(--a)"/>'
+            f'<circle cx="{(x + 170) % 330 + 35}" cy="84" r="20" style="fill:var(--a)"/>')
+
+
 def yer_tutucu_svg(sanatci: str, eser: str = "", *, sinif: str = "yer-tutucu") -> Markup:
     """Sanatçıya özgü, temaya uyan kare kapak (inline SVG)."""
-    ozet = hashlib.sha1((sanatci or "?").lower().encode("utf-8")).digest()
-    a, b = _CIFTLER[ozet[0] % len(_CIFTLER)]
-    aci = (ozet[1] % 8) * 45
-    kimlik = f"{ozet.hex()[:8]}-{next(_SAYAC)}"
-
-    # Dalga formu: 28 çubuk, yükseklikler addan. Kenarlara doğru sönümlü —
-    # gerçek bir parçanın zarfı gibi, düz bir çubuk grafik gibi değil.
-    cubuklar = []
-    for i in range(28):
-        bayt = ozet[(i + 2) % len(ozet)] ^ ozet[(i * 7) % len(ozet)]
-        zarf = 1 - abs(i - 13.5) / 16
-        h = 18 + (bayt / 255) * 120 * zarf
-        x = 22 + i * 12.6
-        cubuklar.append(
-            f'<rect x="{x:.1f}" y="{300 - h / 2:.1f}" width="6.4" height="{h:.1f}" rx="3.2"/>'
-        )
-
-    halka_x = 110 + ozet[3] % 180
-    halka_y = 90 + ozet[4] % 70
+    ozet = _ozet(sanatci)
+    renk = _yer_tutucu_sirasi(ozet)
+    aksan = "--ay" if renk in _KOYU else "--vurgu"
+    clip = f"{ozet.hex()[:8]}-{next(_SAYAC)}"
     harfler = html.escape(_bas_harfler(sanatci or ""))
     alt = html.escape(f"{sanatci} — {eser}" if eser else sanatci or "")
 
-    svg = f"""<svg class="{sinif}" viewBox="0 0 400 400" role="img" aria-label="{alt} (kapak bulunamadı)" preserveAspectRatio="xMidYMid slice">
-<defs>
-<linearGradient id="yt-{kimlik}" gradientTransform="rotate({aci} .5 .5)">
-<stop offset="0" style="stop-color:var({a})"/><stop offset="1" style="stop-color:var({b})"/>
-</linearGradient>
-<radialGradient id="yk-{kimlik}" cx=".5" cy=".5" r=".5">
-<stop offset="0" style="stop-color:var(--zemin);stop-opacity:.0"/>
-<stop offset="1" style="stop-color:var(--zemin);stop-opacity:.85"/>
-</radialGradient>
-</defs>
-<rect width="400" height="400" style="fill:var(--zemin-2)"/>
-<rect width="400" height="400" fill="url(#yt-{kimlik})" opacity=".55"/>
-<g style="fill:none;stroke:var(--metin);stroke-opacity:.14">
-<circle cx="{halka_x}" cy="{halka_y}" r="150"/><circle cx="{halka_x}" cy="{halka_y}" r="118"/>
-<circle cx="{halka_x}" cy="{halka_y}" r="86"/><circle cx="{halka_x}" cy="{halka_y}" r="54"/>
-</g>
-<circle cx="{halka_x}" cy="{halka_y}" r="18" style="fill:var(--zemin);fill-opacity:.7"/>
-<rect width="400" height="400" fill="url(#yk-{kimlik})"/>
-<g style="fill:var(--metin);fill-opacity:.82">{''.join(cubuklar)}</g>
-<text x="24" y="376" style="fill:var(--metin);font:700 44px var(--font-baslik);letter-spacing:.02em">{harfler}</text>
-</svg>"""
+    svg = (f'<svg class="{sinif}" viewBox="0 0 400 400" role="img" '
+           f'aria-label="{alt} (kapak bulunamadı)" preserveAspectRatio="xMidYMid slice" '
+           f'style="--z:var(--kapak-{renk});--m:var(--kapak-{renk}-metin);--a:var({aksan})">'
+           f'<defs><clipPath id="yt-{clip}"><rect width="400" height="300"/></clipPath></defs>'
+           f'<rect width="400" height="400" style="fill:var(--z)"/>'
+           f'{_nesne(ozet[2] % 4, ozet, clip)}'
+           f'<text x="30" y="58" style="fill:var(--m);font:500 26px var(--font-etiket);'
+           f'letter-spacing:.14em">{harfler}</text></svg>')
     return Markup(svg)

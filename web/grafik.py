@@ -30,26 +30,27 @@ import html
 import math
 from dataclasses import dataclass
 
-#: stil.css'teki ÇİZİM tokenlarıyla AYNI (SVG sayfanın değişkenlerini `fill`
+#: stil.css'teki İKİ AY tokenlarıyla AYNI (SVG sayfanın değişkenlerini `fill`
 #: özniteliğinde okuyamıyor; bkz. modül başlığı). Biri değişirse öteki de.
 PALET = {
-    "vurgu": "#e2572b",      # --vurgu (eylem)
-    "ikincil": "#3a5a6e",    # --ikincil (ölçüm)
-    "mor": "#6d5a8c",
-    "yesil": "#4a8650",
-    "kirmizi": "#c3402e",
-    "kenar": "#d9d2c6",
-    "izgara": "#ebe5da",
-    "metin": "#1d1b19",
-    "soluk": "#4a4540",
-    "cok_soluk": "#8a837a",
+    "vurgu": "#bb4628",      # --vurgu (eylem)
+    "ikincil": "#2e3a66",    # --ikincil (ölçüm)
+    "mor": "#6a5a86",
+    "yesil": "#3b6b50",
+    "kirmizi": "#973131",
+    "kenar": "#dcd4c6",
+    "izgara": "#eae4d8",
+    "metin": "#20232c",
+    "soluk": "#4d515c",
+    "cok_soluk": "#6c6f7a",
 }
 
-#: Kategorik renkler: krem kâğıt üstünde birbirinden ayrışan suluboya aile.
-#: Sıra, komşu iki grubun benzer ton almayacağı şekilde dizildi.
+#: Kategorik renkler: kitap kâğıdı üstünde ayrışan, soluk baskı mürekkepleri
+#: (kapak paletinin koyulaştırılmış akrabaları). Sıra, komşu iki grubun
+#: benzer ton almayacağı şekilde dizildi.
 KATEGORIK = [
-    "#336b8c", "#cf5a31", "#3d8a4a", "#7b5aa3", "#c98a14", "#b0465f",
-    "#2f8a86", "#8a5a2b", "#5a7d2e", "#a0527f", "#4a5fa8", "#b5732a",
+    "#2e3a66", "#bb4628", "#3b6b50", "#c0902c", "#6a5a86", "#b0646a",
+    "#3f7f86", "#8a5a2b", "#6f8a4a", "#8e4a74", "#5476a8", "#b5732a",
 ]
 
 

@@ -1,9 +1,9 @@
 {% extends "kabuk.html" %}
 {% block baslik %}{{ t("Üye ol", "Sign up") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
-<div class="kapi hud">
-  <img class="cizim" src="{{ statik('cizim/plak.svg') }}" alt="" width="140" height="130">
-  <div class="kapi-marka"><span class="logo">◈</span><b>KEŞİF</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
+<div class="kapi">
+  <img class="cizim" src="{{ statik('cizim/iki-ay.svg') }}" alt="" width="320" height="200">
+  <div class="kapi-marka"><span class="logo" aria-hidden="true"></span><b>Keşif</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
   <h1>{{ t("Hesap aç", "Create an account") }}</h1>
   <p class="kapi-alt">{{ t("Kütüphaneni tanıyacak bir motor için bir hesap.",
                            "One account, and an engine that gets to know your library.") }}</p>
