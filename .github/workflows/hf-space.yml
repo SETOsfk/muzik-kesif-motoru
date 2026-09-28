@@ -1,0 +1,57 @@
+# main'e her gönderimde uygulamayı Hugging Face Space'e yayınla.
+#
+# Gerekenler (GitHub → Settings → Secrets and variables → Actions):
+#   secret   HF_TOKEN   Hugging Face "write" jetonu
+#   variable HF_SPACE   KULLANICI/kesif   (Space'in adı)
+name: Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  yayinla:
+    runs-on: ubuntu-latest
+    if: vars.HF_SPACE != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Space dosyalarını hazırla
+        run: |
+          mkdir -p /tmp/space
+          cp -r Dockerfile .dockerignore requirements-sunucu.txt requirements-aktarim.txt python web /tmp/space/
+          # Space ayarları README başlığında durur; depo README'si Space'e gitmez.
+          cat > /tmp/space/README.md <<'BASLIK'
+          ---
+          title: Keşif Motoru
+          emoji: 🎧
+          colorFrom: pink
+          colorTo: blue
+          sdk: docker
+          app_port: 8800
+          pinned: false
+          short_description: Kütüphanene göre müzik keşfi — kaydır, dinle, bul.
+          ---
+          Kaynak kod: https://github.com/${{ github.repository }}
+          BASLIK
+          sed -i 's/^          //' /tmp/space/README.md
+
+      - name: Yükle
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          pip install -q "huggingface_hub>=0.24"
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["HF_SPACE"]
+          api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
+          api.upload_folder(repo_id=space, repo_type="space", folder_path="/tmp/space",
+                            ignore_patterns=["**/__pycache__/**"],
+                            delete_patterns=["python/**", "web/**"],
+                            commit_message=f"GitHub {os.environ.get('GITHUB_SHA', '')[:7]}")
+          print(f"https://huggingface.co/spaces/{space}")
+          PY

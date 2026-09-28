@@ -1,6 +1,7 @@
 # Keşif Motoru — tek imaj: web sunucusu + aktarım süreci (CLAP, CPU).
 #
-#   docker compose up -d --build        (bkz. docs/yayin.md)
+# Hugging Face Spaces bu dosyayı olduğu gibi derler (bkz. .github/workflows/
+# hf-space.yml). Her ortamda HTTPS vekili ardında: KESIF_HTTPS=1.
 #
 # torch CPU tekerleğiyle kurulur (~200 MB; GPU sürümü ~2 GB ve gereksiz:
 # klip başına ~1 sn). Sunucu süreci torch'u YÜKLEMEZ, yalnız aktarım süreci.
@@ -10,7 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    HF_HOME=/app/data/hf
+    HF_HOME=/app/data/hf \
+    KESIF_HTTPS=1
 
 # libsndfile: librosa'nın MP3 önizlemeyi okuması için.
 RUN apt-get update \

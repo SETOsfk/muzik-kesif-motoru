@@ -2303,8 +2303,16 @@ def _onbellekleri_isit() -> None:
 
 @contextlib.asynccontextmanager
 async def _yasam(uygulama_):
+    import asyncio
+
+    from python import hf_yedek
+
+    # Hugging Face Spaces: disk geçici, veri özel veri deposundan gelir.
+    # Geri yükleme ısıtmadan ÖNCE — ısıtma veritabanını okuyor.
+    await asyncio.to_thread(hf_yedek.acilis)
     threading.Thread(target=_onbellekleri_isit, name="isitma", daemon=True).start()
     yield
+    await asyncio.to_thread(hf_yedek.kapanis)
 
 
 uygulama = Starlette(

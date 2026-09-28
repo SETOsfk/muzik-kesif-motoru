@@ -465,7 +465,7 @@ görünmez bırakıyordu).
 - **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 285 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 288 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.
@@ -480,7 +480,7 @@ görünmez bırakıyordu).
   `1.sqlite`'a 11 boş gölge tablo kurdu; onarıldı, yedek
   `data/db/kullanici/1.sqlite.golge-oncesi-20260923`. `baglan()` artık
   `kullanici/` klasöründeki dosyaya tam şema kurmuyor.
-- **Yayın:** kullanıcı 2026-09-28'de istedi; kod ve paket hazır, sunucu henüz
+- **Yayın (güncel):** Hugging Face Spaces + özel veri deposu yedeği (`python/hf_yedek.py`, `.github/workflows/hf-space.yml`). Eski not: kod ve paket hazır, sunucu henüz
   açılmadı (hesap kullanıcının işi). Yol: Oracle Always Free ARM + `docker compose`
   (`docs/yayin.md`). Veri: `scripts/yayin_paketi.sh` (~50 MB, kişisel veri içerir).
   İmaj derlemesi ve gerçek aktarım bulut oturumunda SINANAMADI (Docker servisi yok,

@@ -2353,3 +2353,24 @@ adreslerine çıkış kapalı. Yayından sonra denetim listesi `docs/yayin.md`.
   yerine formu görüyordu ve ikinci tıklama ikinci süreç açabiliyordu.
 
 285 test geçiyor (271'den).
+
+## 2026-09-28 (2) — Yayın yeri: Hugging Face Spaces
+
+Kullanıcı: "Mac'e yük binmesin; kullanıcı direkt bir linke bassın." Streamlit
+Cloud ve shinyapps.io elendi (yalnız kendi çatılarını çalıştırıyorlar, kalıcı
+disk yok, bellek ~1 GB — CLAP ~2 GB istiyor). Spaces (Docker, ücretsiz
+2 vCPU / 16 GB) mevcut Dockerfile'ı değiştirmeden çalıştırıyor.
+
+Geçici disk sorunu: `python/hf_yedek.py` — veri kullanıcının ÖZEL veri
+deposunda; açılışta boş diske geri yüklenir, 5 dk'da bir yalnız değişen
+dosyalar (SQLite `backup` anlık kopyasıyla) gönderilir, yerelde silinen dosya
+depodan da silinir (hesap silme yedekte geri gelmesin). Kayıp riski: son
+yedekten sonraki birkaç dakika.
+
+Google Drive da düşünüldü (kullanıcının boş alanı var): sunucuya ayrıca Google
+kimlik bilgisi (hizmet hesabı ya da OAuth) kurmak gerekiyor; HF deposu Space'le
+aynı jetonla çalışıyor ve veri ~50 MB. Drive gerekirse elle ek yedek olarak kalır.
+
+Yayın: `.github/workflows/hf-space.yml`, main'e her gönderimde Space'i günceller
+(`HF_SPACE` değişkeni tanımlı değilse çalışmaz). Space `KESIF_HTTPS=1`i
+imajdan alır.
