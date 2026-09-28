@@ -2655,3 +2655,37 @@ Seçenek olarak «kendi küçük çizicimiz» de sunuldu.
   yüzdeliği, 50 = orta — K13), beğeni oranı seyri (kıvılcım, tarih değil karar
   sırası), kararlar halkası. Profil şeritleri ve «Ne tuttu?» aralıkları aynı
   çiziciye taşındı.
+
+## 2026-09-28 (15) — Aramaya iki alternatif yöntem: spektral gömme ve konsensüs
+
+**İstek:** arama Mac'te çalıştı; «bir de böyle deneyelim» → yöntem notundaki
+alternatiflerden eklemek (kullanıcı seçti).
+
+- **spektral:** PCA yerine kosinüs kNN (k=10) benzerlik grafının normalleştirilmiş
+  Laplace'ından Ng–Jordan–Weiss gömmesi (`boyut_indirgeme.spektral_gomme`).
+- **konsensus:** aynı c için bütün PCA koşularının (5 boyut × 4 m) keskin
+  atamalarından ortak-atama matrisi, onun spektral gömmesinde FCM. Sağlamlığı
+  iyimser (gömme tüm veriden).
+- Üçü aynı ölçütler ve aynı seçim kuralıyla yarışıyor; `--yontemler` ile
+  daraltılabilir. `--yaz` artık seçileni kendi uzayında yazıyor
+  (`secileni_yaz`, üretimin yazma işlevlerini çağırır); calisma_id sonunda
+  yöntem adı (ör. `-spektral12`, `-konsensus`).
+
+**Seçim kuralında hata bulundu ve düzeltildi.** Siluet toleransı mutlak 0,02
+idi. Seyrek veride siluetler ~0,07 olduğundan bu %30'luk bir pay demekti:
+yapay veride (6 gizli grup) kural c=9 seçti. Tolerans göreli yapıldı (%5).
+
+**Yapay sınama** (302 albüm, ~900 «müzisyen» sütunu, %2 dolu, ikili; albümün
+kredilerinin belli bir payı kendi grubunun havuzundan):
+
+| gerçek c | kendi-grup payı | seçilen | ARI | en iyi siluetli (c, ARI): PCA / spektral / konsensüs |
+|---:|---:|---|---:|---|
+| 6 | 0,8 | PCA 12, m 1,4, c 6 | 1,00 | (6, 1,00) / (6, 0,98) / (6, 1,00) |
+| 9 | 0,7 | PCA 12, m 1,3, c 10 | 0,89 | (9, 0,83) / (9, 0,92) / (9, 0,85) |
+| 4 | 0,6 | PCA 12, m 1,4, c 4 | 0,97 | (4, 0,97) / (4, 0,93) / (4, 0,97) |
+
+Okuma: üç yöntem de gerçek c'yi en iyi siluetle buluyor; hiçbiri öbürlerine
+açıkça üstün değil. Kalabalık verisi olmadan eşitlik bozucu «en büyük c»
+9 grupluk senaryoda bir fazla (c=10) seçti — gerçek veride kalabalık uyumu
+bu kararı veriyor. Yapay veri gerçek kütüphanenin yerini tutmaz: asıl karar
+Mac'teki rapor + K19 değerlendirmesiyle.

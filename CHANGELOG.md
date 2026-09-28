@@ -4,6 +4,7 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- Kümeleme araması üç yöntemi yarıştırıyor: PCA, spektral gömme, konsensüs; seçim kuralında göreli tolerans.
 - Bütün grafikler tek dilde: tarayıcıda, kartın gerçek genişliğinde (Chart.js); yazı ve çizgi her yerde aynı.
 - Pano: ses imzası (radar), beğeni oranı seyri, kararlar halkası, tablo görünümü.
 - Etkileşimli pano: tarz haritası, tarz seçince bütün grafikler süzülür, tarz paneli.
