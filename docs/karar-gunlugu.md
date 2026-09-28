@@ -2602,3 +2602,33 @@ emin değil; telefonda «bağlantı yok».
 - **Çevrimdışı sayfası** (SW v5): telefon internetsiz mi, sunucu mu kapalı
   ayırt ediyor, 15 sn'de bir yeniden deniyor. Mac pilde de boşta uyumasın diye
   `caffeinate -i -s`; `servis.sh durum` genel linki de denetliyor.
+
+## 2026-09-28 (13) — Kümeleme araması, tema paleti, etkileşimli pano
+
+**İstek:** «Yeniden güçlü bir kümeleme; grafik renkleri uygulamaya uysun;
+alt alta/yan yana değil, gerçek bir pano.»
+
+- **Kümeleme araması** (`python/kumeleme/arama.py`): bileşen (5,6,8,10,12) ×
+  m (1,3–1,6) × c (2–12) = 220 aday. Geçerlilik: her küme bootstrap'ta sağlam
+  VE en küçük küme ≥ max(5, %2·n). Sıralama: bulanık siluet (Campello &
+  Hruschka 2006), ORTAK referans uzayında (ağırlıklı, indirgenmemiş matris,
+  kosinüs) — her aday kendi PCA uzayında ölçülse kıyaslanamazdı. Dış ölçüt:
+  kalabalık uyumu (PMI > 0 sanatçı çiftlerinin aynı tarzda olma oranı / Σp_k²).
+  Seçim: en iyi siluetin 0,02 içindekilerden kalabalık uyumu en yüksek; yoksa
+  en büyük c. Yapay veride (7 küme, 302 × 400) doğru c ~100 sn'de bulundu.
+  GERÇEK VERİDE ÇALIŞTIRILMADI (bulut oturumunda data/ yok). `--yaz` olmadan
+  yalnız rapor; yazınca `tasi` ile adlar/kararlar taşınır; sonra K19
+  değerlendirmesiyle eski/yeni kıyaslanmalı.
+- **Tema paleti** (`grafik.TARZ_RENKLERI`): İKİ AY kapak tonlarının 8 renklik,
+  dataviz doğrulayıcısından geçen hâli (CVD ΔE ≥ 8,1; normal ΔE ≥ 22,9).
+  Renk tarzın büyüklük sırasından, çalışma boyunca sabit; 9. tarz ve sonrası
+  gri. Döngüsel renk (eski 12'li KATEGORIK) kaldırıldı: iki tarz aynı rengi
+  alıyordu.
+- **Etkileşimli pano** (`/istatistik`): tarz şeridi + tarz haritası
+  (birlikte-üyelikten klasik MDS, kabarcık = albüm, çizgi = köprü) + seçili
+  tarz paneli; seçim bütün grafiklerde (`data-tarz`) öbür tarzları soldurur,
+  `#tarz-N` ile paylaşılır. Her grafik iki genişlikte çizilir (masa 620/480,
+  telefon 360): SVG yazısı viewBox'la ölçeklendiği için tek çizim telefonda
+  okunmuyordu.
+- **Yöntem notu** hocalara danışmak için ayrı bir sayfa olarak hazırlandı
+  (matris, hat, consensus yapılmadığı, açık sorular).

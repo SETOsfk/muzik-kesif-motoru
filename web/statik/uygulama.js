@@ -318,3 +318,45 @@ document.addEventListener('click', async (olay) => {
   }, { rootMargin: '200px' });
   kartlar.forEach((k) => gozcu.observe(k));
 })();
+
+/* ---------------------------------------------------------------------------
+ * «Sayılarla sen» panosu: bir tarz seçilince `data-tarz` taşıyan her işaret
+ * (kabarcık, sütun parçası, çubuk, köprü) seçili tarza ait değilse solar ve
+ * yan panel o tarzı anlatır. Seçim `#tarz-N` ile paylaşılabilir. Durum yalnız
+ * sayfada; sunucu her zaman tam resmi çizer (JS yoksa pano yine eksiksiz).
+ * ------------------------------------------------------------------------- */
+(() => {
+  const pano = document.querySelector('[data-pano]');
+  if (!pano) return;
+  const sec = (k) => {
+    k = k || '';
+    pano.dataset.secili = k;
+    pano.querySelectorAll('[data-tarz]').forEach((el) => {
+      const ait = el.dataset.tarz.split(' ').includes(k);
+      el.classList.toggle('soluk', k !== '' && !ait);
+    });
+    pano.querySelectorAll('[data-panel]').forEach((p) => {
+      p.hidden = p.dataset.panel !== (k || 'tum');
+    });
+    pano.querySelectorAll('[data-sec]').forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.sec === k));
+    });
+    try {
+      history.replaceState(null, '', k ? `#tarz-${k}` : location.pathname + location.search);
+    } catch (_) { /* çerçeve içinde izin verilmeyebilir */ }
+  };
+  const tikla = (hedef) => {
+    const k = hedef.dataset.sec !== undefined ? hedef.dataset.sec : hedef.dataset.tarz;
+    sec(pano.dataset.secili === k ? '' : k);
+  };
+  pano.addEventListener('click', (olay) => {
+    const h = olay.target.closest('[data-sec], .g-tarz');
+    if (h) tikla(h);
+  });
+  pano.addEventListener('keydown', (olay) => {
+    const h = olay.target.closest('.g-tarz');
+    if (h && (olay.key === 'Enter' || olay.key === ' ')) { olay.preventDefault(); tikla(h); }
+  });
+  const m = location.hash.match(/^#tarz-(\d+)$/);
+  if (m) sec(m[1]);
+})();

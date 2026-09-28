@@ -844,7 +844,8 @@ async def profil(istek):
                     f"{r['ad']} · {r['n']} albums · median at the "
                     f"{round(r['orta'] * 100)}th percentile of your library"))
                  for r in e["satirlar"]],
-                sol=kisa(e["dusuk"]), sag=kisa(e["yuksek"]), genislik=360)})
+                sol=kisa(e["dusuk"]), sag=kisa(e["yuksek"]), genislik=360,
+                renkler=[grafik.tarz_rengi(r["renk"]) for r in e["satirlar"]])})
 
         secili_eksen = istek.query_params.get("uc") or (
             ozet.iloc[0]["eksen"] if not ozet.empty else None)
@@ -1364,7 +1365,7 @@ def kisi_resmi(anahtar: str, tembel: bool = True) -> Markup:
 
 
 def istatistik_sayfasi(istek):
-    """«Sayılarla sen»: grafik ve yöntem adıyla istatistiksel portre."""
+    """«Sayılarla sen»: etkileşimli pano (tarz seçince bütün grafikler süzülür)."""
     from python import istatistik as ist
     from python.gerekce import strateji_adi
     from python.sen import onyil_adi
@@ -1378,67 +1379,85 @@ def istatistik_sayfasi(istek):
         conn.close()
     if not s["album"]:
         return RedirectResponse("/basla", status_code=303)
-    adlar = _eksen_adlari(calisma_id) if calisma_id else {}
+    ham_adlar = _eksen_adlari(calisma_id) if calisma_id else {}
+
+    def tarz_adi(kume) -> str:
+        return ham_adlar.get(int(kume)) or t(f"Tarz {int(kume) + 1}", f"Style {int(kume) + 1}")
 
     def saglik_adi(durum: str) -> str:
         return t(*{"saglam": ("sağlam", "robust"), "karisik": ("karışık", "mixed"),
                    "oynak": ("oynak", "unsettled")}.get(durum, (durum, durum)))
 
-    def tarz_adi(kume) -> str:
-        return adlar.get(int(kume)) or t(f"Tarz {int(kume) + 1}", f"Style {int(kume) + 1}")
+    p = s.get("pano")
+    adlar = {tz["kume"]: tarz_adi(tz["kume"]) for tz in (p or {}).get("tarzlar", [])}
+    renk = {tz["kume"]: grafik.tarz_rengi(tz["renk"]) for tz in (p or {}).get("tarzlar", [])}
+    teshis = {k["kume"]: k for k in (s["tarzlar"] or {}).get("liste", [])}
+    ciftler = (s["tarzlar"] or {}).get("ciftler", [])
 
-    g_tarz = g_zaman = g_cesit = g_tempo = g_kaynak = None
-    tepe_onyil = None
-    g_cift = g_karar = None
-    if s["tarzlar"]:
-        g_tarz = grafik.yigin_cubuk(
-            [(tarz_adi(k["kume"]), [k["net"], k["arada"]],
-              t(f"{tarz_adi(k['kume'])}: {k['album']} albüm — {k['net']} net, {k['arada']} arada · "
-                f"sağlamlık {dil_sayi(k['stabilite'] or 0, 2)} · {saglik_adi(k['saglik'])}",
-                f"{tarz_adi(k['kume'])}: {k['album']} albums — {k['net']} clear, {k['arada']} in between · "
-                f"robustness {dil_sayi(k['stabilite'] or 0, 2)} · {saglik_adi(k['saglik'])}"))
-             for k in s["tarzlar"]["liste"]], genislik=900)
-        if s["tarzlar"]["ciftler"]:
-            g_cift = grafik.yatay_cubuk(
-                [(f"{tarz_adi(a)} ↔ {tarz_adi(b)}", n) for a, b, n in s["tarzlar"]["ciftler"]],
-                basamak=0, birim=t(" albüm", " albums"), genislik=440)
-    if s["zaman"]:
-        onyillar = s["zaman"]["onyillar"]
-        tepe = max(range(len(onyillar)), key=lambda i: onyillar[i][1])
-        tepe_onyil = onyillar[tepe][0]
-        g_zaman = grafik.sutunlar(
-            [(f"{o % 100:02d}" if len(onyillar) > 7 else str(o), n,
-              t(f"{onyil_adi(o)}: {n} albüm", f"{onyil_adi(o)}: {n} albums"))
-             for o, n in onyillar], vurgu=tepe, genislik=440, yukseklik=190)
+    g: dict[str, tuple] = {}
+    paneller = []
+
+    def iki(ciz, masa: int, tel: int = 360, **kw):
+        """Aynı grafik iki genişlikte: SVG yazısı viewBox'la ölçeklendiği için
+        telefonda geniş çizim okunmaz; CSS ekrana göre birini gösterir."""
+        return (ciz(genislik=masa, **kw), ciz(genislik=tel, **kw))
+    if p:
+        from functools import partial
+        g["harita"] = (grafik.tarz_haritasi(p["tarzlar"], ciftler, adlar),
+                       grafik.tarz_haritasi(p["tarzlar"], ciftler, adlar, genislik=360, yukseklik=340))
+        g["onyil"] = iki(partial(grafik.onyil_tarz, p["onyillar"], p["tarzlar"], adlar,
+                                 onyil_adi=onyil_adi), 620)
+        if p["tempo_alan"]:
+            g["tempo"] = iki(partial(grafik.tempo_seridi, p["tarzlar"], adlar, p["tempo_alan"],
+                                     birim=t("vuruş/dk", "bpm")), 620)
+        sirali = [tz for tz in p["tarzlar"] if tz["kume"] in teshis]
+        g["netlik"] = iki(partial(grafik.yigin_cubuk,
+            [(adlar[tz["kume"]], [teshis[tz["kume"]]["net"], teshis[tz["kume"]]["arada"]],
+              t(f"{adlar[tz['kume']]}: {teshis[tz['kume']]['net']} net, "
+                f"{teshis[tz['kume']]['arada']} arada · {saglik_adi(teshis[tz['kume']]['saglik'])}",
+                f"{adlar[tz['kume']]}: {teshis[tz['kume']]['net']} clear, "
+                f"{teshis[tz['kume']]['arada']} in between · {saglik_adi(teshis[tz['kume']]['saglik'])}"))
+             for tz in sirali], tarzlar=[tz["kume"] for tz in sirali],
+            renkler=[renk[tz["kume"]] for tz in sirali]), 480)
+        for tz in p["tarzlar"]:
+            k = tz["kume"]
+            ortaklar = sorted(((b if a == k else a, n) for a, b, n in ciftler if k in (a, b)),
+                              key=lambda x: -x[1])
+            paneller.append({**tz, "ad": adlar[k], "renk_hex": renk[k],
+                             "saglik": teshis.get(k, {}).get("saglik"),
+                             "stabilite": teshis.get(k, {}).get("stabilite"),
+                             "net": teshis.get(k, {}).get("net"),
+                             "pay": tz["album"] / max(1, s["album"]),
+                             "ortaklar": [(adlar.get(o, o), n) for o, n in ortaklar[:3]]})
     if s["cesitlilik"]:
-        g_cesit = grafik.yatay_cubuk(
-            [(a, n) for a, n in s["cesitlilik"]["ilk"]], basamak=0,
-            birim=t(" albüm", " albums"), renk=grafik.PALET["ikincil"], genislik=440)
-    if s["ses"]:
-        kutular = s["ses"]["kutular"]
-        tepe = max(range(len(kutular)), key=lambda i: kutular[i][1])
-        g_tempo = grafik.sutunlar(
-            [(str(b), n, t(f"{b}–{b + ist.TEMPO_KUTU} vuruş/dk: {n} albüm",
-                           f"{b}–{b + ist.TEMPO_KUTU} bpm: {n} albums"))
-             for b, n in kutular], vurgu=tepe, genislik=440, yukseklik=190,
-            etiket_adimi=2 if len(kutular) > 8 else 1)
+        st = (p or {}).get("sanatci_tarzi", {})
+        ilk = s["cesitlilik"]["ilk"]
+        from functools import partial
+        g["cesit"] = iki(partial(grafik.yatay_cubuk,
+            [(a, n) for a, n in ilk], basamak=0, birim=t(" albüm", " albums"),
+            renkler=[renk.get(st.get(a), grafik.DIGER) for a, _ in ilk],
+            tarzlar=[st.get(a) for a, _ in ilk],
+            ipuclari=[f"{a} · {adlar.get(st.get(a), '—')}" for a, _ in ilk]), 480)
     if s["kesif"]:
         k = s["kesif"]
-        g_karar = grafik.yigin_cubuk(
+        from functools import partial
+        g["karar"] = iki(partial(grafik.yigin_cubuk,
             [("", [k["begendim"], k["tutmadi"], k["bilinen"]],
               t(f"{k['begendim']} listene · {k['tutmadi']} geçtin · {k['bilinen']} biliyordun",
                 f"{k['begendim']} saved · {k['tutmadi']} passed · {k['bilinen']} already known"))],
-            genislik=900, etiket_eni=0)
-    if s["kesif"] and s["kesif"]["kaynaklar"]:
-        g_kaynak = grafik.aralik(
-            [(strateji_adi(k["strateji"]), k["oran"], k["alt"], k["ust"],
-              t(f"{k['begendim']}/{k['n']} beğendin · aralık {yuzde(k['alt'])}–{yuzde(k['ust'])}",
-                f"liked {k['begendim']}/{k['n']} · range {yuzde(k['alt'])}–{yuzde(k['ust'])}"))
-             for k in s["kesif"]["kaynaklar"]], genislik=440)
+            etiket_eni=0), 480)
+        if k["kaynaklar"]:
+            g["kaynak"] = iki(partial(grafik.aralik,
+                [(strateji_adi(x["strateji"]), x["oran"], x["alt"], x["ust"],
+                  t(f"{x['begendim']}/{x['n']} beğendin · aralık {yuzde(x['alt'])}–{yuzde(x['ust'])}",
+                    f"liked {x['begendim']}/{x['n']} · range {yuzde(x['alt'])}–{yuzde(x['ust'])}"))
+                 for x in k["kaynaklar"]]), 480)
+    tepe_onyil = None
+    if s["zaman"]:
+        tepe_onyil = max(s["zaman"]["onyillar"], key=lambda o: o[1])[0]
     return SABLONLAR.TemplateResponse(istek, "istatistik.html", _ortam(
-        istek, s=s, g_tarz=g_tarz, g_zaman=g_zaman, g_cesit=g_cesit, g_tempo=g_tempo,
-        g_cift=g_cift, g_karar=g_karar, saglik_adi=saglik_adi,
-        g_kaynak=g_kaynak, tepe_onyil=tepe_onyil, onyil_adi=onyil_adi, tarz_adi=tarz_adi,
+        istek, s=s, g=g, paneller=paneller, tarz_adi=tarz_adi, saglik_adi=saglik_adi,
+        tepe_onyil=tepe_onyil, onyil_adi=onyil_adi,
         net_esik=ist.NET_UYELIK, kopru_esik=ist.KOPRU_UYELIK))
 
 

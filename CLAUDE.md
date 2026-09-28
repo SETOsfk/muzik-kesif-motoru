@@ -463,7 +463,7 @@ Yazı: Newsreader (serif gövde/başlık) + Jost (aralıklı etiket), OFL, kendi
 sunucumuzdan; Mincho yazıları ğ/ş/İ taşımadığı için elendi. Önce: Neon, sonra
 el çizimi (Kalam + Patrick Hand). Tek tema; `stil.css` token disiplini:
 bileşende sabit renk yok, kiremit eylem / gece mavisi ölçüm anlamı korunur,
-`--ay` yalnız süs ve çalma düğmesi. SVG paleti (`web/grafik.py:PALET`) ve ikon
+`--ay` yalnız süs ve çalma düğmesi. SVG paleti (`web/grafik.py:PALET`, tarz renkleri `TARZ_RENKLERI` — 8 renk, doğrulayıcıdan geçti, fazlası gri) ve ikon
 (`scripts/ikon_uret.py`) tokenlarla aynı tutulur. Gezinti: Keşfet · Listem ·
 Sen; teknik sayfalar menüde «Gelişmiş»; telefonda alt şerit. Görsel yoksa
 `web/yer_tutucu.py` (sanatçıdan türeyen kapak, kartın karşıt parlaklığında).
@@ -475,7 +475,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 313 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 321 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.
@@ -509,6 +509,9 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
+-1. Mac'te `python -m python.kumeleme.arama` (rapor) → beğenilirse `--yaz`;
+   sonra `python -m python.degerlendirme` ile eski/yeni kıyası (K19). Arama
+   gerçek veride HİÇ çalışmadı (karar günlüğü 2026-09-28 (13)).
 0. Yayını aç ve §6 denetim listesini gerçek cihazda yürüt. Sonra liste yolunun
    isabetini ilk kullanıcıların kararlarıyla ölç (ölçülmedi — karar günlüğü 2026-09-28).
 1. Kaydırarak karar biriktir: kaynak payı (K21) ve geri bildirim tavanı

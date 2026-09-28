@@ -4,6 +4,9 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- Etkileşimli pano: tarz haritası, tarz seçince bütün grafikler süzülür, tarz paneli.
+- Grafikler uygulamanın renkleriyle: her tarzın her yerde aynı rengi var.
+- Kümeleme araması (`python -m python.kumeleme.arama`): 220 ayarı ölçüyle kıyaslar.
 - «Sayılarla sen» artık bir pano: özet şeridi, tarz netliği, köprüler, keşif karnesi.
 - Profilde okunmayan saçılım/ısı haritası yerine «tarzın iki uç arasında nerede» şeritleri.
 - Tarz sağlığı: sağlam / karışık / oynak — panoda ve Tarzlar sayfasında uyarı.

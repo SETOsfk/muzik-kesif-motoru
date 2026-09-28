@@ -477,6 +477,8 @@ def tarz_konumlari(
                 continue
             satirlar.append({
                 "kume": int(kume), "ad": adlar.get(int(kume), f"{int(kume) + 1}"),
+                # Renk sırası panoyla aynı: büyüklük sırası (web/grafik.py:tarz_rengi).
+                "renk": list(boyut.index).index(kume),
                 "orta": float(grup["sira"].median()),
                 "q1": float(grup["sira"].quantile(0.25)),
                 "q3": float(grup["sira"].quantile(0.75)),

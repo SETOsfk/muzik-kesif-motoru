@@ -78,9 +78,12 @@ def test_aralik_ipucu_tasir():
     assert "<title>10 karardan 8&#x27;i bilinen</title>" in cizim.svg
 
 
-def test_kategorik_renk_dongusu():
-    """12'den fazla grup varsa renkler başa döner ama çakışma sayısı azalsın."""
-    assert len(grafik.KATEGORIK) >= 12
+def test_kategorik_renkler_donmez():
+    """Renkler döngüye girmez (iki grup aynı rengi almasın): 8 doğrulanmış
+    renk, dokuzuncu grup ve sonrası «diğer» gri (2026-09-28)."""
+    assert len(set(grafik.TARZ_RENKLERI)) == len(grafik.TARZ_RENKLERI) == 8
+    assert grafik.tarz_rengi(8) == grafik.DIGER
+    assert grafik.DIGER not in grafik.TARZ_RENKLERI
 
 
 def test_nan_deger_cizilmez():

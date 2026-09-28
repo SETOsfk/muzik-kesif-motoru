@@ -45,13 +45,25 @@ PALET = {
     "cok_soluk": "#6c6f7a",
 }
 
-#: Kategorik renkler: kitap kâğıdı üstünde ayrışan, soluk baskı mürekkepleri
-#: (kapak paletinin koyulaştırılmış akrabaları). Sıra, komşu iki grubun
-#: benzer ton almayacağı şekilde dizildi.
-KATEGORIK = [
-    "#2e3a66", "#bb4628", "#3b6b50", "#c0902c", "#6a5a86", "#b0646a",
-    "#3f7f86", "#8a5a2b", "#6f8a4a", "#8e4a74", "#5476a8", "#b5732a",
+#: Tarz renkleri — İKİ AY kapak tonlarının grafik için ayarlanmış akrabaları
+#: (gece, kiremit, çam, hardal, erik, gök, zeytin, gül). OKLCH'de açıklık
+#: 0,45–0,74, doygunluk ≥ 0,11; sıra komşu iki rengin renk körlüğünde de
+#: ayrışacağı biçimde (dataviz doğrulayıcısı, 2026-09-28: CVD ΔE ≥ 8,1,
+#: normal görüş ΔE ≥ 22,9). Hardal ve gülün kâğıt üstünde karşıtlığı 3:1'in
+#: altında — bu yüzden her renkli işaretin yanında yazılı etiket var.
+#: Renk tarzın BÜYÜKLÜK sırasından gelir ve bir çalışma boyunca sabittir;
+#: süzgeç değişince yeniden boyanmaz. Dokuzuncu tarz ve sonrası «diğer» gri.
+TARZ_RENKLERI = [
+    "#3a5095", "#d26b46", "#006e4a", "#c69f32",
+    "#884783", "#0097b1", "#495800", "#dc7d94",
 ]
+DIGER = "#9a9ca3"
+KATEGORIK = TARZ_RENKLERI
+
+
+def tarz_rengi(sira: int | None) -> str:
+    return TARZ_RENKLERI[sira] if sira is not None and 0 <= sira < len(TARZ_RENKLERI) else DIGER
+
 
 
 def _kisalt(metin: str, azami: int) -> str:
@@ -101,8 +113,13 @@ def yatay_cubuk(
     basamak: int = 2,
     genislik: int = 640,
     ipuclari: list[str] | None = None,
+    renkler: list[str] | None = None,
+    tarzlar: list[int | None] | None = None,
 ) -> Cizim:
-    """Etiket + çubuk + değer. En uzun etiket ölçüye göre yer ayırır."""
+    """Etiket + çubuk + değer. En uzun etiket ölçüye göre yer ayırır.
+
+    `renkler` / `tarzlar` verilirse her satır kendi rengini ve `data-tarz`ını
+    taşır (panoda süzgeçle solar)."""
     if not satirlar:
         return _cerceve("", genislik, 40)
 
@@ -118,13 +135,15 @@ def yatay_cubuk(
         orta = y + sira_yuksekligi / 2
         uzunluk = 0 if deger is None else abs(deger) / en_buyuk * cubuk_eni
         ipucu = f"<title>{_k(ipuclari[i])}</title>" if ipuclari else ""
+        veri = f' data-tarz="{tarzlar[i]}"' if tarzlar and tarzlar[i] is not None else ""
+        satir_rengi = renkler[i] if renkler else renk
         parcalar.append(
-            f'<g class="g-satir">{ipucu}'
+            f'<g class="g-satir"{veri}>{ipucu}'
             f'<rect x="0" y="{y}" width="{genislik}" height="{sira_yuksekligi}" fill="transparent"/>'
             f'<text x="{etiket_eni}" y="{orta}" text-anchor="end" '
             f'dominant-baseline="central" class="g-etiket">{_k(etiket)}</text>'
             f'<rect x="{etiket_eni + 12}" y="{y + 7}" width="{uzunluk:.1f}" '
-            f'height="{sira_yuksekligi - 14}" rx="3" fill="{renk}" opacity="0.85"/>'
+            f'height="{sira_yuksekligi - 14}" rx="3" fill="{satir_rengi}" opacity="0.9"/>'
             f'<text x="{etiket_eni + 20 + uzunluk:.1f}" y="{orta}" '
             f'dominant-baseline="central" class="g-deger">'
             f"{_sayi(deger, basamak)}{_k(birim)}</text></g>"
@@ -205,6 +224,8 @@ def yigin_cubuk(
     genislik: int = 440,
     etiket_eni: int | None = None,
     toplam_goster: bool = True,
+    tarzlar: list[int] | None = None,
+    renkler: list[str] | None = None,
 ) -> Cizim:
     """(etiket, [parça değerleri], ipucu). Parçalar soldan sağa YIGIN_TONLARI."""
     if not satirlar:
@@ -221,7 +242,8 @@ def yigin_cubuk(
     for i, (etiket, degerler, ipucu) in enumerate(satirlar):
         y = ust + i * sira
         orta = y + sira / 2
-        parcalar.append(f'<g class="g-satir"><title>{_k(ipucu)}</title>'
+        veri = f' data-tarz="{tarzlar[i]}"' if tarzlar else ""
+        parcalar.append(f'<g class="g-satir"{veri}><title>{_k(ipucu)}</title>'
                         f'<rect x="0" y="{y}" width="{genislik}" height="{sira}" fill="transparent"/>')
         if etiket:
             parcalar.append(f'<text x="{etiket_eni}" y="{orta}" text-anchor="end" '
@@ -232,6 +254,8 @@ def yigin_cubuk(
             if w <= 0:
                 continue
             renk, op = YIGIN_TONLARI[min(j, len(YIGIN_TONLARI) - 1)]
+            if renkler:
+                renk = renkler[i]
             parcalar.append(f'<rect x="{x:.1f}" y="{y + 7}" width="{max(w - 2, 1):.1f}" '
                             f'height="{sira - 14}" rx="3" fill="{renk}" opacity="{op}"/>')
             x += w
@@ -252,6 +276,7 @@ def konum_seridi(
     sol: str,
     sag: str,
     genislik: int = 440,
+    renkler: list[str] | None = None,
 ) -> Cizim:
     """(etiket, ortanca, alt çeyrek, üst çeyrek, ipucu) — değerler 0..1 yüzdelik.
 
@@ -276,6 +301,7 @@ def konum_seridi(
     ]
     for i, (etiket, orta, q1, q3, ipucu) in enumerate(satirlar):
         y = ust + i * sira + sira / 2
+        renk = renkler[i] if renkler else PALET["ikincil"]
         parcalar.append(
             f'<g class="g-satir"><title>{_k(ipucu)}</title>'
             f'<rect x="0" y="{y - sira / 2}" width="{genislik}" height="{sira}" fill="transparent"/>'
@@ -283,8 +309,8 @@ def konum_seridi(
             f'class="g-etiket">{_k(_kisalt(etiket, 19))}</text>'
             f'<line x1="{x0}" y1="{y}" x2="{x1}" y2="{y}" stroke="{PALET["izgara"]}" stroke-width="2"/>'
             f'<rect x="{olcek(q1):.1f}" y="{y - 5}" width="{max(olcek(q3) - olcek(q1), 2):.1f}" '
-            f'height="10" rx="5" fill="{PALET["ikincil"]}" opacity="0.22"/>'
-            f'<circle cx="{olcek(orta):.1f}" cy="{y}" r="6" fill="{PALET["ikincil"]}" '
+            f'height="10" rx="5" fill="{renk}" opacity="0.3"/>'
+            f'<circle cx="{olcek(orta):.1f}" cy="{y}" r="6" fill="{renk}" '
             f'stroke="#fbf9f4" stroke-width="2"/></g>')
     return _cerceve("".join(parcalar), genislik, alt_y + 6)
 
@@ -384,7 +410,7 @@ def sacilim(
     ky = lambda v: ustb + ic_boy - (v - y0) / (y1 - y0) * ic_boy  # noqa: E731
 
     gruplar = sorted({n[2] for n in noktalar})
-    renk = {g: KATEGORIK[i % len(KATEGORIK)] for i, g in enumerate(gruplar)}
+    renk = {g: tarz_rengi(i) for i, g in enumerate(gruplar)}
 
     parcalar = []
     for pay in (0, 0.25, 0.5, 0.75, 1.0):
@@ -422,7 +448,7 @@ def sacilim_efsanesi(gruplar: list[str]) -> str:
     """Saçılımın renk açıklaması — HTML, SVG değil (metin akışına girsin)."""
     parcalar = []
     for i, grup in enumerate(sorted(gruplar)):
-        renk = KATEGORIK[i % len(KATEGORIK)]
+        renk = tarz_rengi(i)
         parcalar.append(
             f'<span class="efsane"><i style="background:{renk}"></i>'
             f"{_k(grup)}</span>"
@@ -526,3 +552,174 @@ def kiyas_cubugu(deger: float, alt: float, ust: float, *, genislik: int = 190) -
         f'<circle cx="{kx(deger):.1f}" cy="15" r="6" fill="{PALET["vurgu"]}"/>',
         genislik, yukseklik, sinif="kiyas",
     )
+
+
+# --------------------------------------------------------------------------- #
+# Pano: tarz haritası, on yıl × tarz, tarz başına tempo
+# --------------------------------------------------------------------------- #
+#
+# Bu üç grafik ETKİLEŞİMLİ panonun parçası: her işaret `data-tarz` taşır;
+# `uygulama.js` bir tarz seçildiğinde öbürlerini soldurur. Seçim DURUMU
+# yalnız sayfada (ve `#tarz-N` bağlantısında); sunucu her zaman tam resmi çizer.
+
+def _ayir(noktalar: list[list[float]], yaricap: list[float], genislik: float,
+          yukseklik: float, tur: int = 120) -> None:
+    """Üst üste binen kabarcıkları it (yerinde). Basit, deterministik gevşetme."""
+    for _ in range(tur):
+        hareket = False
+        for i in range(len(noktalar)):
+            for j in range(i + 1, len(noktalar)):
+                dx = noktalar[j][0] - noktalar[i][0]
+                dy = noktalar[j][1] - noktalar[i][1]
+                d = math.hypot(dx, dy) or 0.01
+                en_az = yaricap[i] + yaricap[j] + 26          # alttaki etikete yer
+                if d < en_az:
+                    itme = (en_az - d) / 2
+                    ux, uy = (dx / d, dy / d) if d > 0.01 else (1.0, 0.0)
+                    noktalar[i][0] -= ux * itme
+                    noktalar[i][1] -= uy * itme
+                    noktalar[j][0] += ux * itme
+                    noktalar[j][1] += uy * itme
+                    hareket = True
+        for k, (x, y) in enumerate(noktalar):
+            r = yaricap[k]
+            noktalar[k][0] = min(max(x, r + 8), genislik - r - 8)
+            noktalar[k][1] = min(max(y, r + 8), yukseklik - r - 30)
+        if not hareket:
+            break
+
+
+def tarz_haritasi(
+    tarzlar: list[dict],
+    ciftler: list[tuple[int, int, int]],
+    adlar: dict[int, str],
+    *,
+    genislik: int = 620,
+    yukseklik: int = 380,
+) -> Cizim:
+    """Kabarcık = tarz (alan ∝ albüm), çizgi = köprü albüm sayısı.
+
+    Konum `istatistik.tarz_haritasi` (birlikte-üyelikten MDS): yakın duran
+    tarzlar albümlerini paylaşıyor. Eksen yok — yalnız yakınlık okunur.
+    """
+    if not tarzlar:
+        return _cerceve("", genislik, 40)
+    en_buyuk = max(t["album"] for t in tarzlar) or 1
+    k = max(0.62, min(1.0, genislik / 620))
+    yaricap = [(14 + 34 * math.sqrt(t["album"] / en_buyuk)) * k for t in tarzlar]
+    kenar = 70 * k
+    noktalar = [[kenar + t["x"] * (genislik - 2 * kenar),
+                 kenar + t["y"] * (yukseklik - 2 * kenar - 20)] for t in tarzlar]
+    _ayir(noktalar, yaricap, genislik, yukseklik)
+    yer = {t["kume"]: i for i, t in enumerate(tarzlar)}
+    en_cok = max((n for _, _, n in ciftler), default=1) or 1
+
+    parcalar = []
+    for a, b, n in ciftler:
+        if a not in yer or b not in yer:
+            continue
+        (x1, y1), (x2, y2) = noktalar[yer[a]], noktalar[yer[b]]
+        parcalar.append(
+            f'<line class="g-kopru" data-tarz="{a} {b}" x1="{x1:.1f}" y1="{y1:.1f}" '
+            f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{PALET["cok_soluk"]}" '
+            f'stroke-width="{1.5 + 6 * n / en_cok:.1f}" stroke-linecap="round" opacity="0.35">'
+            f"<title>{_k(adlar.get(a, a))} ↔ {_k(adlar.get(b, b))}: {n}</title></line>")
+    for i, t in enumerate(tarzlar):
+        x, y = noktalar[i]
+        r = yaricap[i]
+        ad = adlar.get(t["kume"], str(t["kume"]))
+        parcalar.append(
+            f'<g class="g-tarz" data-tarz="{t["kume"]}" tabindex="0" role="button" '
+            f'aria-label="{_k(ad)}">'
+            f"<title>{_k(ad)} · {t['album']}</title>"
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{tarz_rengi(t["renk"])}" '
+            f'stroke="#fbf9f4" stroke-width="3"/>'
+            f'<text x="{x:.1f}" y="{y + 4:.1f}" text-anchor="middle" class="g-kabarcik-sayi">'
+            f'{t["album"]}</text>'
+            f'<text x="{x:.1f}" y="{y + r + 16:.1f}" text-anchor="middle" class="g-etiket g-kabarcik-ad">'
+            f"{_k(_kisalt(ad, 22))}</text></g>")
+    return _cerceve("".join(parcalar), genislik, yukseklik, sinif="tarz-haritasi")
+
+
+def onyil_tarz(
+    onyillar: list[int],
+    tarzlar: list[dict],
+    adlar: dict[int, str],
+    *,
+    genislik: int = 620,
+    yukseklik: int = 230,
+    onyil_adi=lambda o: str(o),
+) -> Cizim:
+    """Her on yılda albümler, tarza göre yığılı sütun."""
+    if not onyillar or not tarzlar:
+        return _cerceve("", genislik, 40)
+    ust, alt = 12, 26
+    alan = yukseklik - ust - alt
+    toplamlar = [sum(t["onyil"].get(o, 0) for t in tarzlar) for o in onyillar]
+    en_buyuk = max(toplamlar) or 1
+    adim = genislik / len(onyillar)
+    g = min(adim - 10, 64)
+    taban = ust + alan
+    parcalar = [f'<line x1="0" y1="{taban}" x2="{genislik}" y2="{taban}" stroke="{PALET["kenar"]}"/>']
+    for i, o in enumerate(onyillar):
+        x = i * adim + (adim - g) / 2
+        y = taban
+        for t in tarzlar:
+            n = t["onyil"].get(o, 0)
+            if not n:
+                continue
+            h = n / en_buyuk * alan
+            parcalar.append(
+                f'<rect class="g-parca" data-tarz="{t["kume"]}" x="{x:.1f}" y="{y - h + 1:.1f}" '
+                f'width="{g:.1f}" height="{max(h - 2, 1):.1f}" rx="2" fill="{tarz_rengi(t["renk"])}">'
+                f"<title>{_k(onyil_adi(o))} · {_k(adlar.get(t['kume'], t['kume']))}: {n}</title></rect>")
+            y -= h
+        parcalar.append(
+            f'<text x="{x + g / 2:.1f}" y="{taban + 17}" text-anchor="middle" class="g-eksen">'
+            f"{o}</text>"
+            f'<text x="{x + g / 2:.1f}" y="{y - 5:.1f}" text-anchor="middle" class="g-deger">'
+            f"{toplamlar[i]}</text>")
+    return _cerceve("".join(parcalar), genislik, yukseklik)
+
+
+def tempo_seridi(
+    tarzlar: list[dict],
+    adlar: dict[int, str],
+    alan: tuple[float, float],
+    *,
+    genislik: int = 620,
+    birim: str = "bpm",
+) -> Cizim:
+    """Tarz başına tempo: bant = albümlerin ortadaki yarısı, nokta = ortanca."""
+    satirlar = [t for t in tarzlar if t.get("tempo")]
+    if not satirlar:
+        return _cerceve("", genislik, 40)
+    sira, ust = 26, 6
+    etiket_eni = min(150, max(70, 6.8 * max(len(adlar.get(t["kume"], "")) for t in satirlar)))
+    x0, x1 = etiket_eni + 14, genislik - 14
+    lo, hi = alan
+    lo, hi = math.floor(lo / 20) * 20, math.ceil(hi / 20) * 20
+    olcek = lambda v: x0 + (v - lo) / max(hi - lo, 1) * (x1 - x0)  # noqa: E731
+    alt_y = ust + len(satirlar) * sira
+    parcalar = []
+    for v in range(int(lo), int(hi) + 1, 20):
+        parcalar.append(
+            f'<line x1="{olcek(v):.1f}" y1="{ust}" x2="{olcek(v):.1f}" y2="{alt_y}" '
+            f'stroke="{PALET["izgara"]}"/>'
+            f'<text x="{olcek(v):.1f}" y="{alt_y + 16}" text-anchor="middle" class="g-eksen">{v}</text>')
+    for i, t in enumerate(satirlar):
+        y = ust + i * sira + sira / 2
+        orta, q1, q3 = t["tempo"]
+        renk = tarz_rengi(t["renk"])
+        ad = adlar.get(t["kume"], str(t["kume"]))
+        parcalar.append(
+            f'<g class="g-satir" data-tarz="{t["kume"]}"><title>{_k(ad)}: {round(orta)} {birim} '
+            f'({round(q1)}–{round(q3)})</title>'
+            f'<rect x="0" y="{y - sira / 2}" width="{genislik}" height="{sira}" fill="transparent"/>'
+            f'<text x="{etiket_eni}" y="{y}" text-anchor="end" dominant-baseline="central" '
+            f'class="g-etiket">{_k(_kisalt(ad, 20))}</text>'
+            f'<rect x="{olcek(q1):.1f}" y="{y - 6}" width="{max(olcek(q3) - olcek(q1), 3):.1f}" '
+            f'height="12" rx="6" fill="{renk}" opacity="0.3"/>'
+            f'<circle cx="{olcek(orta):.1f}" cy="{y}" r="6" fill="{renk}" stroke="#fbf9f4" '
+            f'stroke-width="2"/></g>')
+    return _cerceve("".join(parcalar), genislik, alt_y + 24)

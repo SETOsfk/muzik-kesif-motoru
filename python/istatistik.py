@@ -15,6 +15,7 @@ import sqlite3
 from collections import Counter
 
 import numpy as np
+import pandas as pd
 
 #: Bir albüm en yüksek üyeliği bu değerin üstündeyse o tarza «net» aittir.
 NET_UYELIK = 0.6
@@ -246,4 +247,97 @@ def hepsi(conn: sqlite3.Connection, calisma_id: str | None) -> dict:
         "album": conn.execute("SELECT COUNT(*) FROM albums").fetchone()[0],
         "zaman": zaman(conn), "tarzlar": tarzlar(conn, calisma_id),
         "cesitlilik": cesitlilik(conn), "ses": ses(conn), "kesif": kesif(conn),
+        "pano": pano(conn, calisma_id),
     }
+
+
+# --------------------------------------------------------------------------- #
+# Pano: tarz başına ayrıntı ve tarz haritası
+# --------------------------------------------------------------------------- #
+
+#: Renkli gösterilen en çok tarz. Fazlası «diğer» gri: dokuzuncu bir renk
+#: üretmek ayrışmayan bir ton demek (kategorik palet 8 renkte doğrulandı).
+RENKLI_TARZ = 8
+
+
+def tarz_haritasi(U: np.ndarray) -> np.ndarray:
+    """Tarzların 2B konumu — birlikte-üyelikten klasik MDS.
+
+    Benzerlik S_ik = kosinüs(u_·i, u_·k): iki tarz aynı albümlerde birlikte
+    yüksek üyelik alıyorsa yakın. Uzaklık √(2 − 2S). Konum, albüm uzayından
+    değil tarzların birbirine KARIŞMASINDAN geliyor; eksenlerin anlamı yok,
+    yalnız yakınlık okunur.
+    """
+    c = U.shape[1]
+    if c < 2:
+        return np.zeros((c, 2))
+    norm = np.linalg.norm(U, axis=0)
+    S = (U.T @ U) / np.maximum(np.outer(norm, norm), 1e-12)
+    D2 = np.clip(2 - 2 * S, 0, None)
+    J = np.eye(c) - 1.0 / c
+    B = -0.5 * J @ D2 @ J
+    deger, vektor = np.linalg.eigh(B)
+    sira = np.argsort(deger)[::-1][:2]
+    X = vektor[:, sira] * np.sqrt(np.clip(deger[sira], 0, None))
+    if X.shape[1] < 2:
+        X = np.hstack([X, np.zeros((c, 2 - X.shape[1]))])
+    # İşaret belirsizliğini sabitle: tekrarlanabilir yerleşim (K2).
+    for k in range(2):
+        if X[np.argmax(np.abs(X[:, k])), k] < 0:
+            X[:, k] *= -1
+    return X
+
+
+def pano(conn: sqlite3.Connection, calisma_id: str | None) -> dict | None:
+    """Etkileşimli pano için tarz başına her şey — tek geçişte."""
+    if not calisma_id:
+        return None
+    uy = pd.read_sql_query(
+        """SELECT m.album_id, m.kume_id, m.uyelik, a.artist, a.year
+             FROM memberships m JOIN albums a USING (album_id)
+            WHERE m.calisma_id = ?""", conn, params=(calisma_id,))
+    if uy.empty:
+        return None
+    U_df = uy.pivot_table(index="album_id", columns="kume_id", values="uyelik", fill_value=0.0)
+    bilgi = uy.drop_duplicates("album_id").set_index("album_id")[["artist", "year"]]
+    keskin = U_df.idxmax(axis=1)
+    boyut = keskin.value_counts()
+    sira = list(boyut.index)                       # büyükten küçüğe: renk sırası
+    renk_sirasi = {int(k): (i if i < RENKLI_TARZ else None) for i, k in enumerate(sira)}
+
+    X = tarz_haritasi(U_df.to_numpy())
+    konum = {int(k): X[i] for i, k in enumerate(U_df.columns)}
+    xs, ys = X[:, 0], X[:, 1]
+    olcek = lambda v, lo, hi: 0.5 if hi - lo < 1e-9 else (v - lo) / (hi - lo)  # noqa: E731
+
+    tempo = {}
+    try:
+        tempo = dict(conn.execute(
+            "SELECT album_id, tempo_medyan FROM audio_features WHERE kaynak = 'yerel' "
+            "AND tempo_medyan > 0").fetchall())
+    except sqlite3.Error:
+        pass
+
+    onyillar = sorted({int(y) // 10 * 10 for y in bilgi["year"].dropna() if y and y > 1900})
+    tarzlar = []
+    for k in sira:
+        k = int(k)
+        uyeler = keskin[keskin == k].index
+        sanatci = bilgi.loc[uyeler, "artist"].value_counts()
+        yillar = [int(y) // 10 * 10 for y in bilgi.loc[uyeler, "year"].dropna() if y and y > 1900]
+        t = [float(tempo[a]) for a in uyeler if a in tempo]
+        tarzlar.append({
+            "kume": k, "renk": renk_sirasi[k], "album": int(boyut[k]),
+            "x": olcek(konum[k][0], xs.min(), xs.max()),
+            "y": olcek(konum[k][1], ys.min(), ys.max()),
+            "sanatcilar": [(a, int(n)) for a, n in sanatci.head(5).items()],
+            "onyil": {o: yillar.count(o) for o in onyillar},
+            "tempo": (float(np.median(t)), float(np.percentile(t, 25)), float(np.percentile(t, 75)))
+                     if len(t) >= 3 else None,
+            "uyum": float(U_df.loc[uyeler, k].mean()),
+        })
+    tum_tempo = [float(v) for v in tempo.values()]
+    return {"tarzlar": tarzlar, "onyillar": onyillar,
+            "tempo_alan": (min(tum_tempo), max(tum_tempo)) if len(tum_tempo) >= 3 else None,
+            "sanatci_tarzi": {a: int(keskin[g.index].mode().iloc[0])
+                              for a, g in bilgi.groupby("artist")}}
