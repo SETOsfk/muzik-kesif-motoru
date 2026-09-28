@@ -2732,3 +2732,28 @@ daha az örtüşüyor. n = 147 küçük; farklar yön göstergesi, kesin değil.
 güçlü kaynak ve kazanç büyük; melezin medyan sırası iyileşti; ses kaybı mutlak
 olarak küçük. Destede kaynak payını zaten gerçek kararlar belirliyor (K21,
 Thompson) — ses yolu kötüleştiyse daha az kart alacak.
+
+## 2026-09-28 (18) — Çok sesli ses kuralı, müzisyen bağlam süzgeci, pull kancası
+
+**Geri bildirim:** (1) Joe Duplantier gibi çalanlara Lana Del Rey — Born to Die;
+(2) progresif metal tarzında Gabi Hartmann, gerekçe tek albüm (Haken — The
+Mountain); (3) «birkaç farklı ses üzerinden öner, tek şarkı değil»;
+(4) «Sayılarla» ve «Çalış tarzı» açılmıyor.
+
+- **Çok sesli kural** (`etiket_clap.komsu_cogunlugu`, `sanatci_sirala`,
+  `SES_KURALI = "cok_sesli"`): parçanın en yakın 3 kütüphane albümünden ≥ 2'si
+  eksende olmalı; skor eksendeki en yakınların ortalaması. Sanatçı ≥ 2 geçen
+  parçayla önerilir (tek parçası olan ancak 3/3 ile); skor en iyi 3 parçanın
+  ortalaması. Kart birden çok albümü sayar. **K19 notu:** kullanıcının açık
+  isteğiyle ölçümden ÖNCE varsayılan yapıldı; `degerlendirme` artık varsayılan
+  olarak bu kuralı ölçüyor (`--ses-kural en_yakin_eksen` eskisi). Kıyas bekliyor.
+  Mevcut adaylar eski kuralla üretildi; yeniden üretim gerekir.
+- **Müzisyen bağlam süzgeci** (`muzisyen.baglam_benzerligi`, `BAGLAM_ESIGI`):
+  icra profili ~10 sayı; aday ayrıca SESİ bakımından müzisyenin albümlerine
+  adaylar arasında üst yarıda olmalı (CLAP, çalma listesi parçaları). Gömüsü
+  olmayan aday elenmez, sona gider. Müzisyen destesinin ölçüm düzeni yok —
+  ÖLÇÜLMEDİ.
+- **Sayfalar açılmıyordu:** bulutta aynı kod ve gerçeğe benzer veriyle iki
+  sayfa da 200 döndü. En olası sebep: `git pull` sonrası sunucu yeniden
+  başlatılmadı (şablonlar taze, Python kodu eski). `servis.sh yeniden` ve
+  `servis.sh kanca` (git post-merge kancası) eklendi; `yayinla` kancayı kurar.

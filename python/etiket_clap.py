@@ -511,6 +511,64 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
+# --------------------------------------------------------------------------- #
+# Çok sesli kural: tek parça, tek albüm değil (kullanıcı isteği, 2026-09-28)
+# --------------------------------------------------------------------------- #
+#
+# «Birkaç farklı ses üzerinden öner, tek şarkı değil.» Eski kural parçayı,
+# kütüphanedeki EN YAKIN TEK albüm eksendeyse sayıyordu ve sanatçıyı en iyi
+# TEK parçasıyla sıralıyordu. Bir sakin klip Haken'in akustik bir anına denk
+# gelince Gabi Hartmann progresif metal ekseninde öneriliyordu. İki taraflı
+# çoğunluk:
+#   - kütüphane tarafı: parçanın en yakın KOMSU_K albümünden en az
+#     KOMSU_COGUNLUK'u eksende; parça skoru eksendeki en yakınlarının ortalaması;
+#   - aday tarafı: sanatçının en az ASGARI_PARCA parçası geçmeli; havuzda tek
+#     parçası olan sanatçı ancak KOMSU_K'nın hepsi eksendeyse. Sanatçı skoru en
+#     iyi (en çok 3) geçen parçasının ortalaması.
+
+#: "cok_sesli" (varsayılan, 2026-09-28) | "en_yakin_eksen" (eski).
+SES_KURALI = "cok_sesli"
+KOMSU_K = 3
+KOMSU_COGUNLUK = 2
+ASGARI_PARCA = 2
+
+
+def komsu_cogunlugu(tum: np.ndarray, eksende: np.ndarray, k: int = KOMSU_K
+                    ) -> tuple[np.ndarray, np.ndarray]:
+    """(eksendeki komşu sayısı, eksendeki en yakın k albüme ortalama skor).
+
+    `tum`: (parça × kütüphane albümü) hubness düzeltilmiş benzerlik;
+    `eksende`: kütüphane albümü eksende mi (bool). Satır başına.
+    """
+    k = max(1, min(k, tum.shape[1]))
+    en_yakin = np.argpartition(-tum, k - 1, axis=1)[:, :k]
+    sayi = eksende[en_yakin].sum(axis=1)
+    eksen_s = np.where(eksende[None, :], tum, -np.inf)
+    ke = max(1, min(k, int(eksende.sum())))
+    ust = -np.sort(-eksen_s, axis=1)[:, :ke]
+    ust = np.where(np.isfinite(ust), ust, np.nan)
+    with np.errstate(invalid="ignore"):
+        ort = np.nanmean(ust, axis=1) if ust.size else np.full(tum.shape[0], np.nan)
+    return sayi, ort
+
+
+def sanatci_sirala(skor: np.ndarray, sayi: np.ndarray, sahipler: list[str],
+                   k: int = KOMSU_K) -> dict[str, float]:
+    """Parça skorlarından sanatçı skoru, çok sesli kurala göre."""
+    parcalar: dict[str, list[tuple[float, int]]] = {}
+    for d, n, a in zip(skor, sayi, sahipler):
+        parcalar.setdefault(a, []).append((float(d), int(n)))
+    sonuc = {}
+    for a, liste in parcalar.items():
+        gecen = sorted((d for d, n in liste if n >= KOMSU_COGUNLUK and d == d), reverse=True)
+        if len(liste) == 1:
+            if liste[0][1] >= k and gecen:
+                sonuc[a] = gecen[0]
+        elif len(gecen) >= ASGARI_PARCA:
+            sonuc[a] = float(np.mean(gecen[:3]))
+    return sonuc
+
+
 def acik_havuz_adaylari(
     conn: sqlite3.Connection, calisma_id: str, eksen: int, *, adet: int = 12,
 ) -> list[dict]:
@@ -592,6 +650,9 @@ def acik_havuz_adaylari(
         eksende = np.array([k in uye_kume for k in k_tum])
         skor = np.where(eksende[S_tum.argmax(axis=1)], skor, -np.inf)
 
+    if SES_KURALI == "cok_sesli" and len(k_tum) >= 10:
+        return _cok_sesli_sonuc(kayitlar, S_tum, eksende, k_tum, sahip_ad, adet)
+
     # Aynı sanatçının birden çok parçası havuzda; sanatçı başına en iyisi.
     # Tekilleştirilmezse tek bir sanatçı listeyi kaplıyor.
     en_iyi: dict[str, dict] = {}
@@ -614,3 +675,28 @@ def acik_havuz_adaylari(
         if len(en_iyi) >= adet:
             break
     return list(en_iyi.values())
+
+
+def _cok_sesli_sonuc(kayitlar, S_tum, eksende, k_tum, sahip_ad, adet) -> list[dict]:
+    """Çok sesli kuralla sanatçı sırası; kart için sanatçının EN İYİ parçası
+    çalınır ve gerekçe eksendeki en yakın albümleri (en çok 3) sayar."""
+    sayi, ort = komsu_cogunlugu(S_tum, eksende)
+    sahipler = [normalize_esleme(k["sanatci"]) for k in kayitlar]
+    sanatci_skor = sanatci_sirala(ort, sayi, sahipler)
+    eksen_idx = np.flatnonzero(eksende)
+    sonuc = []
+    for anahtar, skor in sorted(sanatci_skor.items(), key=lambda x: -x[1])[:adet]:
+        satirlar = [i for i, a in enumerate(sahipler) if a == anahtar and sayi[i] >= KOMSU_COGUNLUK]
+        i = max(satirlar, key=lambda j: ort[j])
+        yakinlar = eksen_idx[np.argsort(-S_tum[i, eksen_idx])[:3]]
+        kayit = kayitlar[i]
+        sonuc.append({
+            "kimlik": kayit["kimlik"], "tur": kayit["tur"], "sanatci": kayit["sanatci"],
+            "ad": kayit["ad"],
+            "parca_id": int(kayit["kimlik"]) if kayit["tur"] == "parca" else None,
+            "benzedigi": sahip_ad.get(k_tum[yakinlar[0]], k_tum[yakinlar[0]]),
+            "benzedikleri": [sahip_ad.get(k_tum[j], k_tum[j]) for j in yakinlar],
+            "parca_sayisi": len(satirlar),
+            "skor": float(skor),
+        })
+    return sonuc

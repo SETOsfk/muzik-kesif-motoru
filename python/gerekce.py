@@ -78,7 +78,20 @@ def _liste_cumlesi(d: dict, eksen: str, adlar: dict[str, str]) -> str:
     return cumle
 
 
-def _ses_cumlesi(benzedigi: str) -> str:
+def _ses_cumlesi(benzedigi: str, d: dict | None = None) -> str:
+    """Tek albüm yerine birden çok parça/albüm kanıtı varsa onu söyler."""
+    d = d or {}
+    albumler = [a for a in (d.get("benzedikleri") or []) if a][:3]
+    parca = d.get("parca_sayisi") or 0
+    if len(albumler) >= 2:
+        liste = ", ".join(f"«{a}»" for a in albumler)
+        parca_tr = f"{parca} parçası" if parca and parca > 1 else "Sesi"
+        parca_en = f"{parca} of its tracks" if parca and parca > 1 else "Its sound"
+        return t(
+            f"{parca_tr} kütüphanendeki birden çok albüme yakın: {liste}. "
+            f"Tek bir klibin tesadüfü değil; birkaç ses aynı yönü gösteriyor.",
+            f"{parca_en} sit close to several albums in your library: {liste}. "
+            f"Not one lucky clip; several sounds point the same way.")
     return t(
         f"Sesi, kütüphanendeki «{benzedigi}» albümünü andırıyor. Bu bir tür "
         f"etiketi ya da ortak kadro değil; iki albümün sesi gerçekten birbirine yakın.",
@@ -105,7 +118,7 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
     if strateji == "liste_birlikteligi" and "pmi" in d:
         return _liste_cumlesi(d, eksen, adlar)
     if strateji == "ses_benzerligi" and benzedigi:
-        return _ses_cumlesi(benzedigi) + " " + t(
+        return _ses_cumlesi(benzedigi, d) + " " + t(
             "Her şeye benzeyen kayıtlar öne çıkmasın diye skor düzeltildi.",
             "The score is corrected so that tracks resembling everything don't float up.")
     if strateji == "melez":
@@ -113,7 +126,7 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
         if "pmi" in d:
             parcalar.append(_liste_cumlesi(d, eksen, adlar))
         if benzedigi:
-            parcalar.append(_ses_cumlesi(benzedigi))
+            parcalar.append(_ses_cumlesi(benzedigi, d))
         if parcalar:
             return " ".join(parcalar)
     # Kadro grafiği stratejileri ve eski satırlar.

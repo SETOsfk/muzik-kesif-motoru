@@ -3,6 +3,8 @@
 #
 #   scripts/servis.sh yayinla    hepsini kur: sunucu + herkese açık link + Drive yedeği
 #   scripts/servis.sh durum      çalışıyor mu, link ne, son yedek ne zaman
+#   scripts/servis.sh yeniden    sunucuyu yeniden başlat (kod güncellenince)
+#   scripts/servis.sh kanca      git pull sonrası sunucu kendiliğinden yeniden başlasın
 #   scripts/servis.sh yedek      şimdi yedek al (Drive klasörüne)
 #   scripts/servis.sh drivea-tasi büyük arşivleri Drive'a taşı, Mac'te yer aç
 #   scripts/servis.sh gunluk     son 50 satır sunucu günlüğü
@@ -155,6 +157,26 @@ link_ac() {
   echo "✓ Link: $GENEL_ADRES"
 }
 
+yeniden() {
+  # Python kodu bellekte kalır: git pull sonrası yeniden başlatılmazsa yeni
+  # şablonlar eski kodla çalışır ve sayfa hata verir (2026-09-28: «Sayılarla»
+  # ve «Çalış tarzı» bu yüzden açılmadı).
+  launchctl kickstart -k "gui/$(id -u)/$ETIKET" 2>/dev/null \
+    && echo "Sunucu yeniden başlatıldı." \
+    || echo "Sunucu ajanı yok — önce: scripts/servis.sh yayinla"
+}
+
+kanca() {
+  local k="$KOK/.git/hooks/post-merge"
+  cat > "$k" <<'KANCA'
+#!/usr/bin/env bash
+# Keşif Motoru: git pull kodu değiştirdiyse sunucuyu yeniden başlat.
+"$(git rev-parse --show-toplevel)/scripts/servis.sh" yeniden || true
+KANCA
+  chmod +x "$k"
+  echo "Kanca kuruldu: bundan sonra her git pull sunucuyu kendiliğinden yeniler."
+}
+
 yayinla() {
   # Önce link: Spotify'ın dönüş adresi herkese açık adresten kuruluyor.
   # Eskiden varsayılan http://127.0.0.1:8800/... kalıyordu ve telefondan
@@ -162,6 +184,7 @@ yayinla() {
   link_ac
   sunucu_kur
   yedek_kur
+  kanca
   echo
   echo "Bu linki paylaşabilirsin. Mac şarjda ve kapağı açıkken uygulama açık kalır."
   echo
@@ -264,6 +287,8 @@ case "${1:-}" in
   yayinla) yayinla ;;
   kur) sunucu_kur ;;
   durum) durum ;;
+  yeniden) yeniden ;;
+  kanca) kanca ;;
   yedek) yedek ;;
   drivea-tasi) drivea_tasi ;;
   gunluk) tail -n 50 "$GUNLUK" ;;

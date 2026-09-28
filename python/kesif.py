@@ -802,6 +802,15 @@ def muzisyen_destesi(
         f"SELECT artist FROM adaylar WHERE aday_id IN ({','.join('?' * len(haric)) or 'NULL'})",
         tuple(haric))}
     uygun = sonuc[~sonuc["artist"].map(lambda a: normalize_esleme(str(a))).isin(engelli)]
+    # BAĞLAM SÜZGECİ (2026-09-28): icra profili tek başına Joe Duplantier ↔
+    # Lana Del Rey eşleştiriyordu. Sesi müzisyenin albümlerinden uzak olan
+    # (adaylar arasında alt yarı) elenir; sesi bilinmeyen en sona gider.
+    from python.muzisyen import BAGLAM_ESIGI
+    baglam = uygun.get("baglam")
+    if baglam is not None and baglam.notna().any():
+        uygun = uygun[~(baglam < BAGLAM_ESIGI)]
+        uygun = uygun.assign(_bilinmiyor=uygun["baglam"].isna()).sort_values(
+            ["_bilinmiyor", "benzerlik"], ascending=[True, False])
     ustunde = uygun[uygun["benzerlik"] >= esik]
     secilen = ustunde.head(adet)
 
@@ -824,6 +833,10 @@ def muzisyen_destesi(
                    satir["dayanak"])
         kart = _kart(conn, satir["calisma_id"], s, {}, {}, {}, {}, adlar)
         yuzde_ = round(float(r.benzerlik) * 100)
+        b = getattr(r, "baglam", None)
+        ses_cumle = t(f" Sesi de onun albümlerine yakın: adayların üst %{round((1 - b) * 100) or 1}'inde.",
+                      f" Its sound is close to theirs too: top {round((1 - b) * 100) or 1}% of candidates.") \
+            if b is not None and b == b else t(" Sesini karşılaştıracak veri yok.", " No sound data to compare.")
         kart.update(
             calisma_id=satir["calisma_id"],
             benzerlik=round(float(r.benzerlik), 3),
@@ -831,10 +844,11 @@ def muzisyen_destesi(
             strateji_ad=t(f"{kisi_adi} gibi", f"like {kisi_adi}"),
             gerekce=t(
                 f"{rol_ad.capitalize()} kanalı {kisi_adi} gibi çalıyor: ayrılmış kanaldan "
-                f"ölçülen profil %{yuzde_} yakın. Ölçüm tek 30 sn klipten; dinleyip karar ver.",
+                f"ölçülen profil %{yuzde_} yakın." + ses_cumle
+                + " Ölçüm tek 30 sn klipten; dinleyip karar ver.",
                 f"The {rol_ad} part plays like {kisi_adi}: the profile measured from the "
-                f"separated stem is {yuzde_}% close. It comes from a single 30 s clip, "
-                f"so have a listen and decide."),
+                f"separated stem is {yuzde_}% close." + ses_cumle
+                + " It comes from a single 30 s clip, so have a listen and decide."),
         )
         kartlar.append(kart)
     kalan = len(ustunde) - len(secilen)

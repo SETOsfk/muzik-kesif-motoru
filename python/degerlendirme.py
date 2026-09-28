@@ -312,8 +312,10 @@ class SesErisimi:
         self._sahip_dizi = np.array(self.kutup_sahip)
 
     #: "en_yakin_eksen": parça yalnız EN YAKIN kütüphane albümü sorgu
-    #: ekseninde ise sayılır (`etiket_clap.acik_havuz_adaylari` ile aynı kural).
-    kural: str = "en_yakin_eksen"
+    #: ekseninde ise sayılır. "cok_sesli": komşu çoğunluğu + sanatçı başına
+    #: birden çok parça (`etiket_clap.komsu_cogunlugu` / `sanatci_sirala` —
+    #: üretimin işlevleri ÇAĞRILIR, K19). Varsayılan üretiminki.
+    from python.etiket_clap import SES_KURALI as kural
 
     def sirala(
         self, gizlenen: str, sahip: set[str], sorgu: set[str] | None = None,
@@ -344,6 +346,16 @@ class SesErisimi:
 
         # Satır (parça) skoru = sorguya en yakın olduğu nokta.
         satir = duzeltilmis.max(axis=1)
+
+        if self.kural == "cok_sesli" and sorgu is not None:
+            from python.etiket_clap import komsu_cogunlugu, sanatci_sirala
+            tum = (self.S[:, kalan] - taban_havuz
+                   - self.LL[np.ix_(kalan, kalan)].mean(axis=1)[None, :])
+            eksende = np.isin(self._sahip_dizi[kalan], list(sorgu))
+            sayi, ort = komsu_cogunlugu(tum, eksende)
+            sk = sanatci_sirala(ort, sayi, self.havuz_sahip)
+            sk = {a: d for a, d in sk.items() if not (a in sahip and a != gizlenen)}
+            return [a for a, _ in sorted(sk.items(), key=lambda x: -x[1])]
 
         if self.kural == "en_yakin_eksen" and sorgu is not None:
             # En yakın albümü sorgu dışında kalan parça bu eksenin adayı değil.
@@ -767,8 +779,9 @@ def main(argv: list[str] | None = None) -> int:
                              help="liste başına ağırlık (büyük karışık listeleri kısar)")
     ayristirici.add_argument("--olcut", choices=("pmi", "npmi"), default="pmi",
                              help="birliktelik ölçütü")
-    ayristirici.add_argument("--ses-kural", choices=("en_yakin_eksen", "eksen"),
-                             default="en_yakin_eksen",
+    from python.etiket_clap import SES_KURALI
+    ayristirici.add_argument("--ses-kural", choices=("cok_sesli", "en_yakin_eksen", "eksen"),
+                             default=SES_KURALI,
                              help="ses erişiminde eksen kuralı (kıyas için)")
     ayristirici.add_argument("--en-kotu", type=int, default=0,
                              help="hiç bulunamayan ilk N sanatçıyı listele")

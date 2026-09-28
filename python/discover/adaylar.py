@@ -845,6 +845,9 @@ def ses_benzerligi(
                 skor=round(kayit["skor"], 4), gerekce=gerekce,
                 dayanak={
                     "benzedigi": kayit["benzedigi"],
+                    # Çok sesli kural (2026-09-28): kanıt birden çok parça ve albüm.
+                    "benzedikleri": kayit.get("benzedikleri"),
+                    "parca_sayisi": kayit.get("parca_sayisi"),
                     "clap_skor": round(kayit["skor"], 4),
                     "yontem": "CLAP gömü, hubness düzeltmeli, açık havuz",
                     "birim": "parca" if parca_mi else "album",
@@ -965,6 +968,8 @@ def melez(
         # benzediği albüm yalnız Türkçe cümlenin içindeydi.
         if s is not None:
             dayanak["benzedigi"] = s.dayanak.get("benzedigi")
+            dayanak["benzedikleri"] = s.dayanak.get("benzedikleri")
+            dayanak["parca_sayisi"] = s.dayanak.get("parca_sayisi")
             dayanak["clap_skor"] = s.dayanak.get("clap_skor")
         if l is not None:
             for alan in ("pmi", "birlikte_liste", "kaynak_sanatcilar"):

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -551,6 +552,87 @@ def adaya_benzeyen_icracilar(
 # (2026-09-23'te ~175). Ölçüm, adayın 30 sn önizlemesinden.
 # --------------------------------------------------------------------------- #
 
+#: Bağlam süzgeci: aday, müzisyenin albümlerine SES bakımından bütün adaylar
+#: arasında en az bu yüzdelikte yakın olmalı. 0,5 = üst yarı.
+BAGLAM_ESIGI = 0.5
+
+
+def _havuz_sanatci_gomuleri(imza: tuple) -> dict[str, np.ndarray]:
+    """{sanatçı anahtarı: birim uzunlukta ortalama CLAP vektörü} — çalma
+    listesi parçalarından. Paylaşımlı veri (kullanıcıya özel değil); önbellek
+    anahtarı klasörün imzası, dosya eklenince yenilenir."""
+    return _havuz_onbellek(imza)
+
+
+@lru_cache(maxsize=2)
+def _havuz_onbellek(imza: tuple) -> dict[str, np.ndarray]:
+    from python.db import baglan_ortak
+    from python.etiket_clap import PARCA_GOMU
+
+    conn = baglan_ortak()
+    try:
+        parca_ad = {int(r[0]): r[1] for r in conn.execute(
+            "SELECT parca_id, sanatci FROM liste_parca WHERE parca_id IS NOT NULL")}
+    except Exception:  # noqa: BLE001 — tablo yoksa bağlam yok
+        return {}
+    finally:
+        conn.close()
+    toplam: dict[str, list[np.ndarray]] = {}
+    for dosya in PARCA_GOMU.glob("*.npy"):
+        try:
+            ad = parca_ad.get(int(dosya.stem))
+        except ValueError:
+            continue
+        if ad:
+            toplam.setdefault(normalize_esleme(ad), []).append(np.load(dosya))
+    sonuc = {}
+    for anahtar, vektorler in toplam.items():
+        v = np.mean(vektorler, axis=0)
+        n = np.linalg.norm(v)
+        if n > 0:
+            sonuc[anahtar] = v / n
+    return sonuc
+
+
+def baglam_benzerligi(conn: sqlite3.Connection, kisi_anahtar: str,
+                      sanatcilar: list[str]) -> dict[str, float]:
+    """Adayın SESİ müzisyenin albümlerine ne kadar yakın — yüzdelik (0–1).
+
+    İcra profili ~10 sayı; tek başına Joe Duplantier ↔ Lana Del Rey gibi
+    tesadüfi eşleşmeler veriyordu (kullanıcı geri bildirimi, 2026-09-28).
+    Burada müzisyenin kütüphanedeki albümlerinin CLAP gömüleri ile adayın
+    çalma listesi parçalarının ortalama gömüsü kıyaslanır: her aday için en
+    yakın albüme kosinüs, sonra adaylar arasında yüzdelik sıra. Gömüsü
+    olmayan aday sözlükte YOK (bilinmiyor ≠ uzak).
+    """
+    from python.enrich.kisi_birlestir import eslesmeleri_oku
+    from python.etiket_clap import GOMU_KLASOR, PARCA_GOMU, gomuleri_oku
+
+    eslesme = eslesmeleri_oku(conn)
+    albumler = []
+    for album_id, ad in conn.execute("SELECT album_id, person_name FROM credits"):
+        anahtar = normalize_esleme(ad or "")
+        if eslesme.get(anahtar, anahtar) == kisi_anahtar:
+            albumler.append(album_id)
+    albumler = sorted(set(albumler))
+    _, M = gomuleri_oku(albumler) if albumler and GOMU_KLASOR.exists() else ([], np.zeros((0, 0)))
+    if not len(M) or not PARCA_GOMU.exists():
+        return {}
+    M = M / np.maximum(np.linalg.norm(M, axis=1, keepdims=True), 1e-12)
+    imza = (PARCA_GOMU.stat().st_mtime_ns, sum(1 for _ in PARCA_GOMU.glob("*.npy")))
+    havuz = _havuz_sanatci_gomuleri(imza)
+    ham = {}
+    for s in set(sanatcilar):
+        v = havuz.get(normalize_esleme(str(s)))
+        if v is not None:
+            ham[s] = float((M @ v).max())
+    if not ham:
+        return {}
+    degerler = np.array(sorted(ham.values()))
+    return {s: float(np.searchsorted(degerler, d, side="right") / len(degerler))
+            for s, d in ham.items()}
+
+
 def muzisyene_benzeyen_adaylar(
     conn: sqlite3.Connection, profiller: pd.DataFrame, kisi_anahtar: str,
     rol: str = "drums", adet: int = 6,
@@ -591,4 +673,6 @@ def muzisyene_benzeyen_adaylar(
              .join(adlar, how="inner")
              .sort_values("benzerlik", ascending=False))
     sonuc = sonuc[~sonuc["artist"].map(lambda a: normalize_esleme(str(a))).duplicated()]
+    baglam = baglam_benzerligi(conn, kisi_anahtar, list(sonuc["artist"]))
+    sonuc["baglam"] = sonuc["artist"].map(baglam)          # yoksa NaN = bilinmiyor
     return sonuc.head(adet).reset_index(names="aday_id"), len(aday_m)
