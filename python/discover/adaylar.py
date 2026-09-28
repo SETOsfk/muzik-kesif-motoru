@@ -41,6 +41,7 @@ from pathlib import Path
 import pandas as pd
 
 from python.db import VARSAYILAN_DB, baglan
+from python.gerekce import gerekce as gerekce_kur
 from python.enrich.rol_eslemesi import ENSTRUMAN_ROLLERI
 from python.discover.listenbrainz import (
     benzer_sanatcilar,
@@ -1234,7 +1235,10 @@ def main(argv: list[str] | None = None) -> int:
             for aday in adaylar[:8]:
                 yil = f" ({aday.year})" if aday.year else ""
                 print(f"  [{aday.strateji:<16}] {aday.artist} — {aday.title}{yil}")
-                print(f"      {aday.gerekce}")
+                # Arayüzdeki cümlenin aynısı (dayanaktan kurulur, K22).
+                metin = gerekce_kur(aday.strateji, aday.dayanak, eksen=ad,
+                                    saklanan=aday.gerekce)
+                print(f"      {metin}")
     finally:
         conn.close()
 

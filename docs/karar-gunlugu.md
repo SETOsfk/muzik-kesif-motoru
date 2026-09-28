@@ -2757,3 +2757,18 @@ Mountain); (3) «birkaç farklı ses üzerinden öner, tek şarkı değil»;
   sayfa da 200 döndü. En olası sebep: `git pull` sonrası sunucu yeniden
   başlatılmadı (şablonlar taze, Python kodu eski). `servis.sh yeniden` ve
   `servis.sh kanca` (git post-merge kancası) eklendi; `yayinla` kancayı kurar.
+
+### 2026-09-28 (19) — Çok sesli kural ölçüldü ve kalıyor
+
+Spektral çalışmada (K19), aynı havuzla, yalnız ses kuralı değişerek:
+
+| erişim | kural | @50 | MRR | medyan sıra | yüzdelik |
+|---|---|---|---|---|---|
+| ses | en yakın eksen (eski) | 0.02 | 0.003 | 238 | 0.094 |
+| ses | çok sesli (yeni) | 0.03 | 0.004 | 114 | **0.045** |
+| melez | en yakın eksen (eski) | 0.08 | 0.016 | 322 | 0.105 |
+| melez | çok sesli (yeni) | 0.08 | 0.014 | 234 | **0.076** |
+
+Liste yolu değişmedi (0.096) — kıyas temiz. Yeni kural gizlenen sanatçıyı
+ortalamada iki kat yukarı taşıyor; ilk 10'da fark yok (n küçük). Karar: kalır.
+Komut satırı çıktısı artık arayüzle aynı cümleyi (`gerekce.py`) basıyor.
