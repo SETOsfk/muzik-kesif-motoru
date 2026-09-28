@@ -439,6 +439,55 @@ def eksen_ozeti(veri: pd.DataFrame, odak: str = "hepsi") -> pd.DataFrame:
     return pd.DataFrame(satirlar)
 
 
+def tarz_konumlari(
+    veri: pd.DataFrame, U: pd.DataFrame, adlar: dict[int, str], odak: str = "genel",
+    asgari: int = 3,
+) -> list[dict]:
+    """Her eksende her tarzın iki uç arasındaki yeri — YÜZDELİK sırayla.
+
+    Eski saçılım haritası (iki eksen, her albüm bir nokta, renk = küme) üst
+    üste binen bir bulut veriyordu; kullanıcı «neredeyse hiçbir şey
+    anlatmıyor» dedi (2026-09-28). Yerine tek sorulu bir özet: bu tarzın
+    albümleri, kütüphanendeki bütün albümler arasında hangi uca yakın?
+
+    Ham değer yerine yüzdelik sıra: 0 = kütüphanenin en «düşük» albümü,
+    1 = en «yüksek»i. Birimi (dB, Hz, oran) bilmeden okunur ve eksenler arası
+    aynı ölçekte durur. Referans yine yalnız bu kütüphane (K13).
+
+    Tarz sırası bütün eksenlerde aynı (büyükten küçüğe) — göz satırı eksenden
+    eksene izleyebilsin.
+    """
+    if veri.empty or U is None or U.empty:
+        return []
+    keskin = U.idxmax(axis=1)
+    boyut = keskin.value_counts()
+    sonuc = []
+    for sutun, stem, ad, dusuk, yuksek in odak_eksenleri(odak):
+        ad, dusuk, yuksek = _eksen_metni(sutun, stem, ad, dusuk, yuksek)
+        if sutun not in veri.columns:
+            continue
+        x = veri[(veri["stem"] == stem) & veri[sutun].notna()]
+        if len(x) < 10:
+            continue
+        x = x.assign(sira=x[sutun].rank(pct=True), kume=x["album_id"].map(keskin)).dropna(subset=["kume"])
+        satirlar = []
+        for kume in boyut.index:
+            grup = x[x["kume"] == kume]
+            if len(grup) < asgari:
+                continue
+            satirlar.append({
+                "kume": int(kume), "ad": adlar.get(int(kume), f"{int(kume) + 1}"),
+                "orta": float(grup["sira"].median()),
+                "q1": float(grup["sira"].quantile(0.25)),
+                "q3": float(grup["sira"].quantile(0.75)),
+                "n": len(grup),
+            })
+        if satirlar:
+            sonuc.append({"eksen": ad, "sutun": sutun, "stem": stem,
+                          "dusuk": dusuk, "yuksek": yuksek, "satirlar": satirlar})
+    return sonuc
+
+
 def kume_ses_imzasi(
     conn: sqlite3.Connection, veri: pd.DataFrame, U: pd.DataFrame, adlar: dict[int, str]
 ) -> pd.DataFrame:

@@ -30,6 +30,11 @@
                placeholder="{{ t('ad ver', 'name it') }}{% if k.oneri %} — {{ t('ör.', 'e.g.') }} {{ k.oneri }}{% endif %}">
         <small class="durum" aria-live="polite"></small>
       </label>
+      {% if k.saglik == "karisik" %}
+      <p class="tarz-uyari"><span class="saglik karisik">{{ t("karışık", "mixed") }}</span>{{ t("Albümlerinin çoğu başka tarzlarla da bağlı; önerileri daha dağınık gelebilir.", "Most of its albums lean into other styles too; its picks can feel scattered.") }}</p>
+      {% elif k.saglik == "oynak" %}
+      <p class="tarz-uyari"><span class="saglik oynak">{{ t("oynak", "unsettled") }}</span>{{ t("Veri yeniden örneklenince dağılıyor; önerilerine temkinli bak.", "Falls apart when the data is resampled; treat its picks with care.") }}</p>
+      {% endif %}
       <ul class="tarz-albumler">
         {% for a in k.albumler %}
         <li><span class="tarz-kapak">{{ yer_tutucu(a.artist, a.title) }}</span>

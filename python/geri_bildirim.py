@@ -241,11 +241,11 @@ def ozet_cumleleri(isabet: pd.DataFrame) -> list[str]:
             cumleler.append(t(
                 f"**{ad}** sana çoğunlukla zaten bildiğin şeyleri getiriyor: "
                 f"{satir.toplam} kararın {satir.zaten_biliyorum} tanesi «zaten biliyorum». "
-                f"Keşif oranı {yuzde(satir.kesif_orani)} ({yuzde(satir.kesif_alt)}–"
-                f"{yuzde(satir.kesif_ust)}). Sorun zevkte değil, keşifte.",
+                f"Yenilik oranı {yuzde(satir.kesif_orani)} ({yuzde(satir.kesif_alt)}–"
+                f"{yuzde(satir.kesif_ust)}). Sorun zevkte değil, yenilikte.",
                 f"**{ad}** mostly brings you things you already know: "
                 f"{satir.zaten_biliyorum} of {satir.toplam} decisions were \"already know it\". "
-                f"Discovery rate {yuzde(satir.kesif_orani)} ({yuzde(satir.kesif_alt)}–"
+                f"Novelty rate {yuzde(satir.kesif_orani)} ({yuzde(satir.kesif_alt)}–"
                 f"{yuzde(satir.kesif_ust)}). The problem isn't taste, it's discovery.",
             ))
         if satir.zevk_n >= ASGARI_N and satir.zevk_alt > 0.5:
@@ -264,8 +264,8 @@ def ozet_cumleleri(isabet: pd.DataFrame) -> list[str]:
             ))
     if not cumleler:
         cumleler.append(t(
-            "Güvenilir bir sonuç çıkaracak kadar geri bildirim henüz yok; Wilson "
-            "aralıkları geniş. Birkaç karar daha gerekiyor.",
+            "Güvenilir bir sonuç çıkaracak kadar karar henüz yok; oranlar hâlâ "
+            "çok oynak. Birkaç karar daha gerekiyor.",
             "Not enough feedback yet for a reliable verdict; the Wilson intervals "
             "are still wide. A few more decisions will do it.",
         ))

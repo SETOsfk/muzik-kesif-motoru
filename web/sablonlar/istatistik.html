@@ -3,24 +3,37 @@
 {% block govde %}
 {# «Sayılarla sen»: her kart bir soru, büyük bir cevap, tek grafik ve
    katlanmış «nasıl ölçtük?». Hesap python/istatistik.py; cümleler burada. #}
-<div class="ist">
+<div class="ist pano">
   <header class="sayfa-basi">
     <p class="etiket-ust">{{ t("sen", "you") }}</p>
     <h1>{{ t("Sayılarla sen", "You in numbers") }}</h1>
-    <p>{{ t("Arka planda dönen hesapların kısa bir özeti: albümlerin nasıl gruplandı, sesin ne söylüyor, öneriler ne kadar tuttu. Her kartın altında yöntemin adı var — merak edene.",
-            "A short look at the maths running underneath: how your albums were grouped, what the sound says, how well the picks landed. Each card names its method — for the curious.") }}</p>
+    <p>{{ t("Arka planda dönen hesapların panosu: albümlerin nasıl gruplandı, sesin ne söylüyor, öneriler ne kadar tuttu. Her kartın altında yöntemin adı var — merak edene.",
+            "A dashboard of the maths running underneath: how your albums were grouped, what the sound says, how well the picks landed. Each card names its method — for the curious.") }}</p>
   </header>
 
-  <div class="ist-sayilar">
-    <div><b>{{ s.album|sayi(0) }}</b><span>{{ t("albüm", "albums") }}</span></div>
-    {% if s.cesitlilik %}<div><b>{{ s.cesitlilik.sanatci|sayi(0) }}</b><span>{{ t("sanatçı", "artists") }}</span></div>{% endif %}
-    {% if s.tarzlar %}<div><b>{{ s.tarzlar.kume_sayisi }}</b><span>{{ t("tarz", "styles") }}</span></div>{% endif %}
-    {% if s.zaman %}<div><b>{{ s.zaman.en_yeni - s.zaman.en_eski }}</b><span>{{ t("yıla yayılıyor", "years of music") }}</span></div>{% endif %}
-    {% if s.kesif %}<div><b>{{ s.kesif.sanatci }}</b><span>{{ t("sanatçıya karar verdin", "artists judged") }}</span></div>{% endif %}
+  <div class="kpi">
+    <div><span>{{ t("albüm", "albums") }}</span><b>{{ s.album|sayi(0) }}</b>
+      {% if s.cesitlilik %}<small>{{ s.cesitlilik.sanatci|sayi(0) }} {{ t("sanatçıdan", "artists") }}</small>{% endif %}</div>
+    {% if s.tarzlar %}
+    <div><span>{{ t("tarz", "styles") }}</span><b>{{ s.tarzlar.kume_sayisi }}</b>
+      <small>{{ s.tarzlar.saglam_sayisi }} {{ t("tanesi sağlam", "robust") }}</small></div>
+    <div><span>{{ t("ayrışma", "separation") }}</span><b>{{ yuzde(s.tarzlar.ayrisma) }}</b>
+      <span class="kpi-olcek" aria-hidden="true"><i style="width:{{ (s.tarzlar.ayrisma*100)|round(1) }}%"></i></span>
+      <small>{{ t("tarzların ne kadar net ayrılıyor", "how cleanly your styles separate") }}</small></div>
+    {% endif %}
+    {% if s.zaman %}
+    <div><span>{{ t("yıl aralığı", "years") }}</span><b>{{ s.zaman.en_yeni - s.zaman.en_eski }}</b>
+      <small>{{ s.zaman.en_eski }}–{{ s.zaman.en_yeni }}</small></div>
+    {% endif %}
+    {% if s.kesif and s.kesif.oran is not none %}
+    <div><span>{{ t("beğeni oranı", "like rate") }}</span><b>{{ yuzde(s.kesif.oran) }}</b>
+      <small>{{ s.kesif.sanatci }} {{ t("sanatçı kararından", "artist decisions") }}</small></div>
+    {% endif %}
   </div>
 
+  <div class="pano-izgara">
   {% if s.tarzlar %}
-  <section class="adim ist-kart">
+  <section class="adim ist-kart genis">
     <p class="etiket-ust">{{ t("tarzların", "your styles") }}</p>
     {% set onda = (s.tarzlar.net_pay * 10)|round|int %}
     <h2>{{ t("Her 10 albümünden " ~ onda ~ " tanesi tek bir tarza net ait",
@@ -32,13 +45,19 @@
     <p>{{ t("Sistem bir albümü tek kutuya sokmuyor; her tarza ne kadar ait olduğunu ayrı ayrı ölçüyor. Senin tarzların birbirinden keskin ayrılıyor.", "The system doesn't force an album into one box; it measures how much it belongs to each style. Yours are sharply separated.") }}</p>
     {% endif %}
     {{ g_tarz }}
-    {% if s.tarzlar.kopruler %}
-    <h3>{{ t("Köprü albümler", "Bridge albums") }}</h3>
-    <p class="sen-not">{{ t("İki tarzın ikisine de güçlü bağlı olanlar — zevkinin birleştiği yerler.", "Strongly tied to two styles at once — where your tastes meet.") }}</p>
-    <ul class="ist-kopru">
-      {% for k in s.tarzlar.kopruler %}
-      <li><b>{{ k.artist }}</b> — {{ k.title }}
-        <span>{{ tarz_adi(k.kume1) }} {{ yuzde(k.u1) }} · {{ tarz_adi(k.kume2) }} {{ yuzde(k.u2) }}</span></li>
+    <div class="ist-efsane" aria-hidden="true">
+      <span><i class="ton-1"></i>{{ t("net ait", "clearly belong") }}</span>
+      <span><i class="ton-2"></i>{{ t("iki tarz arasında", "in between") }}</span>
+    </div>
+    {% set sorunlu = s.tarzlar.liste|rejectattr("saglik", "equalto", "saglam")|list %}
+    {% if sorunlu %}
+    <h3>{{ t("Dikkat isteyen tarzlar", "Styles to watch") }}</h3>
+    <ul class="saglik-liste">
+      {% for k in sorunlu %}
+      <li><span class="saglik {{ k.saglik }}">{{ saglik_adi(k.saglik) }}</span>
+        <b>{{ tarz_adi(k.kume) }}</b> —
+        {% if k.saglik == "oynak" %}{{ t("veri yeniden örneklenince dağılıyor; bu tarzdan gelen önerilere temkinli bak.", "falls apart when the data is resampled; treat picks from it with care.") }}
+        {% else %}{{ t("albümlerinin çoğu başka tarzlarla paylaşılıyor, bu yüzden önerileri daha dağınık gelebilir.", "most of its albums are shared with other styles, so its picks can feel scattered.") }}{% endif %}</li>
       {% endfor %}
     </ul>
     {% endif %}
@@ -48,7 +67,26 @@
               "Fuzzy clustering (fuzzy c-means): every album gets a membership between 0 and 1 in every style. An album counts as «clear» if its top membership is above " ~ (net_esik*100)|int ~ "%, otherwise «in between»; if its second membership also passes " ~ (kopru_esik*100)|int ~ "%, it's a bridge.") }}</p>
       <p>{{ t("Sağlamlık: veri yüzlerce kez yeniden örneklenip (bootstrap) kümeleme tekrarlandı; aynı tarz her seferinde aynı albümleri topluyorsa sağlam sayıldı (Jaccard benzerliği). " ~ s.tarzlar.kume_sayisi ~ " tarzın " ~ s.tarzlar.stabil_sayisi ~ " tanesi sağlam çıktı. Üzerine gelince her tarzın puanı görünür.",
               "Robustness: the data was resampled hundreds of times (bootstrap) and clustered again; a style that gathers the same albums every time counts as robust (Jaccard similarity). " ~ s.tarzlar.stabil_sayisi ~ " of " ~ s.tarzlar.kume_sayisi ~ " styles came out robust. Hover a style to see its score.") }}</p>
+      <p>{{ t("Ayrışma: albümlerin en yüksek üyeliklerinin ortalaması, «her albüm her tarza eşit ait» (%0) ile «her albüm tek bir tarzda» (%100) arasına ölçeklendi — bölüntü katsayısının okunur hâli. «Karışık» tarz: sağlam ama üyelerinin ortalama en yüksek üyeliği eşiğin (%" ~ (net_esik*100)|int ~ ") altında.",
+              "Separation: the average top membership, rescaled between «every album belongs equally everywhere» (0%) and «every album in exactly one style» (100%) — a readable form of the partition coefficient. A «mixed» style is robust, but its albums' average top membership is below " ~ (net_esik*100)|int ~ "%.") }}</p>
     </details>
+  </section>
+  {% endif %}
+
+  {% if s.tarzlar and s.tarzlar.ciftler %}
+  <section class="adim ist-kart">
+    <p class="etiket-ust">{{ t("köprüler", "bridges") }}</p>
+    <h2>{{ t("Zevkin en çok " ~ tarz_adi(s.tarzlar.ciftler[0][0]) ~ " ile " ~ tarz_adi(s.tarzlar.ciftler[0][1]) ~ " arasında buluşuyor",
+             "Your tastes meet most between " ~ tarz_adi(s.tarzlar.ciftler[0][0]) ~ " and " ~ tarz_adi(s.tarzlar.ciftler[0][1])) }}</h2>
+    <p>{{ t(s.tarzlar.kopru_sayisi ~ " albüm iki tarza birden güçlü bağlı. En sık buluşan çiftler:", s.tarzlar.kopru_sayisi ~ " albums are strongly tied to two styles at once. The most common pairs:") }}</p>
+    {{ g_cift }}
+    <h3>{{ t("En güçlü köprü albümler", "Strongest bridge albums") }}</h3>
+    <ul class="ist-kopru">
+      {% for k in s.tarzlar.kopruler %}
+      <li><b>{{ k.artist }}</b> — {{ k.title }}
+        <span>{{ tarz_adi(k.kume1) }} {{ yuzde(k.u1) }} · {{ tarz_adi(k.kume2) }} {{ yuzde(k.u2) }}</span></li>
+      {% endfor %}
+    </ul>
   </section>
   {% endif %}
 
@@ -63,22 +101,6 @@
       <summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
       <p>{{ t("Albümler çıkış yılına göre on yıllara ayrıldı; " ~ s.zaman.n ~ " albümün yılı biliniyor. Ortadaki yıl medyan: albümlerin tam yarısı ondan önce.",
               "Albums are grouped by release decade; " ~ s.zaman.n ~ " albums have a known year. The middle year is the median: exactly half the albums come before it.") }}</p>
-    </details>
-  </section>
-  {% endif %}
-
-  {% if s.cesitlilik %}
-  <section class="adim ist-kart">
-    <p class="etiket-ust">{{ t("çeşitlilik", "variety") }}</p>
-    <h2>{{ t("Kütüphanen " ~ (s.cesitlilik.etkin|round|int) ~ " sanatçı kadar çeşitli",
-             "Your library is as varied as " ~ (s.cesitlilik.etkin|round|int) ~ " artists") }}</h2>
-    <p>{{ t(s.cesitlilik.sanatci ~ " sanatçın var, ama bazıları çok daha kalabalık. En çok albümün olan 10 sanatçının payı " ~ yuzde(s.cesitlilik.ilk10_pay) ~ "; " ~ s.cesitlilik.tek_albumlu ~ " sanatçı tek bir albümle temsil ediliyor.",
-            "You have " ~ s.cesitlilik.sanatci ~ " artists, but some take up far more room. Your top 10 artists hold " ~ yuzde(s.cesitlilik.ilk10_pay) ~ " of the library; " ~ s.cesitlilik.tek_albumlu ~ " artists appear with a single album.") }}</p>
-    {{ g_cesit }}
-    <details class="ist-yontem">
-      <summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
-      <p>{{ t("Shannon çeşitliliği (Hill sayısı): albümlerin sanatçılara dağılımından bir entropi hesaplanır ve «her biri eşit yer kaplayan kaç sanatçıya denk?» sorusuna çevrilir. Denge oranı " ~ yuzde(s.cesitlilik.denge) ~ ": %100, her sanatçının eşit sayıda albümü olsaydı çıkardı.",
-              "Shannon diversity (Hill number): an entropy is computed from how albums spread across artists and turned into «how many equally-sized artists is this worth?». Evenness is " ~ yuzde(s.cesitlilik.denge) ~ ": 100% would mean every artist had the same number of albums.") }}</p>
     </details>
   </section>
   {% endif %}
@@ -100,12 +122,34 @@
   </section>
   {% endif %}
 
+  {% if s.cesitlilik %}
   <section class="adim ist-kart">
+    <p class="etiket-ust">{{ t("çeşitlilik", "variety") }}</p>
+    <h2>{{ t("Kütüphanen " ~ (s.cesitlilik.etkin|round|int) ~ " sanatçı kadar çeşitli",
+             "Your library is as varied as " ~ (s.cesitlilik.etkin|round|int) ~ " artists") }}</h2>
+    <p>{{ t(s.cesitlilik.sanatci ~ " sanatçın var, ama bazıları çok daha kalabalık. En çok albümün olan 10 sanatçının payı " ~ yuzde(s.cesitlilik.ilk10_pay) ~ "; " ~ s.cesitlilik.tek_albumlu ~ " sanatçı tek bir albümle temsil ediliyor.",
+            "You have " ~ s.cesitlilik.sanatci ~ " artists, but some take up far more room. Your top 10 artists hold " ~ yuzde(s.cesitlilik.ilk10_pay) ~ " of the library; " ~ s.cesitlilik.tek_albumlu ~ " artists appear with a single album.") }}</p>
+    {{ g_cesit }}
+    <details class="ist-yontem">
+      <summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
+      <p>{{ t("Shannon çeşitliliği (Hill sayısı): albümlerin sanatçılara dağılımından bir entropi hesaplanır ve «her biri eşit yer kaplayan kaç sanatçıya denk?» sorusuna çevrilir. Denge oranı " ~ yuzde(s.cesitlilik.denge) ~ ": %100, her sanatçının eşit sayıda albümü olsaydı çıkardı.",
+              "Shannon diversity (Hill number): an entropy is computed from how albums spread across artists and turned into «how many equally-sized artists is this worth?». Evenness is " ~ yuzde(s.cesitlilik.denge) ~ ": 100% would mean every artist had the same number of albums.") }}</p>
+    </details>
+  </section>
+  {% endif %}
+
+  <section class="adim ist-kart genis">
     <p class="etiket-ust">{{ t("keşif karnen", "discovery report") }}</p>
     {% if s.kesif and s.kesif.oran is not none %}
     <h2>{{ t("Beğeni oranın " ~ yuzde(s.kesif.oran), "You liked " ~ yuzde(s.kesif.oran) ~ " of the picks") }}</h2>
     <p>{{ t(s.kesif.begendim ~ " sanatçıyı listene ekledin, " ~ s.kesif.tutmadi ~ " tanesini geçtin, " ~ s.kesif.bilinen ~ " tanesini zaten biliyordun. Senin için yeni olanların oranı " ~ yuzde(s.kesif.yeni_pay) ~ ".",
             "You saved " ~ s.kesif.begendim ~ " artists, passed on " ~ s.kesif.tutmadi ~ " and already knew " ~ s.kesif.bilinen ~ ". " ~ yuzde(s.kesif.yeni_pay) ~ " of the picks were new to you.") }}</p>
+    {{ g_karar }}
+    <div class="ist-efsane" aria-hidden="true">
+      <span><i class="ton-1"></i>{{ t("listene ekledin", "saved") }}</span>
+      <span><i class="ton-2"></i>{{ t("geçtin", "passed") }}</span>
+      <span><i class="ton-3"></i>{{ t("zaten biliyordun", "already knew") }}</span>
+    </div>
     {% if g_kaynak %}
       <h3>{{ t("Hangi yol daha iyi tutuyor?", "Which route lands better?") }}</h3>
       {{ g_kaynak }}
@@ -125,5 +169,6 @@
     <p><a class="dugme" href="/kesfet">{{ t("Kaydırmaya başla →", "Start swiping →") }}</a></p>
     {% endif %}
   </section>
+  </div>
 </div>
 {% endblock %}

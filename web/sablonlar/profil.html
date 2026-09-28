@@ -14,52 +14,51 @@
     {% endfor %}
   </nav>
   <p class="aciklama">{{ odaklar[odak][1] }}</p>
-  <p>{{ t(albom_sayisi ~ " albümün ayrılmış enstrüman kanallarından ölçüldü. Uydurma bir \"ortalama dinleyici\" normuyla kıyaslanmıyor, çünkü öyle bir veri yok. Konum, bu kütüphanede gerçekten ölçülmüş uçlara göre veriliyor (Eminem'in programlanmış beat'i, Meshuggah'ın ride ağırlığı gibi).",
-          "Measured from the separated instrument stems of " ~ albom_sayisi ~ " albums. Nothing here is compared with a made-up \"average listener\", because no such data exists. Positions are given relative to extremes actually measured in this library (Eminem's programmed beats, Meshuggah's ride-heavy drumming).") }}</p>
+  <p>{{ t(albom_sayisi ~ " albüm, kayıttan ayrıştırılan davul, bas, gitar ve vokal seslerinden ölçüldü. Her şey yalnız kendi kütüphanene göre — uydurma bir «ortalama dinleyici» yok.",
+          albom_sayisi ~ " albums, measured from drums, bass, guitar and vocals separated out of the recordings. Everything is relative to your own library — there's no made-up «average listener».") }}</p>
 </div>
 
-<ul class="madde">
-  {% for c in cumleler %}<li>{{ c|replace('**','')|safe }}</li>{% endfor %}
-</ul>
+<details class="ist-yontem profil-cumleler">
+  <summary>{{ t("Kısa özet: her ölçümde nerede duruyorsun?", "Quick summary: where do you sit on each measure?") }}</summary>
+  <ul class="madde">
+    {% for c in cumleler %}<li>{{ c|replace('**','')|safe }}</li>{% endfor %}
+  </ul>
+</details>
+
+{% if konumlar %}
+<section class="bolum">
+  <h2>{{ t("Tarzların nasıl çalıyor?", "How do your styles play?") }}</h2>
+  <p class="aciklama">{{ t("Her satır bir tarzın. Nokta, o tarzdaki tipik albümün kütüphanende iki ucun hangisine yakın durduğunu gösteriyor; soluk bant albümlerinin yarısının durduğu aralık. Kesik çizgi kütüphanenin ortası. Ayrıntı için satırın üzerine gel.",
+                           "Each row is one of your styles. The dot shows where its typical album sits between the two ends, among all your albums; the pale band is where half of its albums sit. The dashed line is the middle of your library. Hover a row for details.") }}</p>
+  <div class="konum-izgara">
+    {% for k in konumlar %}
+    <article class="kart konum-kart">
+      <h3>{{ k.eksen|bas_harf }}</h3>
+      {{ k.cizim }}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 <div class="izgara iki bolum">
   <section class="kart">
     <h3>{{ t("Enstrüman dengesi", "Instrument balance") }}</h3>
-    <p class="aciklama">{{ t("Her kanalın mikste kapladığı yer (medyan). Dördü 1'e toplanmaz, çünkü ayrıştırma artığı ve örtüşme var; okunacak şey kanallar arasındaki denge.",
-                             "How much room each stem takes in the mix (median). The four don't add up to 1, because separation leaves residue and overlap; what matters is the balance between them.") }}</p>
+    <p class="aciklama">{{ t("Kayıttan ayrıştırılan her enstrümanın mikste kapladığı yer (ortanca albüm). Dördü 1'e toplanmaz; okunacak şey aralarındaki denge.",
+                             "How much room each instrument, separated out of the recording, takes in the mix (median album). The four don't add up to 1; what matters is the balance.") }}</p>
     {{ g_denge }}
-    <p class="aciklama" style="margin:var(--b2) 0 0">
-      {{ t("Kapsama:", "Coverage:") }}
-      {% for _, r in denge.iterrows() %}<code>{{ stem_adi(r.stem) }}</code>
-        {{ r.kapsama|yuzde }}{{ ' · ' if not loop.last }}{% endfor %}.
-      {{ t("Ölçülemeyen kanal, o albümde yok ya da çok kısık demek.", "A stem that couldn't be measured is either absent from that album or very quiet.") }}
-    </p>
   </section>
 
   <section class="kart">
-    <h3>{{ t("Hangi eksende geniş bir dinleyicisin?", "Where are you a wide listener?") }}</h3>
-    <p class="aciklama">{{ t("Yayılım = (p95−p5)/medyan. Geniş, o boyutta her şeyi dinlediğin anlamına gelir; dar ise belirli bir zevkin olduğunu gösterir ve dar eksende sapan bir öneri risklidir.",
-                             "Spread = (p95−p5)/median. Wide means you listen to everything on that dimension; narrow means you have a specific taste, and a pick that strays on a narrow axis is a risky one.") }}</p>
+    <h3>{{ t("Nerede her şeyi dinliyorsun?", "Where do you listen to everything?") }}</h3>
+    <p class="aciklama">{{ t("Uzun çubuk: o özellikte kütüphanen geniş bir alana yayılıyor. Kısa çubuk: belirli bir zevkin var — o yönde sapan bir öneri daha riskli.",
+                             "Long bar: your library spreads widely on that trait. Short bar: you have a specific taste — a pick that strays there is riskier.") }}</p>
     {{ g_cesit }}
+    <details class="ist-yontem"><summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
+      <p>{{ t("Yayılım = (95. yüzdelik − 5. yüzdelik) / ortanca. Uç albümlerin etkisini kırpar, birimleri farklı özellikleri kıyaslanabilir yapar.",
+              "Spread = (95th percentile − 5th percentile) / median. It trims the extreme albums and makes traits with different units comparable.") }}</p></details>
   </section>
 </div>
-
-{% if g_davul %}
-<section class="bolum">
-  <h2>{{ harita_basligi }}</h2>
-  <p class="aciklama">{{ harita_aciklama }}</p>
-  <div class="kart">{{ g_davul }}<div style="margin-top:var(--b3)">{{ efsane|safe }}</div></div>
-</section>
-{% endif %}
-
-{% if g_imza %}
-<section class="bolum">
-  <h2>{{ t("Kümelerinin ses imzası", "The sound signature of your clusters") }}</h2>
-  <p class="aciklama">{{ t("Kümeler kredi ve tür verisinden çıktı, adlarını sen verdin; burada nasıl seslendikleri görünüyor. Camgöbeği kütüphane medyanının üstünde, macenta altında demek. Sayılar için hücrenin üzerine gel.",
-                           "Your clusters came from credits and genre data, and you named them; this shows how they actually sound. Cyan means above the library median, magenta below. Hover a cell for the numbers.") }}</p>
-  <div class="kart">{{ g_imza }}</div>
-</section>
-{% endif %}
 
 {% if uclar %}
 <section class="bolum">
@@ -99,8 +98,8 @@
 </section>
 {% endif %}
 
-<section class="bolum">
-  <h2>{{ t("Bütün eksenler", "All axes") }}</h2>
+<details class="bolum ist-yontem">
+  <summary>{{ t("Bütün ölçümler (tablo)", "All measurements (table)") }}</summary>
   <div class="tablo-sarmal">
     <table>
       <thead><tr><th>{{ t("eksen", "axis") }}</th><th class="sayi">n</th><th class="sayi">p5</th>
@@ -117,5 +116,5 @@
       </tbody>
     </table>
   </div>
-</section>
+</details>
 {% endblock %}

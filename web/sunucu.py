@@ -789,8 +789,8 @@ async def karar_ver(istek):
 
 async def profil(istek):
     from python.profil import (
-        cesitlilik, eksen_adi, eksen_ozeti, enstruman_dengesi, harita,
-        kume_ses_imzasi, odaklar, profil_cumleleri, stem_adi, stem_verisi,
+        cesitlilik, eksen_ozeti, enstruman_dengesi, odaklar, profil_cumleleri,
+        stem_adi, stem_verisi, tarz_konumlari,
     )
     from web import grafik
 
@@ -822,57 +822,29 @@ async def profil(istek):
         U = (uyelik.pivot(index="album_id", columns="kume_id", values="uyelik")
              .fillna(0.0) if not uyelik.empty else pd.DataFrame())
         adlar = _eksen_adlari(calisma_id) if calisma_id else {}
-        imza = kume_ses_imzasi(conn, veri, U, adlar) if not U.empty else pd.DataFrame()
 
         # --- grafikler ---
         g_denge = grafik.yatay_cubuk(
             [(stem_adi(r["stem"]), r["enerji_payi"]) for _, r in denge.iterrows()],
-            basamak=3, renk=grafik.PALET["ikincil"])
+            basamak=2, renk=grafik.PALET["ikincil"], genislik=440)
         g_cesit = grafik.yatay_cubuk(
-            [(r["eksen"], r["yayilim"]) for _, r in cesit.iterrows()],
-            basamak=2, renk=grafik.PALET["mor"])
+            [(bas_harf(r["eksen"]), r["yayilim"]) for _, r in cesit.iterrows()],
+            basamak=2, renk=grafik.PALET["ikincil"], genislik=440)
 
-        # HARİTA ODAĞA GÖRE. Eskiden sabit bir "Davul haritası" vardı; vokale
-        # bakan kullanıcı yine davul görüyordu.
-        x_sutun, x_stem, y_sutun, y_stem, harita_aciklama = harita(odak)
-        harita_basligi = t(f"{ODAKLAR[odak][0]} haritası", f"{ODAKLAR[odak][0]} map")
-
-        if x_stem == y_stem:
-            kaynak = veri[veri["stem"] == x_stem]
-        else:  # farklı stem'lerden eksen: albüm bazında birleştir
-            kaynak = veri[veri["stem"] == x_stem].merge(
-                veri[veri["stem"] == y_stem][["album_id", y_sutun]],
-                on="album_id", suffixes=("", "_y"))
-        y_ad = y_sutun + "_y" if (x_stem != y_stem and y_sutun in
-                                  veri.columns) else y_sutun
-        davul = kaynak[kaynak[x_sutun].notna() & kaynak[y_ad].notna()].copy() \
-            if x_sutun in kaynak.columns and y_ad in kaynak.columns else pd.DataFrame()
-        g_davul = efsane = None
-        if not davul.empty and not U.empty:
-            keskin = U.idxmax(axis=1)
-            davul["kume"] = davul["album_id"].map(keskin).map(adlar).fillna("—")
-            g_davul = grafik.sacilim(
-                [(float(r[x_sutun]), float(r[y_ad]), str(r["kume"]),
-                  f"{r['artist']} — {r['title']}  ·  {r[x_sutun]:.2f} / "
-                  f"{r[y_ad]:.2f}  ·  {r['kume']}")
-                 for _, r in davul.iterrows()],
-                # Eksen başlıkları ODAĞA göre. Eskiden sabit "tekme payı /
-                # zil payı" yazıyordu; vokal haritasında bile.
-                x_baslik=eksen_adi(x_sutun, x_stem), y_baslik=eksen_adi(y_sutun, y_stem))
-            efsane = grafik.sacilim_efsanesi(sorted(davul["kume"].unique()))
-
-        g_imza = None
-        if not imza.empty:
-            g_imza = grafik.isi_haritasi(
-                sorted(imza["eksen"].unique()), sorted(imza["kume"].unique()),
-                {(r["eksen"], r["kume"]): float(r["sapma"]) for _, r in imza.iterrows()},
-                ipuclari={(r["eksen"], r["kume"]):
-                          f"{r['kume']} · {r['eksen']}: {dil_sayi(r['medyan'], 3)} "
-                          + t(f"(kütüphane {dil_sayi(r['genel_medyan'], 3)}, "
-                              f"sapma {yuzde(r['sapma'])}, {r['albüm']} albüm)",
-                              f"(library {dil_sayi(r['genel_medyan'], 3)}, "
-                              f"deviation {yuzde(r['sapma'])}, {r['albüm']} albums)")
-                          for _, r in imza.iterrows()})
+        # TARZLARIN KONUMU (2026-09-28). Eski saçılım haritası ve sapma ısı
+        # haritası «hiçbir şey anlatmıyor» geri bildirimiyle kaldırıldı; her
+        # eksen artık tek bir soru: tarzın iki uçtan hangisine yakın?
+        konumlar = []
+        for e in tarz_konumlari(veri, U, adlar, odak) if not U.empty else []:
+            kisa = lambda m: m.split(" / ")[0]  # noqa: E731
+            konumlar.append({**e, "cizim": grafik.konum_seridi(
+                [(r["ad"], r["orta"], r["q1"], r["q3"],
+                  t(f"{r['ad']} · {r['n']} albüm · ortancası kütüphanenin "
+                    f"{round(r['orta'] * 100)}. yüzdeliğinde",
+                    f"{r['ad']} · {r['n']} albums · median at the "
+                    f"{round(r['orta'] * 100)}th percentile of your library"))
+                 for r in e["satirlar"]],
+                sol=kisa(e["dusuk"]), sag=kisa(e["yuksek"]), genislik=360)})
 
         secili_eksen = istek.query_params.get("uc") or (
             ozet.iloc[0]["eksen"] if not ozet.empty else None)
@@ -891,10 +863,8 @@ async def profil(istek):
 
         return SABLONLAR.TemplateResponse(istek, "profil.html", _ortam(
             istek, cumleler=profil_cumleleri(ozet, denge), denge=denge,
-            g_denge=g_denge, g_cesit=g_cesit, g_davul=g_davul, efsane=efsane,
-            g_imza=g_imza, ozet=ozet, uclar=uclar,
+            g_denge=g_denge, g_cesit=g_cesit, konumlar=konumlar, ozet=ozet, uclar=uclar,
             odak=odak, odaklar=ODAKLAR, stem_adi=stem_adi,
-            harita_basligi=harita_basligi, harita_aciklama=harita_aciklama,
             eksen_listesi=list(ozet["eksen"]), albom_sayisi=veri["album_id"].nunique(),
         ))
     finally:
@@ -937,13 +907,13 @@ async def ogrenme(istek):
                f"{r['zaten_biliyorum']} tanesi «zaten biliyorum»",
                f"{strateji_adi(r['strateji'])}: {r['toplam']} decisions, "
                f"{r['zaten_biliyorum']} \"already know it\""))
-            for _, r in isabet.iterrows()])
+            for _, r in isabet.iterrows()], genislik=440)
         zevkli = isabet[isabet["zevk_n"] > 0]
         zevk = grafik.aralik([
             (strateji_adi(r["strateji"]), r["zevk_isabeti"], r["zevk_alt"], r["zevk_ust"],
              t(f"{strateji_adi(r['strateji'])}: {r['begendim']} beğendim / {r['tutmadi']} tutmadı",
                f"{strateji_adi(r['strateji'])}: {r['begendim']} liked / {r['tutmadi']} passed"))
-            for _, r in zevkli.iterrows()]) if not zevkli.empty else None
+            for _, r in zevkli.iterrows()], genislik=440) if not zevkli.empty else None
 
         return SABLONLAR.TemplateResponse(istek, "ogrenme.html", _ortam(
             istek, cumleler=ozet_cumleleri(isabet), isabet=isabet,
@@ -1285,6 +1255,8 @@ def tarzlar_sayfasi(istek):
                  SELECT album_id, kume_id, MAX(uyelik) FROM memberships
                   WHERE calisma_id = ? GROUP BY album_id) GROUP BY kume_id""",
             (calisma_id,)).fetchall())
+        from python.istatistik import tarzlar as tarz_istatistigi
+        teshis = {k["kume"]: k for k in (tarz_istatistigi(conn, calisma_id) or {}).get("liste", [])}
         tarzlar = []
         for k in kumeler:
             albumler = [dict(r) for r in conn.execute(
@@ -1300,6 +1272,7 @@ def tarzlar_sayfasi(istek):
                 (calisma_id, k["kume_id"])).fetchone()
             tarzlar.append({"kume_id": k["kume_id"], "ad": k["kullanici_adi"],
                             "album": boyut.get(k["kume_id"], 0), "albumler": albumler,
+                            "saglik": teshis.get(k["kume_id"], {}).get("saglik", "saglam"),
                             "oneri": oneri[0] if oneri else ""})
     finally:
         conn.close()
@@ -1351,6 +1324,15 @@ def sen_sayfasi(istek):
         eksen_adi=eksen_adi, onyil_adi=onyil_adi))
 
 
+def bas_harf(metin: str) -> str:
+    """İlk harf büyük, Türkçe kuralıyla (i → İ, ı → I); gerisine dokunmaz."""
+    metin = str(metin or "")
+    if not metin:
+        return metin
+    ilk = {"i": "İ", "ı": "I"}.get(metin[0], metin[0].upper()) if etkin_dil() != "en" else metin[0].upper()
+    return ilk + metin[1:]
+
+
 def kisi_gorsel_istek(istek):
     """Müzisyen fotoğrafı: bulunursa görsele yönlendir, yoksa 404.
 
@@ -1398,22 +1380,28 @@ def istatistik_sayfasi(istek):
         return RedirectResponse("/basla", status_code=303)
     adlar = _eksen_adlari(calisma_id) if calisma_id else {}
 
+    def saglik_adi(durum: str) -> str:
+        return t(*{"saglam": ("sağlam", "robust"), "karisik": ("karışık", "mixed"),
+                   "oynak": ("oynak", "unsettled")}.get(durum, (durum, durum)))
+
     def tarz_adi(kume) -> str:
         return adlar.get(int(kume)) or t(f"Tarz {int(kume) + 1}", f"Style {int(kume) + 1}")
 
     g_tarz = g_zaman = g_cesit = g_tempo = g_kaynak = None
     tepe_onyil = None
+    g_cift = g_karar = None
     if s["tarzlar"]:
-        g_tarz = grafik.yatay_cubuk(
-            [(tarz_adi(k["kume"]), k["album"]) for k in s["tarzlar"]["liste"]],
-            basamak=0, birim=t(" albüm", " albums"), genislik=440,
-            ipuclari=[t(f"{tarz_adi(k['kume'])}: {k['album']} albüm · sağlamlık "
-                        f"{dil_sayi(k['stabilite'] or 0, 2)}"
-                        + (" (sağlam)" if k["stabil"] else " (oynak)"),
-                        f"{tarz_adi(k['kume'])}: {k['album']} albums · robustness "
-                        f"{dil_sayi(k['stabilite'] or 0, 2)}"
-                        + (" (robust)" if k["stabil"] else " (unsettled)"))
-                      for k in s["tarzlar"]["liste"]])
+        g_tarz = grafik.yigin_cubuk(
+            [(tarz_adi(k["kume"]), [k["net"], k["arada"]],
+              t(f"{tarz_adi(k['kume'])}: {k['album']} albüm — {k['net']} net, {k['arada']} arada · "
+                f"sağlamlık {dil_sayi(k['stabilite'] or 0, 2)} · {saglik_adi(k['saglik'])}",
+                f"{tarz_adi(k['kume'])}: {k['album']} albums — {k['net']} clear, {k['arada']} in between · "
+                f"robustness {dil_sayi(k['stabilite'] or 0, 2)} · {saglik_adi(k['saglik'])}"))
+             for k in s["tarzlar"]["liste"]], genislik=900)
+        if s["tarzlar"]["ciftler"]:
+            g_cift = grafik.yatay_cubuk(
+                [(f"{tarz_adi(a)} ↔ {tarz_adi(b)}", n) for a, b, n in s["tarzlar"]["ciftler"]],
+                basamak=0, birim=t(" albüm", " albums"), genislik=440)
     if s["zaman"]:
         onyillar = s["zaman"]["onyillar"]
         tepe = max(range(len(onyillar)), key=lambda i: onyillar[i][1])
@@ -1434,6 +1422,13 @@ def istatistik_sayfasi(istek):
                            f"{b}–{b + ist.TEMPO_KUTU} bpm: {n} albums"))
              for b, n in kutular], vurgu=tepe, genislik=440, yukseklik=190,
             etiket_adimi=2 if len(kutular) > 8 else 1)
+    if s["kesif"]:
+        k = s["kesif"]
+        g_karar = grafik.yigin_cubuk(
+            [("", [k["begendim"], k["tutmadi"], k["bilinen"]],
+              t(f"{k['begendim']} listene · {k['tutmadi']} geçtin · {k['bilinen']} biliyordun",
+                f"{k['begendim']} saved · {k['tutmadi']} passed · {k['bilinen']} already known"))],
+            genislik=900, etiket_eni=0)
     if s["kesif"] and s["kesif"]["kaynaklar"]:
         g_kaynak = grafik.aralik(
             [(strateji_adi(k["strateji"]), k["oran"], k["alt"], k["ust"],
@@ -1442,6 +1437,7 @@ def istatistik_sayfasi(istek):
              for k in s["kesif"]["kaynaklar"]], genislik=440)
     return SABLONLAR.TemplateResponse(istek, "istatistik.html", _ortam(
         istek, s=s, g_tarz=g_tarz, g_zaman=g_zaman, g_cesit=g_cesit, g_tempo=g_tempo,
+        g_cift=g_cift, g_karar=g_karar, saglik_adi=saglik_adi,
         g_kaynak=g_kaynak, tepe_onyil=tepe_onyil, onyil_adi=onyil_adi, tarz_adi=tarz_adi,
         net_esik=ist.NET_UYELIK, kopru_esik=ist.KOPRU_UYELIK))
 
@@ -2605,6 +2601,7 @@ from python.gerekce import strateji_adi  # noqa: E402
 SABLONLAR.env.filters["etiket_adi"] = etiket_adi
 SABLONLAR.env.filters["rol_adi"] = rol_adi
 SABLONLAR.env.filters["olcut_adi"] = olcut_adi
+SABLONLAR.env.filters["bas_harf"] = bas_harf
 SABLONLAR.env.filters["roller_adi"] = roller_adi
 SABLONLAR.env.filters["stem_adi"] = lambda s: __import__("python.profil", fromlist=["stem_adi"]).stem_adi(s)
 SABLONLAR.env.globals["etiket_aciklama"] = etiket_aciklama

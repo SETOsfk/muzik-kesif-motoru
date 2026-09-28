@@ -56,8 +56,23 @@ def zaman(conn: sqlite3.Connection) -> dict | None:
 # Tarzlar: bulanık üyelik
 # --------------------------------------------------------------------------- #
 
+def saglik(uyum: float, stabil: bool) -> str:
+    """Bir tarzın durumu, üç kelimeyle.
+
+    - «saglam»: bootstrap'ta her seferinde aynı albümleri topluyor VE üyeleri
+      ona net ait (ortalama en yüksek üyelik ≥ NET_UYELIK).
+    - «karisik»: sağlam ama üyeleri başka tarzlarla paylaşılıyor — öneriler
+      daha dağınık gelir. Kullanıcının «emin değilim» dediği öneriler çoğu
+      zaman buradan çıkar.
+    - «oynak»: yeniden örneklemede dağılıyor; tarz verinin bir tesadüfü olabilir.
+    """
+    if not stabil:
+        return "oynak"
+    return "saglam" if uyum >= NET_UYELIK else "karisik"
+
+
 def tarzlar(conn: sqlite3.Connection, calisma_id: str | None) -> dict | None:
-    """Tarz büyüklükleri, üyelik netliği, köprü albümler, bootstrap sağlamlığı."""
+    """Tarz büyüklükleri, netlik, köprüler, sağlamlık ve ayrışma."""
     if not calisma_id:
         return None
     satirlar = conn.execute(
@@ -76,30 +91,47 @@ def tarzlar(conn: sqlite3.Connection, calisma_id: str | None) -> dict | None:
                    "WHERE calisma_id = ?", (calisma_id,))}
 
     boyut: Counter = Counter()
-    net = arada = 0
+    net_say: Counter = Counter()
+    uyum_top: Counter = Counter()
+    ciftler: Counter = Counter()
+    en_yuksekler = []
     kopruler = []
     for a in albumler.values():
         sirali = sorted(a["u"].items(), key=lambda kv: -kv[1])
-        boyut[sirali[0][0]] += 1
-        if sirali[0][1] >= NET_UYELIK:
-            net += 1
-        else:
-            arada += 1
+        k, u = sirali[0]
+        boyut[k] += 1
+        uyum_top[k] += u
+        en_yuksekler.append(u)
+        if u >= NET_UYELIK:
+            net_say[k] += 1
         if len(sirali) > 1 and sirali[1][1] >= KOPRU_UYELIK:
             kopruler.append({"artist": a["artist"], "title": a["title"],
-                             "kume1": sirali[0][0], "u1": sirali[0][1],
-                             "kume2": sirali[1][0], "u2": sirali[1][1]})
+                             "kume1": k, "u1": u, "kume2": sirali[1][0], "u2": sirali[1][1]})
+            ciftler[tuple(sorted((k, sirali[1][0])))] += 1
     kopruler.sort(key=lambda k: -k["u2"])
     n = len(albumler)
-    liste = [{"kume": k, "ad": kumeler.get(k, {}).get("ad", ""), "album": boyut[k],
-              "pay": boyut[k] / n, "stabilite": kumeler.get(k, {}).get("stabilite"),
-              "stabil": kumeler.get(k, {}).get("stabil", False)}
-             for k in sorted(boyut, key=lambda k: -boyut[k])]
+    c = max(2, len({k for a in albumler.values() for k in a["u"]}))
+    liste = []
+    for k in sorted(boyut, key=lambda k: -boyut[k]):
+        bilgi = kumeler.get(k, {})
+        uyum = uyum_top[k] / boyut[k]
+        liste.append({"kume": k, "ad": bilgi.get("ad", ""), "album": boyut[k],
+                      "pay": boyut[k] / n, "net": net_say[k], "arada": boyut[k] - net_say[k],
+                      "uyum": uyum, "stabilite": bilgi.get("stabilite"),
+                      "stabil": bilgi.get("stabil", False),
+                      "saglik": saglik(uyum, bilgi.get("stabil", False))})
+    net = sum(net_say.values())
+    # Ayrışma: ortalama en yüksek üyeliğin 1/c (tam bulanık) ile 1 (tam keskin)
+    # arasındaki yeri. Bezdek'in bölüntü katsayısının okunur, ölçeklenmiş akrabası.
+    ort = float(np.mean(en_yuksekler))
     return {
         "n": n, "kume_sayisi": len(liste), "liste": liste,
-        "net": net, "arada": arada, "net_pay": net / n,
+        "net": net, "arada": n - net, "net_pay": net / n,
         "kopru_sayisi": len(kopruler), "kopruler": kopruler[:5],
+        "ciftler": [(a, b, say) for (a, b), say in ciftler.most_common(6)],
         "stabil_sayisi": sum(1 for k in liste if k["stabil"]),
+        "saglam_sayisi": sum(1 for k in liste if k["saglik"] == "saglam"),
+        "ayrisma": max(0.0, (ort - 1 / c) / (1 - 1 / c)),
     }
 
 

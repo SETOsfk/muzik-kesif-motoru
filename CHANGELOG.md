@@ -4,6 +4,10 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- «Sayılarla sen» artık bir pano: özet şeridi, tarz netliği, köprüler, keşif karnesi.
+- Profilde okunmayan saçılım/ısı haritası yerine «tarzın iki uç arasında nerede» şeritleri.
+- Tarz sağlığı: sağlam / karışık / oynak — panoda ve Tarzlar sayfasında uyarı.
+- Çevrimdışı sayfası sunucu kapalı mı telefon mu ayırt ediyor, kendiliğinden yeniden deniyor.
 - **Sayılarla sen** (`/istatistik`): tarzların netliği ve köprü albümler,
   on yıllar, çeşitlilik, tempo dağılımı, keşif karnesi — her kartta yöntemin adı.
 - Gelişmiş sayfalar sekmelerin altına taşındı; menüde yalnız bakım kaldı.

@@ -2579,3 +2579,26 @@ Deezer, yalnız TAM ad eşitliğinde. Ağ hatası «yok» diye yazılmaz. Sayfa
 `/kisi-gorsel/<anahtar>` adresini tembel yükler; bulunamazsa yer tutucu
 kalır. Bulut oturumunda dış ağ kapalıydı: yol sahte istemcilerle sınandı,
 gerçek isabet oranı ÖLÇÜLMEDİ.
+
+## 2026-09-28 (12) — Pano, anlaşılır profil grafikleri, tarz sağlığı, çevrimdışı sayfası
+
+**Geri bildirim:** istatistik sayfası pano gibi olsun; davul haritası «PCA'ya
+benziyor, neredeyse hiçbir şey anlatmıyor»; kümeleme gelişsin, bazı önerilerden
+emin değil; telefonda «bağlantı yok».
+
+- **Pano** (`/istatistik`): KPI şeridi (albüm, tarz/sağlam, ayrışma, yıl, beğeni),
+  iki sütunlu kartlar. Tarzlar yığılmış çubukla (net ait / arada), köprü çiftleri,
+  keşif kararları tek yığında. Tek renk ailesi (sıralı tonlar) + yazılı efsane.
+- **Profil:** saçılım haritası ve sapma ısı haritası kaldırıldı. Yerine eksen
+  başına «konum şeridi» (`profil.tarz_konumlari`, `grafik.konum_seridi`): her
+  tarzın ortanca albümü, kütüphanedeki YÜZDELİK sırasıyla, iki anlamlı uç
+  arasında; soluk bant çeyrekler arası. Birimsiz, eksenler arası aynı ölçek, K13.
+- **Tarz sağlığı** (`istatistik.saglik`): sağlam / karışık (stabil ama ortalama
+  en yüksek üyelik < 0,6) / oynak (bootstrap'ta dağılıyor). Pano ve Tarzlar
+  sayfası uyarır. «Ayrışma» = ortalama en yüksek üyeliğin 1/c–1 arasına
+  ölçeklenmişi (bölüntü katsayısının okunur hâli). Kümeleme YÖNTEMİ
+  değişmedi: yeniden kümeleme gerçek veride ölçülmeden yapılmaz (K19) —
+  kullanıcıyla konuşulacak.
+- **Çevrimdışı sayfası** (SW v5): telefon internetsiz mi, sunucu mu kapalı
+  ayırt ediyor, 15 sn'de bir yeniden deniyor. Mac pilde de boşta uyumasın diye
+  `caffeinate -i -s`; `servis.sh durum` genel linki de denetliyor.

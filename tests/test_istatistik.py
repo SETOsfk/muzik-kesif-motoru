@@ -121,3 +121,42 @@ def test_ag_hatasi_yok_diye_yazilmaz(conn):
     _kredi(conn, "Ian Paice", MBID)
     assert kg.coz(conn, "ian paice", mb=_Kopuk(), wd=_Kopuk(), dz=_Kopuk()) is None
     assert kg.oku(conn, "ian paice") is None
+
+
+def test_tarz_sagligi_ve_ayrisma(conn):
+    _albumler(conn, [("A", 1990, 0.95, None)] * 1 + [("B", 1991, 0.9, None), ("C", 1992, 0.05, None)])
+    t = ist.tarzlar(conn, "c1")
+    assert t["ayrisma"] > 0.8                           # neredeyse keskin
+    assert ist.saglik(0.9, True) == "saglam"
+    assert ist.saglik(0.5, True) == "karisik"
+    assert ist.saglik(0.9, False) == "oynak"
+
+
+def test_kopru_ciftleri_sayilir(conn):
+    _albumler(conn, [("A", 2000, 0.55, None), ("B", 2000, 0.6, None), ("C", 2000, 0.9, None)])
+    t = ist.tarzlar(conn, "c1")
+    assert t["ciftler"] == [(0, 1, 2)]
+
+
+def test_tarz_konumlari_yuzdelik_ve_sira():
+    import pandas as pd
+    from python.profil import tarz_konumlari
+
+    veri = pd.DataFrame({"album_id": [f"a{i}" for i in range(12)], "stem": "drums",
+                         "tempo": list(range(12))})
+    U = pd.DataFrame({0: [1.0] * 6 + [0.0] * 6, 1: [0.0] * 6 + [1.0] * 6},
+                     index=[f"a{i}" for i in range(12)])
+    k = tarz_konumlari(veri, U, {0: "ağır", 1: "hızlı"}, "davul")
+    tempo = next(e for e in k if e["sutun"] == "tempo")
+    orta = {r["ad"]: r["orta"] for r in tempo["satirlar"]}
+    assert orta["ağır"] < 0.5 < orta["hızlı"]
+    assert all(0 <= r["q1"] <= r["orta"] <= r["q3"] <= 1 for r in tempo["satirlar"])
+
+
+def test_grafikler_bos_veride_cokmez():
+    from web import grafik
+    assert "<svg" in grafik.yigin_cubuk([]).svg
+    assert "<svg" in grafik.konum_seridi([], sol="a", sag="b").svg
+    svg = grafik.konum_seridi([("çok uzun bir tarz adı burada", 0.5, 0.2, 0.8, "ipucu")],
+                              sol="a", sag="b").svg
+    assert "…" in svg and "ipucu" in svg

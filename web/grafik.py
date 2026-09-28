@@ -54,6 +54,12 @@ KATEGORIK = [
 ]
 
 
+def _kisalt(metin: str, azami: int) -> str:
+    """Dar grafikte uzun ad: sonu «…» (tam adı ipucu taşır)."""
+    metin = str(metin)
+    return metin if len(metin) <= azami else metin[: azami - 1].rstrip() + "…"
+
+
 def _k(metin) -> str:
     """XML kaçışı. Sanatçı adlarında & ve < gerçekten geçiyor."""
     return html.escape(str(metin), quote=True)
@@ -181,6 +187,106 @@ def sutunlar(
                 f'class="g-eksen">{_k(etiket)}</text>')
         parcalar.append("</g>")
     return _cerceve("".join(parcalar), genislik, yukseklik)
+
+
+# --------------------------------------------------------------------------- #
+# Yığılmış yatay çubuk (bir bütünün parçaları)
+# --------------------------------------------------------------------------- #
+
+#: Yığında parça tonları: aynı mürekkebin koyudan açığa üç basamağı. Parçalar
+#: KİMLİK değil sıra taşıdığı için tek renk ailesi (sıralı) — kategorik palet
+#: gerekmiyor; efsane yine de şablonda yazılı.
+YIGIN_TONLARI = ((PALET["ikincil"], 0.92), (PALET["ikincil"], 0.42), (PALET["cok_soluk"], 0.28))
+
+
+def yigin_cubuk(
+    satirlar: list[tuple[str, list[float], str]],
+    *,
+    genislik: int = 440,
+    etiket_eni: int | None = None,
+    toplam_goster: bool = True,
+) -> Cizim:
+    """(etiket, [parça değerleri], ipucu). Parçalar soldan sağa YIGIN_TONLARI."""
+    if not satirlar:
+        return _cerceve("", genislik, 40)
+    sira, ust = 30, 4
+    if etiket_eni is None:
+        etiket_eni = min(170, max(0, 7 * max(len(a) for a, _, _ in satirlar))) if any(
+            a for a, _, _ in satirlar) else 0
+    deger_eni = 38 if toplam_goster else 6
+    bas = etiket_eni + (12 if etiket_eni else 0)
+    eni = genislik - bas - deger_eni
+    en_buyuk = max(sum(p) for _, p, _ in satirlar) or 1
+    parcalar = []
+    for i, (etiket, degerler, ipucu) in enumerate(satirlar):
+        y = ust + i * sira
+        orta = y + sira / 2
+        parcalar.append(f'<g class="g-satir"><title>{_k(ipucu)}</title>'
+                        f'<rect x="0" y="{y}" width="{genislik}" height="{sira}" fill="transparent"/>')
+        if etiket:
+            parcalar.append(f'<text x="{etiket_eni}" y="{orta}" text-anchor="end" '
+                            f'dominant-baseline="central" class="g-etiket">{_k(etiket)}</text>')
+        x = bas
+        for j, d in enumerate(degerler):
+            w = d / en_buyuk * eni
+            if w <= 0:
+                continue
+            renk, op = YIGIN_TONLARI[min(j, len(YIGIN_TONLARI) - 1)]
+            parcalar.append(f'<rect x="{x:.1f}" y="{y + 7}" width="{max(w - 2, 1):.1f}" '
+                            f'height="{sira - 14}" rx="3" fill="{renk}" opacity="{op}"/>')
+            x += w
+        if toplam_goster:
+            parcalar.append(f'<text x="{x + 6:.1f}" y="{orta}" dominant-baseline="central" '
+                            f'class="g-deger">{_sayi(sum(degerler), 0)}</text>')
+        parcalar.append("</g>")
+    return _cerceve("".join(parcalar), genislik, ust * 2 + len(satirlar) * sira)
+
+
+# --------------------------------------------------------------------------- #
+# Konum şeridi: iki anlamlı uç arasında nerede?
+# --------------------------------------------------------------------------- #
+
+def konum_seridi(
+    satirlar: list[tuple[str, float, float, float, str]],
+    *,
+    sol: str,
+    sag: str,
+    genislik: int = 440,
+) -> Cizim:
+    """(etiket, ortanca, alt çeyrek, üst çeyrek, ipucu) — değerler 0..1 yüzdelik.
+
+    Saçılım haritası iki eksenli ve tarzlar üst üste biniyordu; okuyana hiçbir
+    şey söylemiyordu (kullanıcı geri bildirimi, 2026-09-28). Burada TEK soru
+    var: bu tarz, kütüphanendeki albümler arasında iki ucun hangisine yakın?
+    0 = kütüphanenin en «sol» albümü, 1 = en «sağ»ı; orta çizgi ortanca albüm.
+    Soluk bant tarzın albümlerinin yarısının durduğu aralık.
+    """
+    if not satirlar:
+        return _cerceve("", genislik, 40)
+    sira, ust = 28, 30
+    etiket_eni = min(125, max(64, 6.6 * max(len(s[0]) for s in satirlar)))
+    x0, x1 = etiket_eni + 14, genislik - 12
+    olcek = lambda d: x0 + max(0.0, min(1.0, d)) * (x1 - x0)  # noqa: E731
+    alt_y = ust + len(satirlar) * sira
+    parcalar = [
+        f'<text x="{x0}" y="14" class="g-baslik">← {_k(sol)}</text>',
+        f'<text x="{x1}" y="14" text-anchor="end" class="g-baslik">{_k(sag)} →</text>',
+        f'<line x1="{olcek(0.5):.1f}" y1="{ust - 6}" x2="{olcek(0.5):.1f}" y2="{alt_y}" '
+        f'stroke="{PALET["kenar"]}" stroke-dasharray="3 3"/>',
+    ]
+    for i, (etiket, orta, q1, q3, ipucu) in enumerate(satirlar):
+        y = ust + i * sira + sira / 2
+        parcalar.append(
+            f'<g class="g-satir"><title>{_k(ipucu)}</title>'
+            f'<rect x="0" y="{y - sira / 2}" width="{genislik}" height="{sira}" fill="transparent"/>'
+            f'<text x="{etiket_eni}" y="{y}" text-anchor="end" dominant-baseline="central" '
+            f'class="g-etiket">{_k(_kisalt(etiket, 19))}</text>'
+            f'<line x1="{x0}" y1="{y}" x2="{x1}" y2="{y}" stroke="{PALET["izgara"]}" stroke-width="2"/>'
+            f'<rect x="{olcek(q1):.1f}" y="{y - 5}" width="{max(olcek(q3) - olcek(q1), 2):.1f}" '
+            f'height="10" rx="5" fill="{PALET["ikincil"]}" opacity="0.22"/>'
+            f'<circle cx="{olcek(orta):.1f}" cy="{y}" r="6" fill="{PALET["ikincil"]}" '
+            f'stroke="#fbf9f4" stroke-width="2"/></g>')
+    return _cerceve("".join(parcalar), genislik, alt_y + 6)
 
 
 # --------------------------------------------------------------------------- #

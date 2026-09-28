@@ -5,36 +5,41 @@
 <div class="sayfa-basi">
   <h1>{{ t("Ne öğrendik", "What we learned") }}</h1>
   <p>{{ t(karar_sayisi ~ " sanatçı hakkında verdiğin kararlar, kaynağa göre. Her sanatçı bir kez sayılıyor. «Zaten biliyorum» bir zevk kararı değil: zevk isabetine girmiyor, keşif oranına giriyor. Bir kaynak zevkte kusursuz olup keşifte tamamen başarısız olabilir.",
-          "Your decisions on " ~ karar_sayisi ~ " artists, by source. Each artist counts once. \"Already know it\" isn't a taste decision: it's left out of the hit rate but counts toward the discovery rate. A source can be spot-on for your taste and still fail completely at discovery.") }}</p>
+          "Your decisions on " ~ karar_sayisi ~ " artists, by source. Each artist counts once. \"Already know it\" isn't a taste decision: it's left out of the like rate but counts toward novelty.") }}</p>
 </div>
 
 <ul class="madde">
   {% for c in cumleler %}<li>{{ c|replace('**','')|safe }}</li>{% endfor %}
 </ul>
 
-<section class="bolum">
-  <h2>{{ t("Keşif oranı", "Discovery rate") }}</h2>
-  <p class="aciklama">{{ t("Önerilen şey senin için yeni miydi? Aralıklar %90 Wilson skor aralığı; bu örneklem boyutunda ham oran yanıltıcı olur (1/1 = %100 ile 80/80 = %100 aynı şey değil). Aralık genişse henüz bir sonuç yok.",
-                           "Was the pick new to you? The bands are 90% Wilson score intervals; at this sample size a raw rate would mislead (1/1 = 100% is not the same as 80/80 = 100%). A wide band means there's no verdict yet.") }}</p>
-  <div class="kart">{{ g_kesif }}</div>
-</section>
-
-{% if g_zevk %}
-<section class="bolum">
-  <h2>{{ t("Zevk isabeti", "Hit rate") }}</h2>
-  <p class="aciklama">{{ t("Yeni olanların içinde beğendiklerinin payı. «Zaten biliyorum» bu hesaba girmiyor, çünkü o albümü beğenip beğenmediğini söylemedin.",
-                           "Of the picks that were new to you, the share you liked. \"Already know it\" is left out, since you didn't say whether you liked it.") }}</p>
-  <div class="kart">{{ g_zevk }}</div>
-</section>
-{% endif %}
+<div class="izgara iki bolum">
+  {% if g_zevk %}
+  <section class="kart">
+    <h3>{{ t("Beğeni oranı", "Like rate") }}</h3>
+    <p class="aciklama">{{ t("Senin için yeni olan önerilerden kaçını beğendin? «Zaten biliyorum» buraya girmiyor.",
+                             "Of the picks that were new to you, how many did you like? «Already know it» isn't counted here.") }}</p>
+    {{ g_zevk }}
+  </section>
+  {% endif %}
+  <section class="kart">
+    <h3>{{ t("Yenilik oranı", "Novelty rate") }}</h3>
+    <p class="aciklama">{{ t("Önerilen sanatçı senin için yeni miydi?", "Was the suggested artist new to you?") }}</p>
+    {{ g_kesif }}
+  </section>
+</div>
+<details class="ist-yontem bolum">
+  <summary>{{ t("Çizgiler ne anlatıyor?", "What do the lines mean?") }}</summary>
+  <p>{{ t("Nokta oran, çizgi %90 Wilson güven aralığı: az kararla oran ne kadar oynayabilir. 1/1 = %100 ile 80/80 = %100 aynı şey değil; çizgi uzunsa henüz bir sonuç yok.",
+          "The dot is the rate; the line is a 90% Wilson confidence interval — how far the rate could move with this few decisions. 1/1 = 100% is not the same as 80/80 = 100%; a long line means no verdict yet.") }}</p>
+</details>
 
 <section class="bolum">
   <div class="tablo-sarmal">
     <table>
       <thead><tr><th>{{ t("kaynak", "source") }}</th><th class="sayi">{{ t("toplam", "total") }}</th>
         <th class="sayi">{{ t("beğendim", "liked") }}</th><th class="sayi">{{ t("tutmadı", "passed") }}</th>
-        <th class="sayi">{{ t("zaten biliyorum", "already knew") }}</th><th class="sayi">{{ t("zevk isabeti", "hit rate") }}</th>
-        <th class="sayi">{{ t("keşif oranı", "discovery") }}</th></tr></thead>
+        <th class="sayi">{{ t("zaten biliyorum", "already knew") }}</th><th class="sayi">{{ t("beğeni", "like rate") }}</th>
+        <th class="sayi">{{ t("yenilik", "novelty") }}</th></tr></thead>
       <tbody>
       {% for _, r in isabet.iterrows() %}
         <tr><td>{{ strateji_adi(r.strateji) }}</td>
