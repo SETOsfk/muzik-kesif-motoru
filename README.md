@@ -203,7 +203,7 @@ kalıcı olan parça kimliğidir ve taze URL çalma anında alınır.
 
 ## Durum
 
-v0.1.0: yayına hazır. Hesap tavanı ortam değişkeniyle ayarlanır (`KESIF_AZAMI_KULLANICI`);
+v0.2.0: yayında (Mac + Tailscale Funnel). Hesap tavanı ortam değişkeniyle ayarlanır (`KESIF_AZAMI_KULLANICI`);
 Spotify girişi Spotify'ın kuralı gereği beş davetli hesapla sınırlı, sanatçı listesiyle başlama
 yolu sınırsız. Açık işler ve gerekçeleri
 [`docs/urun-yolu.md`](docs/urun-yolu.md) ve [`docs/karar-gunlugu.md`](docs/karar-gunlugu.md)

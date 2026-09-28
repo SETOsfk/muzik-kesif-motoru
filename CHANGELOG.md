@@ -4,6 +4,12 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+## 0.2.0 — 2026-09-28 · güçlü kümeleme, pano, çok sesli öneri
+
+- Etkin kümeleme spektral gömmeyle yeniden kuruldu (12 tarz, hepsi bootstrap'ta sağlam); eski PCA çalışması geçersizdi.
+- Ses önerisi artık birkaç farklı parçaya dayanıyor (çok sesli kural); ölçümde gizlenen sanatçı iki kat yukarıda.
+- Müzisyen önerilerinde ses bağlamı süzgeci (ör. metal davulcuya pop albüm gelmez).
+- `scripts/servis.sh yeniden` ve `kanca`: her `git pull`dan sonra sunucu kendiliğinden yenilenir.
 - «Senin müziğin» yeniden tasarlandı: kapak mozaiği, renkli tarz kartları, dönem histogramı, rafın yıldızları.
 - Kümeleme araması üç yöntemi yarıştırıyor: PCA, spektral gömme, konsensüs; seçim kuralında göreli tolerans.
 - Bütün grafikler tek dilde: tarayıcıda, kartın gerçek genişliğinde (Chart.js); yazı ve çizgi her yerde aynı.
