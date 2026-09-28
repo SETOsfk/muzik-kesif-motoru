@@ -2491,3 +2491,42 @@ dil, gizlilik, çıkış; «Gelişmiş» katlı: öneriler listesi, ses aileleri
 etiketler, ölçümler, zevk eksenleri, ne öğrendik, veri seti, eşleştirme,
 sözlük, kümeleme çalışması ve sayaçlar. Hiçbir sayfa silinmedi; gelişmiş
 sayfalar ait oldukları sekmeyi işaretlemeye devam ediyor.
+
+## 2026-09-28 (9) — Tasarım: Çizim → İKİ AY (Murakami kitap kapağı)
+
+Kullanıcı: "Murakami kitapları tarzında bir tasarım istiyorum. Sakin, ilgi
+çekici, sıkıcı olmayan. Görseldeki [mürekkep çizimli, turuncu noktalı şablon]
+güzel ama ondan daha güzel bir şey yapabiliriz." K23'ün "tek tema, token
+disiplini" kısmı aynen duruyor; değişen dil.
+
+- **Kart = kitap kapağı.** Destedeki her kart düz bir renk alanı; renk
+  sanatçıdan (`kapak_sirasi`, 9 soluk renk: gece, kiremit, hardal, adaçayı,
+  gül kurusu, gök, mürekkep, çam, kum). Albüm kapağı alanın ortasında gölgeli
+  bir nesne. Kart içinde metin tokenları kapağın yazı rengine göre yeniden
+  tanımlanıyor; içerideki bileşenler ayrıca boyanmadı. Bir dizinin kapakları
+  gibi: her kart farklı, hepsi aynı aileden.
+- **Yer tutucu kapak** artık dalga formu değil; aynı kitap dili: düz alan ve
+  tek nesne (ay ve ufuk, ufuktan doğan plak, kuyu, tarlada kapı). Rengi
+  kartın KARŞIT parlaklığından seçiliyor — aynı gruptan seçilince kapak kartın
+  içinde kayboluyordu. Test: `test_yer_tutucu_kartin_karsit_parlakliginda`.
+- **Yazı:** Newsreader (serif, gövde ve başlık) + Jost (aralıklı büyük harf
+  etiket — kapaktaki yazar satırı). Japon kitap havası için Shippori Mincho ve
+  Zen Old Mincho denendi: ikisinde de ğ, ş, İ yok (fontTools ile ölçüldü),
+  karışık yazı çıkardı. Kalam ve Patrick Hand kaldırıldı.
+- **Renk:** kâğıt #f3efe7, baskı mürekkebi #20232c, kiremit eylem #bb4628,
+  gece mavisi ölçüm #2e3a66. `--ay` / `--ay-2` (iki ay) yalnız süs ve çalma
+  düğmesi; metin rengi olarak kullanılmıyor (kontrast yetmiyor).
+- **Çalma düğmesi ay:** sarı disk, mürekkep üçgen, ilerleme halkası.
+- **Çizim:** `cizim/iki-ay.svg` — gece, iki ay, duvarda ayın önünde oturan
+  kedi, ufuktan doğan plak. Giriş kartının üst levhası, eğitim, boş deste,
+  «Sen». İkon aynı sahneden (`scripts/ikon_uret.py`, Neon'da kalmıştı).
+- Köşedeki iki soluk ay yalnız dar sütunlu sayfalarda (Keşfet, giriş): geniş
+  sayfalarda yarı saydam kutuların ardından görünüyordu.
+
+Yol boyunca bulunan: `.dk-gorsel > img` kuralı sanatçı fotoğrafına
+(`.dk-avatar`) da uyuyordu ve daha özgül olduğu için onu tüm görsel alanına
+yayıyordu; avatar artık açıkça konumlanıyor. Nesnenin gölgesi görsel alanın
+`overflow: hidden`ında kesilip çizgi bırakıyordu (ekran görüntüsünde görüldü).
+
+Gerçek albüm kapaklarıyla görünüm bu ortamda denenemedi (Deezer'a çıkış
+kapalı); ekran görüntüleri yer tutucu kapaklarla.

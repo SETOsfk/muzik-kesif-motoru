@@ -1,7 +1,8 @@
-"""Neon ikonu üret — macOS uygulaması ve PWA için (2026-09-23).
+"""İKİ AY ikonu üret — macOS uygulaması ve PWA için (2026-09-28).
 
-Eski ikon (turuncu kulaklık) v2 temasındandı. Neon kimliği: gece mavisi zemin,
-başlıktaki ◈ işareti macenta→turuncu geçişle, camgöbeği HUD köşeleri —
+Tema değişti (Neon → Çizim → İKİ AY), ikon Neon'da kalmıştı. Yeni kimlik:
+gece mavisi zemin, büyük sarı ay, sağ üstte küçük adaçayı ay, duvarda ayın
+önünde oturan bir kedi — `web/statik/cizim/iki-ay.svg` ile aynı sahne ve
 `web/statik/stil.css` tokenlarıyla aynı renkler.
 
 Çıktılar:
@@ -18,36 +19,16 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 KOK = Path(__file__).resolve().parents[1]
-ZEMIN = (5, 6, 12)
-MACENTA = (255, 43, 214)
-TURUNCU = (255, 122, 69)
-CAMGOBEGI = (34, 236, 255)
+GECE = (39, 48, 90)          # --gece
+DUVAR = (28, 35, 69)
+AY = (229, 182, 74)          # --ay
+AY_2 = (169, 191, 174)       # --ay-2
+KEDI = (20, 24, 46)
 OLCEK = 4          # süper örnekleme: 4 kat büyük çiz, küçült — kenarlar pürüzsüz
-
-
-def _gecis(boyut: int) -> Image.Image:
-    """Sol üstten sağ alta macenta → turuncu."""
-    g = Image.new("RGB", (boyut, boyut))
-    px = g.load()
-    for y in range(boyut):
-        for x in range(boyut):
-            t = (x + y) / (2 * (boyut - 1))
-            px[x, y] = tuple(int(a + (b - a) * t) for a, b in zip(MACENTA, TURUNCU))
-    return g
-
-
-def _elmas(ciz: ImageDraw.ImageDraw, m: float, r: float, kalinlik: float | None = None,
-           dolgu=255) -> None:
-    nokta = [(m, m - r), (m + r, m), (m, m + r), (m - r, m)]
-    if kalinlik is None:
-        ciz.polygon(nokta, fill=dolgu)
-    else:
-        ciz.line(nokta + [nokta[0]], fill=dolgu, width=int(kalinlik), joint="curve")
 
 
 def ikon(boyut: int = 1024, *, mac: bool = False) -> Image.Image:
     S = boyut * OLCEK
-    tuval = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 
     # macOS Big Sur ızgarası: 1024'lük tuvalde ~824'lük yuvarlatılmış kare.
     pay = int(S * 0.098) if mac else 0
@@ -56,55 +37,20 @@ def ikon(boyut: int = 1024, *, mac: bool = False) -> Image.Image:
     maske = Image.new("L", (S, S), 0)
     ImageDraw.Draw(maske).rounded_rectangle(govde, radius=yaricap, fill=255)
 
-    zemin = Image.new("RGBA", (S, S), ZEMIN + (255,))
-    # İki ışık lekesi (stil.css `--zemin-desen` ile aynı yerleşim).
-    isik = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    ci = ImageDraw.Draw(isik)
-    ci.ellipse((int(S * .45), int(-S * .25), int(S * 1.25), int(S * .55)), fill=MACENTA + (70,))
-    ci.ellipse((int(-S * .35), int(S * .55), int(S * .45), int(S * 1.3)), fill=CAMGOBEGI + (48,))
-    isik = isik.filter(ImageFilter.GaussianBlur(S * .12))
-    zemin = Image.alpha_composite(zemin, isik)
-    # 44 px ızgaranın ikon ölçeğindeki karşılığı: seyrek, çok soluk.
-    iz = ImageDraw.Draw(zemin)
-    adim = S // 10
-    for i in range(adim, S, adim):
-        iz.line((i, 0, i, S), fill=CAMGOBEGI + (8,), width=OLCEK)
-        iz.line((0, i, S, i), fill=CAMGOBEGI + (8,), width=OLCEK)
-
-    m = S / 2
-    r_dis = S * (0.30 if mac else 0.33)
-    # ◈: dış elmas çerçeve + iç dolu elmas, ikisi de geçişle boyanıyor.
-    # Çerçeve çizgiyle değil İKİ DOLU ELMASIN FARKIYLA: çizgi birleşimi tepe
-    # köşesinde çentik bırakıyordu (ilk sürümde görüldü).
-    kal = S * 0.045
-    dis, ici = Image.new("L", (S, S), 0), Image.new("L", (S, S), 0)
-    _elmas(ImageDraw.Draw(dis), m, r_dis + kal / 2)
-    _elmas(ImageDraw.Draw(ici), m, r_dis - kal / 2 * 1.414)
-    sekil = ImageChops.subtract(dis, ici)
-    _elmas(ImageDraw.Draw(sekil), m, r_dis * 0.46)
-    renk = _gecis(S).convert("RGBA")
-    # Neon parıltısı: şeklin bulanık kopyası macenta olarak arkaya.
-    parilti = Image.new("RGBA", (S, S), MACENTA + (0,))
-    parilti.putalpha(sekil.filter(ImageFilter.GaussianBlur(S * 0.035)).point(lambda v: int(v * .85)))
-    zemin = Image.alpha_composite(zemin, parilti)
-    renkli = renk.copy()
-    renkli.putalpha(sekil)
-    zemin = Image.alpha_composite(zemin, renkli)
-
-    # HUD köşeleri (sol üst, sağ alt) — camgöbeği, hafif parıltılı.
-    hud = Image.new("L", (S, S), 0)
-    ch = ImageDraw.Draw(hud)
-    ic = pay + int(S * 0.085)
-    boy, kal = int(S * 0.13), int(S * 0.022)
-    ch.line((ic, ic + boy, ic, ic, ic + boy, ic), fill=255, width=kal, joint="curve")
-    d = S - ic
-    ch.line((d, d - boy, d, d, d - boy, d), fill=255, width=kal, joint="curve")
-    hud_parilti = Image.new("RGBA", (S, S), CAMGOBEGI + (0,))
-    hud_parilti.putalpha(hud.filter(ImageFilter.GaussianBlur(S * 0.012)))
-    zemin = Image.alpha_composite(zemin, hud_parilti)
-    hud_renk = Image.new("RGBA", (S, S), CAMGOBEGI + (0,))
-    hud_renk.putalpha(hud)
-    zemin = Image.alpha_composite(zemin, hud_renk)
+    # Maskelenebilir ikon: sahne ortadaki %80'lik güvenli dairenin içinde.
+    zemin = Image.new("RGBA", (S, S), GECE + (255,))
+    c = ImageDraw.Draw(zemin)
+    def daire(x, y, r, renk):
+        c.ellipse((S * (x - r), S * (y - r), S * (x + r), S * (y + r)), fill=renk)
+    daire(.50, .47, .25, AY)
+    daire(.76, .25, .06, AY_2)
+    c.rectangle((0, S * .69, S, S), fill=DUVAR)
+    # Kedi: ayın önünde, duvarda oturuyor.
+    c.ellipse((S * .435, S * .54, S * .565, S * .72), fill=KEDI)
+    daire(.50, .50, .055, KEDI)
+    c.polygon([(S * .455, S * .48), (S * .46, S * .405), (S * .495, S * .46)], fill=KEDI)
+    c.polygon([(S * .545, S * .48), (S * .54, S * .405), (S * .505, S * .46)], fill=KEDI)
+    c.arc((S * .52, S * .60, S * .64, S * .72), start=270, end=90, fill=KEDI, width=int(S * .018))
 
     if mac:
         # Hafif iç kenar ışığı — Big Sur ikonlarının derinlik hissi.

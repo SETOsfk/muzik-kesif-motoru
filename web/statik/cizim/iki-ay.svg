@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Gece, iki ay, duvarda bir kedi ve ufuktan doğan bir plak">
+<!-- İKİ AY teması (karar günlüğü 2026-09-28 (9)). Renkler stil.css tokenlarıyla aynı:
+     gece #27305a, ay #e5b64a, ikinci ay #a9bfae, vurgu #c24a2a. <img> olarak
+     yüklendiği için CSS değişkenlerini göremez; biri değişirse öteki de. -->
+<rect width="320" height="200" fill="#27305a"/>
+<g fill="#f1ebdf">
+  <circle cx="34" cy="30" r="1.2" opacity=".7"/>
+  <circle cx="92" cy="58" r="0.9" opacity=".5"/>
+  <circle cx="128" cy="22" r="1" opacity=".6"/>
+  <circle cx="298" cy="104" r="0.9" opacity=".5"/>
+  <circle cx="60" cy="96" r="0.8" opacity=".4"/>
+</g>
+<circle cx="204" cy="94" r="56" fill="#e5b64a"/>
+<circle cx="272" cy="42" r="12" fill="#a9bfae"/>
+<!-- Ufuktan doğan plak: yarısı duvarın arkasında. -->
+<g transform="translate(0 8)">
+  <circle cx="76" cy="152" r="30" fill="#14182e"/>
+  <g fill="none" stroke="#2c3458" stroke-width="0.8">
+    <circle cx="76" cy="152" r="25"/><circle cx="76" cy="152" r="20"/><circle cx="76" cy="152" r="15"/>
+  </g>
+  <circle cx="76" cy="152" r="8" fill="#c24a2a"/>
+  <circle cx="76" cy="152" r="1.6" fill="#27305a"/>
+</g>
+<rect y="158" width="320" height="42" fill="#1c2345"/>
+<rect y="158" width="320" height="2" fill="#2c3458"/>
+<!-- Kedi: ayın önünde, duvarda oturuyor. -->
+<g fill="#14182e" transform="translate(0 8)">
+  <path d="M199 151 C 199 136, 201 126, 207 121 C 213 126, 215 136, 215 151 Z"/>
+  <path d="M190 151 C 186 138, 192 124, 200 119 L 212 119 C 222 125, 226 140, 222 151 Z"/>
+  <circle cx="206" cy="110" r="10.5"/>
+  <path d="M197.5 105 L 198.5 91 L 205 101 Z"/>
+  <path d="M214.5 105 L 213.5 91 L 207 101 Z"/>
+  <path d="M221 149 C 238 149, 244 140, 239 131" fill="none" stroke="#14182e" stroke-width="4.2" stroke-linecap="round"/>
+</g>
+</svg>

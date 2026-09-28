@@ -6,7 +6,7 @@
 <title>{% block baslik %}{{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ statik('stil.css') }}">
 <link rel="manifest" href="{{ statik('manifest.webmanifest') }}">
-<meta name="theme-color" content="#faf7f1">
+<meta name="theme-color" content="#f3efe7">
 {# iOS ana ekrana eklendiğinde tam ekran açılsın ve durum çubuğu koyu olsun.
    Apple `beforeinstallprompt` desteklemiyor; kurulum elle yapılıyor. #}
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -28,11 +28,11 @@
    silinmedi; menüde «Gelişmiş» altında. Her sekme: (kimlik, ad, simge,
    görünen alt seçenekler, sekmeye ait sayfalar — ilki sekmenin adresi). #}
 {% set sekmeler = [
-  ('kesfet', t('Keşfet', 'Discover'), '◈',
+  ('kesfet', t('Keşfet', 'Discover'), '◐',
       [('/kesfet', t('Kaydır', 'Swipe')), ('/muzisyenler', t('Müzisyene göre', 'By musician'))],
       ['/kesfet', '/muzisyenler', '/oneriler', '/ses-kumeleri']),
-  ('listem', t('Listem', 'My list'), '♥', [], ['/listem', '/ogrenme']),
-  ('sen', t('Sen', 'You'), '◍', [],
+  ('listem', t('Listem', 'My list'), '♡', [], ['/listem', '/ogrenme']),
+  ('sen', t('Sen', 'You'), '☾', [],
       ['/sen', '/etiketler', '/profil', '/kumeler', '/veri', '/eslestirme', '/sozluk']),
 ] %}
 {% set gelismis = [
@@ -56,7 +56,7 @@
 
 <header class="ust">
   <a class="marka" href="/kesfet" aria-label="{{ t('Keşif Motoru — Keşfet\'e dön', 'Discovery Engine — back to Discover') }}">
-    <span class="logo">◈</span><b>KEŞİF</b><span class="marka-alt">{{ t('motoru', 'engine') }}</span>
+    <span class="logo" aria-hidden="true"></span><b>Keşif</b><span class="marka-alt">{{ t('motoru', 'engine') }}</span>
   </a>
 
   <nav class="ana-sekmeler" aria-label="{{ t('Ana bölümler', 'Main sections') }}">

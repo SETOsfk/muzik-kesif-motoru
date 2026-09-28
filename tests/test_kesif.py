@@ -362,6 +362,17 @@ def test_sayi_ve_yuzde_dile_gore():
     assert bas_harf_buyuk("insan") == "İnsan" and bas_harf_buyuk("ızgara") == "Izgara"
 
 
+def test_yer_tutucu_kartin_karsit_parlakliginda():
+    """Destede kartın zemini sanatçının kapak rengi; yer tutucu kapak onun
+    içinde kaybolmasın diye karşıt parlaklıktan (koyu kartta açık kapak)."""
+    from web.yer_tutucu import _KOYU, KAPAK_SAYISI, kapak_sirasi, yer_tutucu_svg
+    for ad in ("Gojira", "Casiopea", "Duman", "T-Square", "Car Bomb", "Sezen Aksu", "?"):
+        kart = kapak_sirasi(ad)
+        assert 0 <= kart < KAPAK_SAYISI and kapak_sirasi(ad) == kart
+        yt = int(str(yer_tutucu_svg(ad)).split("--z:var(--kapak-")[1].split(")")[0])
+        assert (kart in _KOYU) != (yt in _KOYU), ad
+
+
 def test_yer_tutucu_benzersiz_ve_kacirilmis():
     from web.yer_tutucu import yer_tutucu_svg
     a, b = str(yer_tutucu_svg("<Guns & Roses>")), str(yer_tutucu_svg("<Guns & Roses>"))
@@ -434,6 +445,7 @@ def test_kesfet_akisi_uctan_uca():
         d = c.get("/api/kesfet/deste").json()
         assert [k["artist"] for k in d["kartlar"]] == ["Car Bomb"]
         assert "yer_tutucu" in d["kartlar"][0] and "<svg" in d["kartlar"][0]["yer_tutucu"]
+        assert isinstance(d["kartlar"][0]["kapak_renk"], int)
         v = c.post("/api/kesfet/karar", json={"aday_id": "a0000001", "calisma_id": CALISMA,
                                               "karar": "begendim"}).json()
         assert v["liste"] == 1 and v["bugun"]["begendim"] == 1
