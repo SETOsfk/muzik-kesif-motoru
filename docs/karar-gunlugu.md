@@ -2549,3 +2549,33 @@ damar) → tek sözcük: **tarz**.
   tahmini yok (2026-08-18). Kullanıcının verdiği ada dokunulmaz. Eşikler
   ölçülmedi; test kümesinde "rock" yerine "progressive metal"/"turkish rock"
   seçiyor.
+
+## 2026-09-28 (11) — «Sayılarla sen», gelişmiş sayfalar sekmelere, müzisyen fotoğrafı
+
+**İstek:** gelişmiş sayfaları kullanışlı hâle getirip ana menüye yedir; kullanıcı
+kendini anlatan grafik ve istatistik görsün. Güçlü terim olabilir ama herkes
+anlasın; ham terim (CLAP, `tekme_araligi`) ekrana çıkmasın. Müzisyenlerin
+resmi gelsin.
+
+**Gezinti.** Keşfet: Kaydır · Müzisyene göre · Sese göre · Liste hâlinde.
+Listem: Listem · Ne tuttu?. Sen: Portren · Tarzların · Sayılarla · Çalış
+tarzı · Etiketler. «Gelişmiş»te yalnız bakım kaldı (kümeleme ayrıntısı, veri
+seti, eşleştirme, sözlük).
+
+**`/istatistik` (`python/istatistik.py`).** Her kart: soru, büyük cevap, tek
+grafik, katlanmış «Nasıl ölçtük?» (yöntemin adı burada: bulanık kümeleme,
+bootstrap/Jaccard, Shannon/Hill sayısı, vuruş takibi, Wilson aralığı).
+Tek seri grafikler, efsane yok; tepe değer turuncu, gerisi mürekkep mavisi;
+değer üzerine gelince. Ses kartı TEK kaynaktan (K11). Türkçe ek sayıya göre
+değiştiği için cümleler eksiz kuruldu («Her 10 albümünden 7 tanesi…»).
+
+**Ham terim temizliği.** Ölçüt adları `ceviri.OLCUT_ADI` («Tekme Payı»),
+roller `roller_adi`; kart gerekçelerinden «(CLAP)» ve «eksen» çıktı;
+boş sayfalarda geliştirici komutu yerine düz açıklama.
+
+**Müzisyen fotoğrafı (`python/kisi_gorsel.py`).** Önce MusicBrainz MBID →
+Wikidata P18 → Wikimedia Commons (kimlikle eşleşir, açık lisans); yoksa
+Deezer, yalnız TAM ad eşitliğinde. Ağ hatası «yok» diye yazılmaz. Sayfa
+`/kisi-gorsel/<anahtar>` adresini tembel yükler; bulunamazsa yer tutucu
+kalır. Bulut oturumunda dış ağ kapalıydı: yol sahte istemcilerle sınandı,
+gerçek isabet oranı ÖLÇÜLMEDİ.

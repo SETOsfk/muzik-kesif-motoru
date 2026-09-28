@@ -1510,3 +1510,31 @@ kbd { font-family: var(--font-etiket); font-size: .78em; }
 .tarz-soru { margin: 0 0 6px; font-family: var(--font-baslik); font-size: 1.15rem; font-style: italic; }
 .tarz-soru a { font-family: var(--font-govde); font-style: normal; font-size: .95rem; margin-left: 8px; }
 .sen-duzenle { font-family: var(--font-govde); font-size: .9rem; font-weight: 400; margin-left: 6px; }
+
+/* ------------------------------------------------- sayılarla sen --- */
+.ist { max-width: 56rem; }
+.ist-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+               gap: var(--b3); margin: 0 0 var(--b6); }
+.ist-sayilar div { background: var(--kart); border: 1px solid var(--kenar); border-radius: var(--r-l);
+                   padding: var(--b3) var(--b4); display: grid; gap: 2px; }
+.ist-sayilar b { font-family: var(--font-baslik); font-size: 1.9rem; font-weight: 400; line-height: 1.1;
+                 font-variant-numeric: tabular-nums; }
+.ist-sayilar span { color: var(--metin-3); font-size: .92rem; }
+.ist-kart { margin-bottom: var(--b5); }
+.ist-kart h2 { font-size: 1.4rem; font-weight: 400; margin: 2px 0 var(--b2); display: block; }
+.ist-kart h3 { font-size: 1.05rem; margin: var(--b5) 0 var(--b1); }
+.ist-kart .grafik { margin: var(--b4) 0 var(--b2); max-width: 620px; }
+.ist-kopru { list-style: none; padding: 0; margin: var(--b2) 0 0; display: grid; gap: 8px; }
+.ist-kopru li { overflow-wrap: anywhere; }
+.ist-kopru span { display: block; color: var(--metin-3); font-size: .9rem; }
+.ist-yontem { margin-top: var(--b4); border-top: 1px dashed var(--kenar); padding-top: var(--b3); }
+.ist-yontem summary { cursor: pointer; color: var(--metin-2); font-size: .95rem; }
+.ist-yontem p { color: var(--metin-2); font-size: .95rem; }
+.grafik .g-sutun:hover path { opacity: 1; }
+.grafik .g-satir:hover rect + text { fill: var(--metin); }
+
+/* Müzisyen fotoğrafı yer tutucunun üstüne biner; yüklenemezse kaldırılır. */
+.mz-avatar, .mz-kahraman-avatar { position: relative; }
+.kisi-resmi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mz-mod-avatar { width: 48px; height: 48px; flex: none; }
+.mz-mod-avatar svg { width: 100%; height: 100%; }

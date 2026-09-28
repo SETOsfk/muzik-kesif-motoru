@@ -94,6 +94,7 @@ def yatay_cubuk(
     renk: str = PALET["ikincil"],
     basamak: int = 2,
     genislik: int = 640,
+    ipuclari: list[str] | None = None,
 ) -> Cizim:
     """Etiket + çubuk + değer. En uzun etiket ölçüye göre yer ayırır."""
     if not satirlar:
@@ -110,18 +111,76 @@ def yatay_cubuk(
         y = ust + i * sira_yuksekligi
         orta = y + sira_yuksekligi / 2
         uzunluk = 0 if deger is None else abs(deger) / en_buyuk * cubuk_eni
+        ipucu = f"<title>{_k(ipuclari[i])}</title>" if ipuclari else ""
         parcalar.append(
+            f'<g class="g-satir">{ipucu}'
+            f'<rect x="0" y="{y}" width="{genislik}" height="{sira_yuksekligi}" fill="transparent"/>'
             f'<text x="{etiket_eni}" y="{orta}" text-anchor="end" '
             f'dominant-baseline="central" class="g-etiket">{_k(etiket)}</text>'
             f'<rect x="{etiket_eni + 12}" y="{y + 7}" width="{uzunluk:.1f}" '
             f'height="{sira_yuksekligi - 14}" rx="3" fill="{renk}" opacity="0.85"/>'
             f'<text x="{etiket_eni + 20 + uzunluk:.1f}" y="{orta}" '
             f'dominant-baseline="central" class="g-deger">'
-            f"{_sayi(deger, basamak)}{_k(birim)}</text>"
+            f"{_sayi(deger, basamak)}{_k(birim)}</text></g>"
         )
     return _cerceve(
         "".join(parcalar), genislik, ust * 2 + len(satirlar) * sira_yuksekligi
     )
+
+
+# --------------------------------------------------------------------------- #
+# Dikey sütunlar (histogram / zaman)
+# --------------------------------------------------------------------------- #
+
+def sutunlar(
+    satirlar: list[tuple[str, float, str]],
+    *,
+    vurgu: int | None = None,
+    genislik: int = 640,
+    yukseklik: int = 200,
+    etiket_adimi: int = 1,
+) -> Cizim:
+    """(x etiketi, değer, ipucu) — tek seri; `vurgu` sıradaki sütun turuncu.
+
+    Tek seri olduğu için efsane yok (başlık adlandırır). Sütunlar tabana
+    oturur, üst uçları yuvarlak, aralarında 2 px boşluk; değer yalnız
+    vurgulanan sütunun üstünde yazar, gerisi üzerine gelince görünür.
+    """
+    if not satirlar:
+        return _cerceve("", genislik, 40)
+    ust, alt = 22, 26
+    alan = yukseklik - ust - alt
+    en_buyuk = max(d for _, d, _ in satirlar) or 1
+    adim = genislik / len(satirlar)
+    bosluk = 2 if adim > 6 else 0.5
+    taban = ust + alan
+    parcalar = [f'<line x1="0" y1="{taban}" x2="{genislik}" y2="{taban}" '
+                f'stroke="{PALET["kenar"]}"/>']
+    for i, (etiket, deger, ipucu) in enumerate(satirlar):
+        x = i * adim + bosluk / 2
+        g = adim - bosluk
+        h = deger / en_buyuk * alan
+        renk = PALET["vurgu"] if i == vurgu else PALET["ikincil"]
+        r = min(4, g / 2, h)
+        yol = (f"M{x:.1f},{taban} V{taban - h + r:.1f} "
+               f"Q{x:.1f},{taban - h:.1f} {x + r:.1f},{taban - h:.1f} "
+               f"H{x + g - r:.1f} Q{x + g:.1f},{taban - h:.1f} {x + g:.1f},{taban - h + r:.1f} "
+               f"V{taban} Z") if h > 0 else ""
+        parcalar.append(
+            f'<g class="g-sutun"><title>{_k(ipucu)}</title>'
+            f'<rect x="{i * adim:.1f}" y="{ust}" width="{adim:.1f}" height="{alan + alt}" fill="transparent"/>'
+            + (f'<path d="{yol}" fill="{renk}" opacity="{1 if i == vurgu else 0.8}"/>' if yol else "")
+        )
+        if i == vurgu:
+            parcalar.append(
+                f'<text x="{x + g / 2:.1f}" y="{taban - h - 6:.1f}" text-anchor="middle" '
+                f'class="g-deger">{_sayi(deger, 0)}</text>')
+        if i % etiket_adimi == 0:
+            parcalar.append(
+                f'<text x="{x + g / 2:.1f}" y="{taban + 17}" text-anchor="middle" '
+                f'class="g-eksen">{_k(etiket)}</text>')
+        parcalar.append("</g>")
+    return _cerceve("".join(parcalar), genislik, yukseklik)
 
 
 # --------------------------------------------------------------------------- #

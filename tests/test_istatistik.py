@@ -1,0 +1,123 @@
+"""«Sayılarla sen» ve müzisyen fotoğrafı."""
+
+import pytest
+
+import python.db as D
+from python import istatistik as ist
+from python import kisi_gorsel as kg
+from python.ceviri import olcut_adi, roller_adi
+
+
+@pytest.fixture
+def conn(tmp_path, monkeypatch):
+    monkeypatch.setattr(D, "KULLANICI_KOK", tmp_path / "kullanici")
+    monkeypatch.setattr(D, "VARSAYILAN_ORTAK", tmp_path / "ortak.sqlite")
+    c = D.baglan_kullanici(1)
+    yield c
+    c.close()
+
+
+def _albumler(conn, kayitlar, calisma="c1"):
+    """kayitlar: (sanatçı, yıl, üyelik0, tempo)"""
+    with conn:
+        for i, (sanatci, yil, u0, tempo) in enumerate(kayitlar):
+            aid = f"a{i}"
+            conn.execute("INSERT INTO albums (album_id, artist, title, year) VALUES (?,?,?,?)",
+                         (aid, sanatci, f"T{i}", yil))
+            conn.execute("INSERT INTO memberships VALUES (?,?,?,?)", (aid, 0, u0, calisma))
+            conn.execute("INSERT INTO memberships VALUES (?,?,?,?)", (aid, 1, 1 - u0, calisma))
+            if tempo:
+                conn.execute("INSERT INTO audio_features (album_id, kaynak, tempo_medyan) "
+                             "VALUES (?, 'yerel', ?)", (aid, tempo))
+        for k in (0, 1):
+            conn.execute("INSERT INTO clusters VALUES (?,?,?,?,?)", (k, calisma, f"t{k}", 0.8, 1))
+
+
+def test_uyelik_netligi_ve_kopru(conn):
+    _albumler(conn, [("A", 1990, 0.9, None), ("B", 1991, 0.55, None), ("C", 2001, 0.2, None)])
+    t = ist.tarzlar(conn, "c1")
+    assert t["net"] == 2 and t["arada"] == 1          # 0.9 ve 0.8 net; 0.55 arada
+    assert [k["artist"] for k in t["kopruler"]] == ["B"]
+    assert {k["kume"]: k["album"] for k in t["liste"]} == {0: 2, 1: 1}
+    assert t["stabil_sayisi"] == 2
+
+
+def test_zaman_bos_onyillari_sifirla_doldurur(conn):
+    _albumler(conn, [("A", 1971, 0.9, None), ("B", 1995, 0.9, None), ("C", 1996, 0.9, None)])
+    z = ist.zaman(conn)
+    assert z["onyillar"] == [(1970, 1), (1980, 0), (1990, 2)]
+
+
+def test_cesitlilik_esit_dagilimda_etkin_sayi_sanatci_sayisi(conn):
+    _albumler(conn, [(s, 2000, 0.9, None) for s in "ABCD" for _ in range(2)])
+    c = ist.cesitlilik(conn)
+    assert c["etkin"] == pytest.approx(4) and c["denge"] == pytest.approx(1)
+
+
+def test_ses_tek_kaynaktan_ve_azsa_yok(conn):
+    _albumler(conn, [("A", 2000, 0.9, 100 + i) for i in range(12)])
+    with conn:
+        conn.execute("UPDATE audio_features SET kaynak = 'onizleme' WHERE album_id IN ('a0', 'a1')")
+    s = ist.ses(conn)
+    assert s["kaynak"] == "yerel" and s["n"] == 10    # kaynaklar karışmaz (K11)
+    with conn:
+        conn.execute("DELETE FROM audio_features WHERE album_id > 'a5'")
+    assert ist.ses(conn) is None                      # 10'dan az ölçüm
+
+
+def test_olcut_ve_rol_adlari_okunur():
+    assert olcut_adi("tekme_payi") in ("Tekme Payı", "Kick Share")
+    assert "_" not in olcut_adi("bilinmeyen_sutun")
+    assert "_" not in roller_adi("drums, backing_vocals")
+
+
+class _Sahte:
+    def __init__(self, yanitlar):
+        self.yanitlar, self.cagrilar = yanitlar, []
+
+    def get_json(self, yol, params=None, **_):
+        self.cagrilar.append(yol)
+        return self.yanitlar.get(yol, {})
+
+
+MBID = "5b11f4ce-a62d-471e-81fc-a69a8278c7da"
+
+
+def _kredi(conn, ad, kimlik):
+    with conn:
+        conn.execute("INSERT INTO credits VALUES ('a1', ?, ?, 'drums', 'musicbrainz')", (kimlik, ad))
+
+
+def test_kisi_gorseli_kimlikle_wikidatadan(conn):
+    _kredi(conn, "Neil Peart", MBID)
+    mb = _Sahte({f"artist/{MBID}": {"relations": [
+        {"type": "wikidata", "url": {"resource": "https://www.wikidata.org/wiki/Q312715"}}]}})
+    wd = _Sahte({"wiki/Special:EntityData/Q312715.json": {"entities": {"Q312715": {"claims": {
+        "P18": [{"mainsnak": {"datavalue": {"value": "Neil Peart 2004.jpg"}}}]}}}}})
+    dz = _Sahte({})
+    k = kg.coz(conn, "neil peart", mb=mb, wd=wd, dz=dz)
+    assert k["kaynak"] == "wikidata" and "Neil_Peart_2004.jpg" in k["gorsel"]
+    assert dz.cagrilar == []
+    # İkinci çağrı ağa çıkmaz.
+    kg.coz(conn, "neil peart", mb=mb, wd=wd, dz=dz)
+    assert len(mb.cagrilar) == 1
+
+
+def test_deezer_yalniz_tam_ad_esitliginde(conn):
+    _kredi(conn, "Matt Cameron", "discogs:1")
+    dz = _Sahte({"search/artist": {"data": [
+        {"name": "Matt Cameron Band", "picture_big": "https://e-cdns-images.dzcdn.net/images/artist/x/1.jpg"}]}})
+    assert kg.coz(conn, "matt cameron", mb=_Sahte({}), wd=_Sahte({}), dz=dz) is None
+    assert kg.oku(conn, "matt cameron")["durum"] == "yok"
+
+
+def test_ag_hatasi_yok_diye_yazilmaz(conn):
+    from python.onbellek import AgYok
+
+    class _Kopuk:
+        def get_json(self, *a, **k):
+            raise AgYok("yok")
+
+    _kredi(conn, "Ian Paice", MBID)
+    assert kg.coz(conn, "ian paice", mb=_Kopuk(), wd=_Kopuk(), dz=_Kopuk()) is None
+    assert kg.oku(conn, "ian paice") is None

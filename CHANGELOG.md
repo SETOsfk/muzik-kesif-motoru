@@ -2,6 +2,14 @@
 
 Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
+## Yayımlanmadı
+
+- **Sayılarla sen** (`/istatistik`): tarzların netliği ve köprü albümler,
+  on yıllar, çeşitlilik, tempo dağılımı, keşif karnesi — her kartta yöntemin adı.
+- Gelişmiş sayfalar sekmelerin altına taşındı; menüde yalnız bakım kaldı.
+- Müzisyen fotoğrafları (Wikidata/Commons, yoksa Deezer tam ad eşleşmesi).
+- Ekranda ham terim kalmadı: «Tekme Payı», Türkçe rol adları, «CLAP» yok.
+
 ## 0.1.0 — 2026-09-28 · ilk yayın sürümü
 
 Herkesin kullanabileceği ilk sürüm: hesap aç, sevdiğin sanatçıları yaz,

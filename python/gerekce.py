@@ -81,9 +81,9 @@ def _liste_cumlesi(d: dict, eksen: str, adlar: dict[str, str]) -> str:
 def _ses_cumlesi(benzedigi: str) -> str:
     return t(
         f"Sesi, kütüphanendeki «{benzedigi}» albümünü andırıyor. Bu bir tür "
-        f"etiketi ya da kadro bağı değil; doğrudan sesin benzerliği (CLAP).",
+        f"etiketi ya da ortak kadro değil; iki albümün sesi gerçekten birbirine yakın.",
         f"Its sound is close to «{benzedigi}» from your library. Not a genre "
-        f"tag or a shared lineup, but the audio itself (CLAP).",
+        f"tag or a shared lineup: the two records genuinely sound alike.",
     )
 
 
@@ -129,15 +129,15 @@ def _genel(strateji: str, d: dict, eksen: str, saklanan: str) -> str:
         if isinstance(kisi, list):
             kisi = ", ".join(map(str, kisi[:3]))
         if kisi:
-            return t(f"Kadrosunda {kisi} var; bu müzisyen senin «{eksen}» ekseninde de çalıyor.",
-                     f"{kisi} plays on it, and also plays on your «{eksen}» axis.")
-        return t(f"«{eksen}» eksenindeki müzisyenlerin başka bir kaydı.",
-                 f"Another record by musicians from your «{eksen}» axis.")
+            return t(f"Kadrosunda {kisi} var; aynı müzisyen senin «{eksen}» tarzındaki albümlerde de çalıyor.",
+                     f"{kisi} plays on it, who also plays on records in your «{eksen}» style.")
+        return t(f"«{eksen}» tarzındaki müzisyenlerin başka bir kaydı.",
+                 f"Another record by musicians from your «{eksen}» style.")
     if strateji == "sahne_komsulugu":
-        return t(f"«{eksen}» ekseninin sanatçılarını dinleyenlerin sık dinlediği bir komşu.",
-                 f"A neighbour that listeners of your «{eksen}» artists often play.")
+        return t(f"«{eksen}» tarzındaki sanatçıları dinleyenlerin sık açtığı bir isim.",
+                 f"An artist often played by people who listen to your «{eksen}» artists.")
     if strateji == "bilincli_uzaklik":
-        return t(f"Bilinçli bir uzaklık: «{eksen}» ekseninin komşularının komşusu.",
+        return t(f"Bilerek biraz uzağa: «{eksen}» tarzının komşularının komşusu.",
                  f"A deliberate step away: a neighbour of your «{eksen}» neighbours.")
     return saklanan or t("Gerekçe kaydı yok.", "No recorded reason.")
 

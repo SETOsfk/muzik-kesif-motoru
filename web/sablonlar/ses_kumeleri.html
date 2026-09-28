@@ -1,16 +1,16 @@
 {% extends "taban.html" %}
-{% block baslik %}{{ t("Ses kümeleri", "Sound clusters") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block baslik %}{{ t("Ses aileleri", "Sound families") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
-  <h1>{{ t("Ses kümeleri", "Sound clusters") }}</h1>
-  <p>{{ t("Bunlar tür etiketinden gelmiyor. Kütüphanenin sesi kümelendi; hangi tür yazdığına, kimin çaldığına, ne zaman çıktığına hiç bakılmadı. Bir küme seç, o sese en yakın ama sende olmayan kayıtları getireyim.",
-          "These don't come from genre tags. Your library's sound was clustered without looking at genre, who played, or when it came out. Pick a cluster and I'll bring you records closest to that sound that you don't have yet.") }}</p>
+  <h1>{{ t("Ses aileleri", "Sound families") }}</h1>
+  <p>{{ t("Bunlar tür etiketinden gelmiyor. Kütüphanen sesine göre ailelere ayrıldı; hangi tür yazdığına, kimin çaldığına, ne zaman çıktığına hiç bakılmadı. Bir aile seç, o sese en yakın ama sende olmayan kayıtları getireyim.",
+          "These don't come from genre tags. Your library was grouped by sound alone, without looking at genre, who played, or when it came out. Pick a family and I'll bring you records closest to that sound that you don't have yet.") }}</p>
 </div>
 
 <div class="bilgi">
-  {{ t("Kümeler CLAP gömü uzayında bulundu (630 bin ses–metin çiftiyle eğitilmiş bir model). Kredi ve tür temelli kümelerinle aynı şeyi görmüyorlar: ikisinin uyumu ARI " ~ (0.073|sayi(3)) ~ ", yani neredeyse ilgisiz. Bu bir çelişki değil, iki ayrı bakış: biri «kim çalmış», öteki «kulağa nasıl geliyor».",
-       "The clusters were found in CLAP embedding space (a model trained on 630k audio–text pairs). They don't see what your credit- and genre-based clusters see: the agreement between the two is ARI " ~ (0.073|sayi(3)) ~ ", almost unrelated. That isn't a contradiction, it's two different lenses: one asks \"who played\", the other \"what does it sound like\".") }}
+  {{ t("Her albümün 30 saniyelik önizlemesi, sesi yüzlerce sayıya çeviren bir yapay kulakla dinlendi; aileler bu sayıların benzerliğinden çıktı. «Tarzların»la aynı şeyi görmüyorlar — ikisinin örtüşmesi ölçüldü ve çok düşük. Çelişki değil, iki ayrı bakış: biri «kim çalmış», öteki «kulağa nasıl geliyor».",
+       "Every album's 30-second preview was heard by a machine ear that turns sound into hundreds of numbers; the families come from how close those numbers are. They don't see what «Your styles» see — we measured the overlap and it is very low. Not a contradiction, two lenses: one asks \"who played\", the other \"what does it sound like\".") }}
 </div>
 
 <div class="izgara iki bolum">
@@ -36,7 +36,7 @@
                            "Ranked after subtracting each record's similarity to your library as a whole; otherwise tracks that resemble everything would float to the top. Each row names the album of yours it's closest to, so you can play the two back to back and judge.") }}</p>
 
   {% if not oneriler %}
-    <div class="bos">{{ t("Bu küme için havuzda henüz yeterli ölçüm yok.", "Not enough measurements in the pool for this cluster yet.") }}</div>
+    <div class="bos">{{ t("Bu aile için havuzda henüz yeterli ölçüm yok.", "Not enough measurements in the pool for this family yet.") }}</div>
   {% else %}
   <div style="display:flex;justify-content:space-between;align-items:center;
               gap:var(--b3);margin-bottom:var(--b3);flex-wrap:wrap">

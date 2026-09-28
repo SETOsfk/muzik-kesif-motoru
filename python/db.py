@@ -396,6 +396,19 @@ SEMA: tuple[str, ...] = (
         tarih           TEXT NOT NULL
     )
     """,
+    # Müzisyen fotoğrafı (python/kisi_gorsel.py). Anahtar müzisyen profiliyle
+    # aynı: normalize_esleme(ad) + kisi_eslesme. `sayfa` görselin kaynak
+    # sayfası — Wikimedia Commons'ta lisans ve atıf orada.
+    """
+    CREATE TABLE IF NOT EXISTS kisi_gorsel (
+        anahtar  TEXT PRIMARY KEY,
+        gorsel   TEXT,
+        kaynak   TEXT,             -- wikidata / deezer
+        sayfa    TEXT,
+        durum    TEXT NOT NULL,    -- bulundu / yok
+        tarih    TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -435,6 +448,7 @@ ORTAK_TABLOLAR: frozenset[str] = frozenset({
     "kullanici",        # hesaplar
     "oturum",           # oturum jetonları
     "medya",            # aday → kapak, sanatçı görseli, çalınacak parça
+    "kisi_gorsel",      # müzisyen → fotoğraf
 })
 
 #: Kullanıcıya özel kalanlar (belge amaçlı; kod `ORTAK_TABLOLAR` dışını kullanır):

@@ -5,8 +5,8 @@
 <div class="sayfa-basi">
   <p class="etiket-ust" style="margin:0 0 4px">{{ t("icra profili", "performance profiles") }}</p>
   <h1>{{ t("Müzisyenler", "Musicians") }}</h1>
-  <p>{{ t("Kütüphanendeki müzisyenler, nasıl çaldıklarına göre. Ölçüm karışık kayıttan değil, ayrılmış enstrüman kanalından geliyor: tür ya da prodüksiyon değil, çalınan şey.",
-          "The musicians in your library, by how they play. The measurement comes from the separated instrument stem, not the full mix: not the genre or the production, but the playing itself.") }}</p>
+  <p>{{ t("Kütüphanendeki müzisyenler, nasıl çaldıklarına göre. Ölçüm karışık kayıttan değil, o enstrümanın kayıttan ayrıştırılmış sesinden geliyor: tür ya da prodüksiyon değil, çalınan şey.",
+          "The musicians in your library, by how they play. The measurement comes from that instrument separated out of the recording, not the full mix: not the genre or the production, but the playing itself.") }}</p>
 </div>
 
 <nav class="cipler" aria-label="{{ t('Rol', 'Role') }}" style="margin-bottom:var(--b4)">
@@ -25,7 +25,7 @@
       {% for anahtar, r in liste.iterrows() %}
       <li class="mz-satir {{ 'etkin' if anahtar == secim }}" data-ara="{{ r.kisi|lower }} {{ r.sanatcilar|lower }}">
         <a href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">
-          <span class="mz-avatar">{{ yer_tutucu(r.kisi, '') }}</span>
+          <span class="mz-avatar">{{ yer_tutucu(r.kisi, '') }}{{ kisi_resmi(anahtar) }}</span>
           <span class="mz-kim"><b>{{ r.kisi }}</b><small>{{ r.sanatcilar }}</small></span>
           <span class="mz-sayi" title="{{ t('bu roldeki albüm', 'albums in this role') }}">{{ r.bu_rolde_album }}</span>
         </a>
@@ -38,12 +38,12 @@
   <div class="mz-ayrinti">
   {% if secim %}
     <section class="mz-kahraman kart">
-      <div class="mz-kahraman-avatar">{{ yer_tutucu(kisi_adi, '') }}</div>
+      <div class="mz-kahraman-avatar">{{ yer_tutucu(kisi_adi, '') }}{{ kisi_resmi(secim, tembel=false) }}</div>
       <div class="mz-kahraman-govde">
-        <p class="etiket-ust">{{ rol|rol_adi }}{% if stem %} · {{ t("kanal", "stem") }}: {{ stem }}{% endif %}</p>
+        <p class="etiket-ust">{{ rol|rol_adi }}</p>
         <h2>{{ kisi_adi }}</h2>
         {% if profil is not none %}
-        <p class="aciklama">{{ profil.album|int }} {{ t("albüm", "albums") }} · {{ profil.roller }}</p>
+        <p class="aciklama">{{ profil.album|int }} {{ t("albüm", "albums") }} · {{ profil.roller|roller_adi }}</p>
         {% endif %}
         {% if secim %}
         <p><a class="dugme birincil" href="/kesfet?muzisyen={{ secim|urlencode }}&rol={{ rol }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">
@@ -84,8 +84,8 @@
     {% if not adaylar.empty %}
     <section class="bolum">
       <h3>{{ t(kisi_adi ~ " gibi çalan, sende olmayan albümler", "Records you don't have, played like " ~ kisi_adi) }}</h3>
-      <p class="aciklama">{{ t("Aday albümlerin kendi " ~ stem ~ " kanalından, bu kişinin profiline en yakın olanlar. İki sınırı var: havuz küçük (yalnız ölçülmüş " ~ havuz ~ " aday) ve her aday tek bir 30 saniyelik klipten ölçülüyor. Sayıya değil kulağına güven: dinle, sonra karar ver.",
-                               "Candidate records whose own " ~ stem ~ " stem sits closest to this person's profile. Two limits: the pool is small (only " ~ havuz ~ " measured candidates) and each one is measured from a single 30-second clip. Trust your ears over the number: listen, then decide.") }}</p>
+      <p class="aciklama">{{ t("Aday albümlerde " ~ (stem|stem_adi) ~ " sesi ayrıştırıldı; bu kişinin profiline en yakın olanlar. İki sınırı var: havuz küçük (yalnız ölçülmüş " ~ havuz ~ " aday) ve her aday tek bir 30 saniyelik klipten ölçülüyor. Sayıya değil kulağına güven: dinle, sonra karar ver.",
+                               "The " ~ (stem|stem_adi) ~ " part was separated out of candidate records; these sit closest to this person's profile. Two limits: the pool is small (only " ~ havuz ~ " measured candidates) and each one is measured from a single 30-second clip. Trust your ears over the number: listen, then decide.") }}</p>
       <div class="mz-kartlar">
         {% for _, a in adaylar.iterrows() %}
         <article class="mz-kart" data-aday="{{ a.aday_id }}">
@@ -124,10 +124,10 @@
       <div class="mz-kartlar">
         {% for anahtar, r in benzer.iterrows() %}
         <article class="mz-kart">
-          <a class="mz-kart-kapak" href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}">{{ yer_tutucu(r.kisi_adi, '') }}</a>
+          <a class="mz-kart-kapak" href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}">{{ yer_tutucu(r.kisi_adi, '') }}{{ kisi_resmi(anahtar) }}</a>
           <div class="mz-kart-govde">
             <a href="/muzisyenler?rol={{ rol }}&kisi={{ anahtar|urlencode }}"><b>{{ r.kisi_adi }}</b></a>
-            <span>{% for s in sutunlar[:3] %}{% if s in r.index and r[s] == r[s] %}{{ s.replace('_',' ') }} {{ r[s]|sayi }}{{ ' · ' if not loop.last }}{% endif %}{% endfor %}</span>
+            <span>{% for s in sutunlar[:3] %}{% if s in r.index and r[s] == r[s] %}{{ s|olcut_adi }} {{ r[s]|sayi }}{{ ' · ' if not loop.last }}{% endif %}{% endfor %}</span>
             <div class="mz-kart-alt">
               <span class="rozet mavi">≈ {{ r.benzerlik|sayi(2, isaret=True) }}</span>
             </div>
@@ -141,8 +141,7 @@
     </section>
     {% endif %}
     {% else %}
-      <div class="bilgi">{{ t(kisi_adi ~ " için " ~ stem ~ " kanalı profili yok. Üretmek için:", "No " ~ stem ~ " stem profile for " ~ kisi_adi ~ " yet. To build one:") }}
-        <code>python -m python.enrich.icra_profili --rol {{ rol }} --limit 30</code></div>
+      <div class="bilgi">{{ t(kisi_adi ~ " için henüz çalış ölçümü yok: albümlerinden bu enstrümanın sesi ayrıştırılmadı.", "No playing measurements for " ~ kisi_adi ~ " yet: this instrument hasn't been separated out of their albums.") }}</div>
     {% endif %}
 
     {% if not albumleri.empty %}

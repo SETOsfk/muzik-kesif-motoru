@@ -22,27 +22,29 @@
    sekizi gizleniyordu. Kullanıcının üç işi var: yeni bir şey bul (Keşfet),
    bulduğunu işle (Listem), kendine bak (Kütüphane). Her sayfa bu üçünden
    birinin altında; sekme adresi o grubun ilk sayfası. #}
-{# GEZİNTİ (2026-09-28 sadeleştirme): ÜÇ SEKME — Keşfet · Listem · Sen.
+{# GEZİNTİ (2026-09-28 sadeleştirme, ikinci tur): ÜÇ SEKME — Keşfet · Listem · Sen.
+   İkinci turda «Gelişmiş»teki günlük sayfalar sekmelerin altına taşındı.
    Eskiden 3 sekmenin altında 13 sayfa vardı. Günlük kullanım üç iş: yeni
    bir şey bul, bulduğunu işle, kendine bak. Ayrıntılı/teknik sayfalar
    silinmedi; menüde «Gelişmiş» altında. Her sekme: (kimlik, ad, simge,
    görünen alt seçenekler, sekmeye ait sayfalar — ilki sekmenin adresi). #}
 {% set sekmeler = [
   ('kesfet', t('Keşfet', 'Discover'), '◐',
-      [('/kesfet', t('Kaydır', 'Swipe')), ('/muzisyenler', t('Müzisyene göre', 'By musician'))],
-      ['/kesfet', '/muzisyenler', '/oneriler', '/ses-kumeleri']),
-  ('listem', t('Listem', 'My list'), '♡', [], ['/listem', '/ogrenme']),
+      [('/kesfet', t('Kaydır', 'Swipe')), ('/muzisyenler', t('Müzisyene göre', 'By musician')),
+       ('/ses-kumeleri', t('Sese göre', 'By sound')), ('/oneriler', t('Liste hâlinde', 'As a list'))],
+      ['/kesfet', '/muzisyenler', '/ses-kumeleri', '/oneriler']),
+  ('listem', t('Listem', 'My list'), '♡',
+      [('/listem', t('Listem', 'My list')), ('/ogrenme', t('Ne tuttu?', 'What worked?'))],
+      ['/listem', '/ogrenme']),
   ('sen', t('Sen', 'You'), '☾',
-      [('/sen', t('Portren', 'Portrait')), ('/tarzlar', t('Tarzların', 'Your styles'))],
-      ['/sen', '/tarzlar', '/etiketler', '/profil', '/kumeler', '/veri', '/eslestirme', '/sozluk']),
+      [('/sen', t('Portren', 'Portrait')), ('/tarzlar', t('Tarzların', 'Your styles')),
+       ('/istatistik', t('Sayılarla', 'In numbers')), ('/profil', t('Çalış tarzı', 'How it plays')),
+       ('/etiketler', t('Etiketler', 'Tags'))],
+      ['/sen', '/tarzlar', '/istatistik', '/profil', '/etiketler', '/kumeler', '/veri', '/eslestirme', '/sozluk']),
 ] %}
+{# Gelişmiş: yalnız bakım ve ham veri. Günlük sayfalar yukarıdaki sekmelerde. #}
 {% set gelismis = [
-  ('/oneriler', t('Öneriler (liste)', 'Recommendations (list)')),
-  ('/ses-kumeleri', t('Ses aileleri', 'Sound families')),
-  ('/etiketler', t('Etiketler', 'Tags')),
-  ('/profil', t('Ölçümler', 'Measurements')),
   ('/kumeler', t('Kümeleme ayrıntısı', 'Clustering details')),
-  ('/ogrenme', t('Ne öğrendik', 'What we learned')),
   ('/veri', t('Veri seti', 'Dataset')),
   ('/eslestirme', t('Eşleştirme', 'Matching')),
   ('/sozluk', t('Sözlük', 'Glossary')),

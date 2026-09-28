@@ -44,6 +44,7 @@ from pathlib import Path
 
 import pandas as pd
 from starlette.applications import Starlette
+from markupsafe import Markup
 from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
@@ -482,9 +483,8 @@ def oneriler(istek):
 
         if adaylar.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj=t("Henüz aday yok. Üretmek için: ",
-                               "No candidates yet. To generate them: ")
-                + "<code>python -m python.discover.adaylar --tum-eksenler</code>"))
+                istek, mesaj=t("Henüz öneri yok. Kütüphanen işlendikçe burası dolacak.",
+                               "No recommendations yet. This fills up once your library is processed.")))
 
         eksenler = sorted(adaylar["eksen"].unique())
         secili = int(istek.query_params.get("eksen", eksenler[0]))
@@ -800,9 +800,8 @@ async def profil(istek):
         veri = stem_verisi(conn)
         if veri.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj=t("Henüz enstrüman ölçümü yok. Çalıştırmak için: ",
-                               "No instrument measurements yet. To run them: ")
-                + "<code>python -m python.enrich.icra_profili --tum</code>"))
+                istek, mesaj=t("Henüz çalış ölçümü yok. Bu sayfa kendi ses dosyalarından ölçülen kütüphanelerde dolar.",
+                               "No playing measurements yet. This page fills in for libraries measured from their own audio files.")))
 
         # ODAK. Aynı ekran herkese aynı şeyi göstermemeli: biri gitara,
         # biri vokale bakmak ister, biri hiçbirine — düz bir profil ister.
@@ -987,7 +986,7 @@ def _olcu_cubuklari(kendi, profiller, sutunlar) -> list[dict]:
         konum = lambda x: max(0.0, min(1.0, (float(x) - alt) / aralik))  # noqa: E731
         tanim = terim(s) or {}
         cubuklar.append({
-            "sutun": s, "ad": tanim.get("ad") or s.replace("_", " "),
+            "sutun": s, "ad": olcut_adi(s),
             "ipucu": tanim.get("kisa", ""), "deger": float(kendi[s]),
             "konum": konum(kendi[s]), "medyan": konum(med),
         })
@@ -1010,9 +1009,8 @@ def muzisyenler(istek):
     veri = _muzisyen_verisi_onbellek(kullanici_id)
     if veri.profil.empty:
         return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-            istek, mesaj=t("Henüz kredi verisi yok. Çalıştırmak için: ",
-                           "No credit data yet. To fetch it: ")
-            + "<code>python -m python.enrich.krediler</code>"))
+            istek, mesaj=t("Henüz kimin çaldığı bilgisi yok. Bu sayfa albüm kredileri toplanmış kütüphanelerde dolar.",
+                           "No musician credits yet. This page fills in once album credits have been gathered.")))
 
     # Yalnız enstrüman kanalı olan roller: akordeon ya da banjo için ayrılmış
     # bir kanal yok ve profil çıkamıyordu (çip tıklanınca boş sayfa). Ana
@@ -1353,6 +1351,101 @@ def sen_sayfasi(istek):
         eksen_adi=eksen_adi, onyil_adi=onyil_adi))
 
 
+def kisi_gorsel_istek(istek):
+    """Müzisyen fotoğrafı: bulunursa görsele yönlendir, yoksa 404.
+
+    Sayfa `<img src="/kisi-gorsel/…" loading="lazy">` koyar; yalnız ekrana
+    giren kişiler çözülür. 404'te genel hata dinleyicisi resmi kaldırır ve
+    yer tutucu görünür kalır (uygulama.js).
+    """
+    from python.kisi_gorsel import coz
+
+    anahtar = istek.path_params["anahtar"]
+    conn = _baglanti()
+    try:
+        kayit = coz(conn, anahtar)
+    finally:
+        conn.close()
+    if not kayit:
+        return Response(status_code=404, headers={"Cache-Control": "private, max-age=3600"})
+    return RedirectResponse(kayit["gorsel"], status_code=302,
+                            headers={"Cache-Control": "private, max-age=86400"})
+
+
+def kisi_resmi(anahtar: str, tembel: bool = True) -> Markup:
+    """Yer tutucunun üstüne binen müzisyen fotoğrafı."""
+    from urllib.parse import quote
+    tembel_ozellik = 'loading="lazy" ' if tembel else ""
+    return Markup(
+        f'<img class="kisi-resmi" src="/kisi-gorsel/{quote(str(anahtar), safe="")}" alt="" '
+        f'{tembel_ozellik}decoding="async" data-kapak>')
+
+
+def istatistik_sayfasi(istek):
+    """«Sayılarla sen»: grafik ve yöntem adıyla istatistiksel portre."""
+    from python import istatistik as ist
+    from python.gerekce import strateji_adi
+    from python.sen import onyil_adi
+    from web import grafik
+
+    calisma_id = _calisma_sec(istek)
+    conn = _baglanti()
+    try:
+        s = ist.hepsi(conn, calisma_id)
+    finally:
+        conn.close()
+    if not s["album"]:
+        return RedirectResponse("/basla", status_code=303)
+    adlar = _eksen_adlari(calisma_id) if calisma_id else {}
+
+    def tarz_adi(kume) -> str:
+        return adlar.get(int(kume)) or t(f"Tarz {int(kume) + 1}", f"Style {int(kume) + 1}")
+
+    g_tarz = g_zaman = g_cesit = g_tempo = g_kaynak = None
+    tepe_onyil = None
+    if s["tarzlar"]:
+        g_tarz = grafik.yatay_cubuk(
+            [(tarz_adi(k["kume"]), k["album"]) for k in s["tarzlar"]["liste"]],
+            basamak=0, birim=t(" albüm", " albums"), genislik=440,
+            ipuclari=[t(f"{tarz_adi(k['kume'])}: {k['album']} albüm · sağlamlık "
+                        f"{dil_sayi(k['stabilite'] or 0, 2)}"
+                        + (" (sağlam)" if k["stabil"] else " (oynak)"),
+                        f"{tarz_adi(k['kume'])}: {k['album']} albums · robustness "
+                        f"{dil_sayi(k['stabilite'] or 0, 2)}"
+                        + (" (robust)" if k["stabil"] else " (unsettled)"))
+                      for k in s["tarzlar"]["liste"]])
+    if s["zaman"]:
+        onyillar = s["zaman"]["onyillar"]
+        tepe = max(range(len(onyillar)), key=lambda i: onyillar[i][1])
+        tepe_onyil = onyillar[tepe][0]
+        g_zaman = grafik.sutunlar(
+            [(f"{o % 100:02d}" if len(onyillar) > 7 else str(o), n,
+              t(f"{onyil_adi(o)}: {n} albüm", f"{onyil_adi(o)}: {n} albums"))
+             for o, n in onyillar], vurgu=tepe, genislik=440, yukseklik=190)
+    if s["cesitlilik"]:
+        g_cesit = grafik.yatay_cubuk(
+            [(a, n) for a, n in s["cesitlilik"]["ilk"]], basamak=0,
+            birim=t(" albüm", " albums"), renk=grafik.PALET["ikincil"], genislik=440)
+    if s["ses"]:
+        kutular = s["ses"]["kutular"]
+        tepe = max(range(len(kutular)), key=lambda i: kutular[i][1])
+        g_tempo = grafik.sutunlar(
+            [(str(b), n, t(f"{b}–{b + ist.TEMPO_KUTU} vuruş/dk: {n} albüm",
+                           f"{b}–{b + ist.TEMPO_KUTU} bpm: {n} albums"))
+             for b, n in kutular], vurgu=tepe, genislik=440, yukseklik=190,
+            etiket_adimi=2 if len(kutular) > 8 else 1)
+    if s["kesif"] and s["kesif"]["kaynaklar"]:
+        g_kaynak = grafik.aralik(
+            [(strateji_adi(k["strateji"]), k["oran"], k["alt"], k["ust"],
+              t(f"{k['begendim']}/{k['n']} beğendin · aralık {yuzde(k['alt'])}–{yuzde(k['ust'])}",
+                f"liked {k['begendim']}/{k['n']} · range {yuzde(k['alt'])}–{yuzde(k['ust'])}"))
+             for k in s["kesif"]["kaynaklar"]], genislik=440)
+    return SABLONLAR.TemplateResponse(istek, "istatistik.html", _ortam(
+        istek, s=s, g_tarz=g_tarz, g_zaman=g_zaman, g_cesit=g_cesit, g_tempo=g_tempo,
+        g_kaynak=g_kaynak, tepe_onyil=tepe_onyil, onyil_adi=onyil_adi, tarz_adi=tarz_adi,
+        net_esik=ist.NET_UYELIK, kopru_esik=ist.KOPRU_UYELIK))
+
+
 async def etiketler(istek):
     """Çok boyutlu etiketler ve tarifler."""
     from python.etiket import ACIKLAMALAR, tarifler
@@ -1365,8 +1458,8 @@ async def etiketler(istek):
                 ORDER BY albüm DESC""", conn)
         if etiket.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj=t("Henüz etiket yok. Üretmek için: ", "No tags yet. To build them: ")
-                + "<code>python -m python.etiket</code>"))
+                istek, mesaj=t("Henüz etiket yok. Kütüphanen ölçüldükçe burası dolacak.",
+                               "No tags yet. This fills up once your library is measured.")))
 
         secili = istek.query_params.get("etiket")
         albumler = pd.DataFrame()
@@ -1399,9 +1492,8 @@ async def ses_kumeleri(istek):
         kumeler = pd.read_sql_query("SELECT * FROM ses_kumesi", conn)
         if kumeler.empty:
             return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
-                istek, mesaj=t("Henüz ses kümesi yok. Önce ", "No sound clusters yet. First run ")
-                + "<code>python -m python.etiket_clap --gomu</code>" + t(", sonra ", ", then ")
-                + "<code>python -m python.ses_kume</code>"))
+                istek, mesaj=t("Henüz ses ailesi yok. Albümlerin önizlemeleri dinlendikçe burası dolacak.",
+                               "No sound families yet. This fills up as your albums' previews are listened to.")))
 
         albumler = {
             r[0]: (r[1], r[2]) for r in conn.execute(
@@ -1544,7 +1636,8 @@ ICERIK_POLITIKASI = "; ".join((
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https://*.dzcdn.net https://*.mzstatic.com "
-    "https://coverartarchive.org https://*.archive.org",
+    "https://coverartarchive.org https://*.archive.org "
+    "https://commons.wikimedia.org https://upload.wikimedia.org",
     "media-src 'self' https://*.dzcdn.net https://*.apple.com https://*.mzstatic.com",
     "connect-src 'self'",
     "frame-ancestors 'none'",
@@ -2399,6 +2492,8 @@ ROTALAR = [
     Route("/eslestirme", eslestirme),
     Route("/etiketler", etiketler),
     Route("/sen", sen_sayfasi),
+    Route("/istatistik", istatistik_sayfasi),
+    Route("/kisi-gorsel/{anahtar:path}", kisi_gorsel_istek),
     Route("/tarzlar", tarzlar_sayfasi),
     Route("/tarzlar/otomatik", tarz_otomatik, methods=["POST"]),
     Route("/ses-kumeleri", ses_kumeleri),
@@ -2500,14 +2595,18 @@ SABLONLAR.env.globals["surum"] = _SURUM
 SABLONLAR.env.globals["statik"] = _statik
 SABLONLAR.env.globals["yer_tutucu"] = yer_tutucu_svg
 SABLONLAR.env.globals["t"] = t
+SABLONLAR.env.globals["kisi_resmi"] = kisi_resmi
 SABLONLAR.env.globals["dil"] = etkin_dil
 SABLONLAR.env.filters["sayi"] = dil_sayi
 SABLONLAR.env.filters["yuzde"] = yuzde
 SABLONLAR.env.globals["yuzde"] = yuzde
-from python.ceviri import etiket_aciklama, etiket_adi, rol_adi  # noqa: E402
+from python.ceviri import etiket_aciklama, etiket_adi, olcut_adi, rol_adi, roller_adi  # noqa: E402
 from python.gerekce import strateji_adi  # noqa: E402
 SABLONLAR.env.filters["etiket_adi"] = etiket_adi
 SABLONLAR.env.filters["rol_adi"] = rol_adi
+SABLONLAR.env.filters["olcut_adi"] = olcut_adi
+SABLONLAR.env.filters["roller_adi"] = roller_adi
+SABLONLAR.env.filters["stem_adi"] = lambda s: __import__("python.profil", fromlist=["stem_adi"]).stem_adi(s)
 SABLONLAR.env.globals["etiket_aciklama"] = etiket_aciklama
 SABLONLAR.env.globals["strateji_adi"] = strateji_adi
 

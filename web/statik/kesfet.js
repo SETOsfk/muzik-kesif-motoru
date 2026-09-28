@@ -269,8 +269,8 @@
     const metin = document.getElementById('deste-bos-metin');
     if (d.bitis === 'profil_yok') {
       baslik.textContent = t('Karşılaştıracak profil yok', 'Nothing to compare against');
-      metin.textContent = t(`${ad} için ayrılmış kanal profili ya da ölçülmüş aday bulunamadı.`,
-                            `There's no separated-stem profile for ${ad}, or no measured picks to compare.`);
+      metin.textContent = t(`${ad} nasıl çalıyor henüz ölçülmedi ya da karşılaştıracak ölçülmüş aday yok.`,
+                            `We haven't measured how ${ad} plays yet, or there are no measured picks to compare.`);
     } else {
       baslik.textContent = t(`${ad} gibi çalan başka kimse yok`, `No one else plays like ${ad}`);
       metin.textContent = t(`Kalan adayların benzerliği %${esik}'in altına düştü. Daha uzaktakileri göstermek, benzemeyenleri benziyor diye sunmak olurdu.`,
