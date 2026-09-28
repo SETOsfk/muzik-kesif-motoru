@@ -1,4 +1,5 @@
 {% extends "taban.html" %}
+{% from "_grafik.html" import grafik, betikler %}
 {% block baslik %}{{ t("Dinleyici profili", "Listener profile") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
@@ -34,7 +35,7 @@
     {% for k in konumlar %}
     <article class="kart konum-kart">
       <h3>{{ k.eksen|bas_harf }}</h3>
-      {{ k.cizim }}
+      {{ grafik("konum-" ~ loop.index, k.tanim, "liste", k.eksen) }}
     </article>
     {% endfor %}
   </div>
@@ -46,14 +47,14 @@
     <h3>{{ t("Enstrüman dengesi", "Instrument balance") }}</h3>
     <p class="aciklama">{{ t("Kayıttan ayrıştırılan her enstrümanın mikste kapladığı yer (ortanca albüm). Dördü 1'e toplanmaz; okunacak şey aralarındaki denge.",
                              "How much room each instrument, separated out of the recording, takes in the mix (median album). The four don't add up to 1; what matters is the balance.") }}</p>
-    {{ g_denge }}
+    {{ grafik("denge", g_denge, "liste", t("Enstrüman dengesi", "Instrument balance")) }}
   </section>
 
   <section class="kart">
     <h3>{{ t("Nerede her şeyi dinliyorsun?", "Where do you listen to everything?") }}</h3>
     <p class="aciklama">{{ t("Uzun çubuk: o özellikte kütüphanen geniş bir alana yayılıyor. Kısa çubuk: belirli bir zevkin var — o yönde sapan bir öneri daha riskli.",
                              "Long bar: your library spreads widely on that trait. Short bar: you have a specific taste — a pick that strays there is riskier.") }}</p>
-    {{ g_cesit }}
+    {{ grafik("yayilim", g_cesit, "liste", t("Yayılım", "Spread")) }}
     <details class="ist-yontem"><summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
       <p>{{ t("Yayılım = (95. yüzdelik − 5. yüzdelik) / ortanca. Uç albümlerin etkisini kırpar, birimleri farklı özellikleri kıyaslanabilir yapar.",
               "Spread = (95th percentile − 5th percentile) / median. It trims the extreme albums and makes traits with different units comparable.") }}</p></details>
@@ -118,3 +119,4 @@
   </div>
 </details>
 {% endblock %}
+{% block betik %}{{ betikler() }}{% endblock %}

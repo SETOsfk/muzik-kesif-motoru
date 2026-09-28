@@ -4,6 +4,8 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- Bütün grafikler tek dilde: tarayıcıda, kartın gerçek genişliğinde (Chart.js); yazı ve çizgi her yerde aynı.
+- Pano: ses imzası (radar), beğeni oranı seyri, kararlar halkası, tablo görünümü.
 - Etkileşimli pano: tarz haritası, tarz seçince bütün grafikler süzülür, tarz paneli.
 - Grafikler uygulamanın renkleriyle: her tarzın her yerde aynı rengi var.
 - Kümeleme araması (`python -m python.kumeleme.arama`): 220 ayarı ölçüyle kıyaslar.

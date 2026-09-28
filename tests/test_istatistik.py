@@ -153,15 +153,6 @@ def test_tarz_konumlari_yuzdelik_ve_sira():
     assert all(0 <= r["q1"] <= r["orta"] <= r["q3"] <= 1 for r in tempo["satirlar"])
 
 
-def test_grafikler_bos_veride_cokmez():
-    from web import grafik
-    assert "<svg" in grafik.yigin_cubuk([]).svg
-    assert "<svg" in grafik.konum_seridi([], sol="a", sag="b").svg
-    svg = grafik.konum_seridi([("çok uzun bir tarz adı burada", 0.5, 0.2, 0.8, "ipucu")],
-                              sol="a", sag="b").svg
-    assert "…" in svg and "ipucu" in svg
-
-
 def test_tarz_haritasi_benzer_tarzlari_yakin_koyar():
     import numpy as np
     # 0 ve 1 albümlerini paylaşıyor, 2 ayrı.
@@ -183,16 +174,7 @@ def test_pano_tarz_basina_veri_ve_renk_sirasi(conn):
     assert p["sanatci_tarzi"]["A"] == 0
 
 
-def test_pano_grafikleri_data_tarz_tasir():
+def test_tarz_rengi_sabit_ve_donmez():
     from web import grafik
-    tarzlar = [{"kume": 0, "renk": 0, "album": 5, "x": 0.1, "y": 0.2, "onyil": {1990: 3},
-                "tempo": (120.0, 110.0, 130.0)},
-               {"kume": 1, "renk": 1, "album": 3, "x": 0.9, "y": 0.8, "onyil": {1990: 1},
-                "tempo": None}]
-    adlar = {0: "metal", 1: "caz"}
-    harita = grafik.tarz_haritasi(tarzlar, [(0, 1, 2)], adlar).svg
-    assert 'data-tarz="0"' in harita and 'data-tarz="0 1"' in harita
-    assert grafik.TARZ_RENKLERI[0] in harita
-    assert 'data-tarz="1"' in grafik.onyil_tarz([1990], tarzlar, adlar).svg
-    assert "caz" not in grafik.tempo_seridi(tarzlar, adlar, (90, 150)).svg   # tempo yok → satır yok
+    assert grafik.tarz_rengi(0) == grafik.TARZ_RENKLERI[0]
     assert grafik.tarz_rengi(None) == grafik.DIGER and grafik.tarz_rengi(12) == grafik.DIGER

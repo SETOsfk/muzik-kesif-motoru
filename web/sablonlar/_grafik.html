@@ -1,0 +1,12 @@
+{# Ortak grafik makrosu: tanım JSON olarak sayfaya gömülür, grafikler.js
+   (Chart.js) kartın gerçek genişliğinde çizer. `boy`: grafik-kutu sınıfı. #}
+{% macro grafik(kimlik, tanim, boy="orta", etiket="") -%}
+  {%- if tanim -%}
+  <div class="grafik-kutu {{ boy }}"{% if tanim.satirlar is defined %} style="--satir: {{ tanim.satirlar|length }}"{% endif %}><canvas data-kaynak="g-{{ kimlik }}" role="img" aria-label="{{ etiket }}"></canvas></div>
+  <script type="application/json" id="g-{{ kimlik }}">{{ tanim|tojson }}</script>
+  {%- endif -%}
+{%- endmacro %}
+{% macro betikler() -%}
+<script src="{{ statik('vendor/chart.umd.js') }}"></script>
+<script src="{{ statik('grafikler.js') }}"></script>
+{%- endmacro %}

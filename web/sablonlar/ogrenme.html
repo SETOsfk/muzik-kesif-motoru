@@ -1,10 +1,11 @@
 {% extends "taban.html" %}
+{% from "_grafik.html" import grafik, betikler %}
 {% block baslik %}{{ t("Ne öğrendik", "What we learned") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 
 <div class="sayfa-basi">
   <h1>{{ t("Ne öğrendik", "What we learned") }}</h1>
-  <p>{{ t(karar_sayisi ~ " sanatçı hakkında verdiğin kararlar, kaynağa göre. Her sanatçı bir kez sayılıyor. «Zaten biliyorum» bir zevk kararı değil: zevk isabetine girmiyor, keşif oranına giriyor. Bir kaynak zevkte kusursuz olup keşifte tamamen başarısız olabilir.",
+  <p>{{ t(karar_sayisi ~ " sanatçı hakkında verdiğin kararlar, kaynağa göre. Her sanatçı bir kez sayılıyor. «Zaten biliyorum» bir beğeni kararı değil: beğeni oranına girmiyor, yenilik oranına giriyor.",
           "Your decisions on " ~ karar_sayisi ~ " artists, by source. Each artist counts once. \"Already know it\" isn't a taste decision: it's left out of the like rate but counts toward novelty.") }}</p>
 </div>
 
@@ -18,13 +19,13 @@
     <h3>{{ t("Beğeni oranı", "Like rate") }}</h3>
     <p class="aciklama">{{ t("Senin için yeni olan önerilerden kaçını beğendin? «Zaten biliyorum» buraya girmiyor.",
                              "Of the picks that were new to you, how many did you like? «Already know it» isn't counted here.") }}</p>
-    {{ g_zevk }}
+    {{ grafik("zevk", g_zevk, "liste", t("Beğeni oranı", "Like rate")) }}
   </section>
   {% endif %}
   <section class="kart">
     <h3>{{ t("Yenilik oranı", "Novelty rate") }}</h3>
     <p class="aciklama">{{ t("Önerilen sanatçı senin için yeni miydi?", "Was the suggested artist new to you?") }}</p>
-    {{ g_kesif }}
+    {{ grafik("yenilik", g_kesif, "liste", t("Yenilik oranı", "Novelty rate")) }}
   </section>
 </div>
 <details class="ist-yontem bolum">
@@ -71,6 +72,7 @@
 
 <div class="bilgi">
   {{ t("Bu ölçümler iki yerde iş görüyor. Keşfet destesi kaynaklar arasındaki payı buradaki beğeni oranlarından alıyor: sende tutan kaynaktan daha çok kart gelir, ama az veriyle her kaynaktan örnek gelmeye devam eder. Öneriler sayfasında da bildiğin sanatçılar sona atılıyor.",
-       "These numbers do two jobs. The Discover deck takes its share across sources from the hit rates here: the source that's landing with you gets more cards, while every source keeps getting sampled while data is thin. And on Recommendations, artists you already know are pushed to the end.") }}
+       "These numbers do two jobs. The Discover deck takes its share across sources from the like rates here: the source that's landing with you gets more cards, while every source keeps getting sampled while data is thin. And on Recommendations, artists you already know are pushed to the end.") }}
 </div>
 {% endblock %}
+{% block betik %}{{ betikler() }}{% endblock %}

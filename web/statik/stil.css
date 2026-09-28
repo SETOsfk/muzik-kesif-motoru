@@ -1631,3 +1631,82 @@ kbd { font-family: var(--font-etiket); font-size: .78em; }
 @media (prefers-reduced-motion: reduce) { [data-pano] [data-tarz] { transition: none; } }
 .pano .g-tel { display: none; }
 @media (max-width: 640px) { .pano .g-masa { display: none; } .pano .g-tel { display: block; } }
+
+/* =================================================== PANO (dördüncü sürüm) ===
+   12 sütunlu ızgara, tek kart dili. Grafikler Chart.js (grafikler.js);
+   kutunun yüksekliği CSS'te, genişlik kartın kendisi — yazı her yerde aynı. */
+.pano2 { max-width: 84rem; margin: 0 auto; display: flex; flex-direction: column; gap: var(--b4); }
+.pano2-bas { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+             gap: var(--b2) var(--b5); }
+.pano2-bas h1 { margin: 2px 0 0; }
+.pano2-bas > p { max-width: 34rem; color: var(--metin-2); margin: 0; }
+.kpi2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: var(--b3); }
+.kpi2-kutu { position: relative; background: var(--kart); border: 1px solid var(--kenar); border-radius: 14px;
+             padding: var(--b3) var(--b4) var(--b4); display: flex; flex-direction: column; gap: 4px;
+             box-shadow: 0 1px 0 rgba(32, 35, 44, .03), 0 8px 24px -18px rgba(32, 35, 44, .25); }
+.kpi2-kutu > span { font: 600 .7rem/1 var(--font-etiket); letter-spacing: .14em; text-transform: uppercase;
+                    color: var(--metin-3); }
+.kpi2-kutu b { font-family: var(--font-baslik); font-weight: 400; font-size: 2.35rem; line-height: 1.05;
+               font-variant-numeric: tabular-nums; color: var(--metin); }
+.kpi2-kutu small { color: var(--metin-3); font-size: .86rem; line-height: 1.35; }
+.kpi2-olcek { display: block; height: 6px; border-radius: 3px; background: var(--zemin-2); overflow: hidden; }
+.kpi2-olcek i { display: block; height: 100%; background: var(--ikincil); border-radius: 3px; }
+.kpi2-seri .grafik-kutu { margin: 2px -4px 0; }
+.pano2-izgara { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--b4); align-items: stretch; }
+.kart2 { background: var(--kart); border: 1px solid var(--kenar); border-radius: 16px; min-width: 0;
+         padding: var(--b4) var(--b5) var(--b4); display: flex; flex-direction: column; gap: var(--b2);
+         box-shadow: 0 1px 0 rgba(32, 35, 44, .03), 0 12px 32px -24px rgba(32, 35, 44, .28); }
+.kart2.s3 { grid-column: span 3; } .kart2.s4 { grid-column: span 4; } .kart2.s5 { grid-column: span 5; }
+.kart2.s6 { grid-column: span 6; } .kart2.s7 { grid-column: span 7; } .kart2.s8 { grid-column: span 8; }
+.kart2.s12 { grid-column: 1 / -1; }
+@media (max-width: 1180px) {
+  .kart2.s3, .kart2.s4 { grid-column: span 6; } .kart2.s5, .kart2.s7 { grid-column: span 6; }
+  .kart2.s8 { grid-column: span 7; } .panel2 { grid-column: span 5 !important; }
+}
+@media (max-width: 860px) { .pano2-izgara > .kart2 { grid-column: 1 / -1 !important; } }
+.kart2-bas { display: flex; flex-direction: column; gap: 2px; }
+.kart2-bas .etiket-ust { margin: 0; }
+.kart2 h2 { font-size: 1.22rem; font-weight: 400; line-height: 1.25; margin: 0; text-wrap: balance; }
+.kart2 h3 { font: 600 .74rem/1.2 var(--font-etiket); letter-spacing: .12em; text-transform: uppercase;
+            color: var(--metin-3); margin: var(--b3) 0 2px; }
+.kart2 p { margin: 0; }
+.kart2-alt { color: var(--metin-3); font-size: .9rem; line-height: 1.45; }
+.kart2-yontem { margin-top: auto; border-top: 1px dashed var(--kenar); padding-top: var(--b2); }
+.kart2-yontem summary { cursor: pointer; color: var(--metin-3); font-size: .86rem; }
+.kart2-yontem p { color: var(--metin-2); font-size: .88rem; margin-top: 6px; }
+.grafik-kutu { position: relative; width: 100%; height: 280px; }
+.grafik-kutu.buyuk { height: 400px; } .grafik-kutu.kare { height: 330px; }
+.grafik-kutu.liste { height: calc(var(--satir, 6) * 32px + 44px); }
+.grafik-kutu.liste-uzun { height: calc(var(--satir, 10) * 28px + 40px); }
+.grafik-kutu.halka { height: 180px; } .grafik-kutu.kivilcim { height: 38px; }
+@media (max-width: 640px) { .grafik-kutu.buyuk { height: 330px; } .grafik-kutu.kare { height: 300px; } }
+.panel2 { align-self: stretch; }
+.panel2 [data-panel] { display: flex; flex-direction: column; gap: var(--b2); }
+.panel2 [data-panel][hidden] { display: none; }
+.panel2-sayilar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b2); margin: var(--b2) 0; }
+.panel2-sayilar div { display: flex; flex-direction: column; gap: 2px; background: var(--zemin);
+                      border-radius: 10px; padding: 8px 10px; }
+.panel2-sayilar b { font-family: var(--font-baslik); font-weight: 400; font-size: 1.55rem; line-height: 1.1;
+                    font-variant-numeric: tabular-nums; }
+.panel2-sayilar span { color: var(--metin-3); font-size: .78rem; }
+.panel2-netlik { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.panel2-netlik small { color: var(--metin-3); }
+.panel2-liste { list-style: none; padding: 0; margin: 0; display: grid; }
+.panel2-liste li { display: flex; justify-content: space-between; align-items: center; gap: var(--b2);
+                   border-bottom: 1px solid var(--zemin-2); padding: 6px 0; }
+.panel2-liste li span:not(.saglik) { color: var(--metin-3); font-variant-numeric: tabular-nums; }
+.panel2-eylem { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--b3) !important; }
+.panel2-ipucu { margin-top: auto !important; color: var(--metin-3); font-style: italic; font-size: .9rem;
+                border-top: 1px dashed var(--kenar); padding-top: var(--b2); }
+.kopru2 { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--b3); }
+.kopru2 li { display: grid; gap: 3px; }
+.kopru2 li > span:first-of-type { color: var(--metin-2); font-size: .92rem; }
+.kopru2-oran { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; margin: 3px 0 1px; }
+.kopru2-oran i { display: block; }
+.kopru2 small { color: var(--metin-3); font-size: .8rem; }
+.kesif2-efsane { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: .9rem; }
+.kesif2-efsane li { display: flex; align-items: center; gap: 8px; color: var(--metin-2); }
+.kesif2-efsane i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.kesif2-efsane b { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--metin); }
+.tablo2 summary { cursor: pointer; color: var(--metin-2); }
+.tablo2 table td .tarz-nokta { margin-right: 8px; }

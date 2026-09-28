@@ -233,7 +233,18 @@ def kesif(conn: sqlite3.Connection) -> dict | None:
                                   "begendim": int(r["begendim"]),
                                   "oran": float(r["zevk_isabeti"]),
                                   "alt": float(r["zevk_alt"]), "ust": float(r["zevk_ust"])})
+    # Beğeni oranının karar sırasına göre seyri («zaten biliyorum» hariç):
+    # panodaki kıvılcım çizgisi. Tarih değil SIRA — kararlar birkaç günde
+    # yığılabiliyor, takvim ekseni boşluklarla dolu olurdu.
+    seri, b, n = [], 0, 0
+    for karar in tekil.sort_values("tarih")["karar"]:
+        if karar == "zaten_biliyorum":
+            continue
+        n += 1
+        b += karar == "begendim"
+        seri.append(round(b / n, 4))
     return {
+        "seri": seri,
         "sanatci": len(tekil), "begendim": begendim, "tutmadi": tutmadi,
         "bilinen": bilinen, "yeni_pay": 1 - bilinen / len(tekil),
         "oran": oran if begendim + tutmadi else None, "alt": alt, "ust": ust,

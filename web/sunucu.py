@@ -824,12 +824,13 @@ async def profil(istek):
         adlar = _eksen_adlari(calisma_id) if calisma_id else {}
 
         # --- grafikler ---
-        g_denge = grafik.yatay_cubuk(
-            [(stem_adi(r["stem"]), r["enerji_payi"]) for _, r in denge.iterrows()],
-            basamak=2, renk=grafik.PALET["ikincil"], genislik=440)
-        g_cesit = grafik.yatay_cubuk(
-            [(bas_harf(r["eksen"]), r["yayilim"]) for _, r in cesit.iterrows()],
-            basamak=2, renk=grafik.PALET["ikincil"], genislik=440)
+        # Grafik TANIMLARI (grafikler.js / Chart.js çizer; bkz. istatistik_sayfasi).
+        g_denge = {"tur": "cubuk", "basamak": 2, "birim": "",
+                   "satirlar": [{"ad": bas_harf(stem_adi(r["stem"])), "deger": round(float(r["enerji_payi"]), 3),
+                                 "renk": grafik.PALET["ikincil"]} for _, r in denge.iterrows()]}
+        g_cesit = {"tur": "cubuk", "basamak": 2, "birim": "",
+                   "satirlar": [{"ad": bas_harf(r["eksen"]), "deger": round(float(r["yayilim"]), 2),
+                                 "renk": grafik.PALET["ikincil"]} for _, r in cesit.iterrows()]}
 
         # TARZLARIN KONUMU (2026-09-28). Eski saçılım haritası ve sapma ısı
         # haritası «hiçbir şey anlatmıyor» geri bildirimiyle kaldırıldı; her
@@ -837,15 +838,16 @@ async def profil(istek):
         konumlar = []
         for e in tarz_konumlari(veri, U, adlar, odak) if not U.empty else []:
             kisa = lambda m: m.split(" / ")[0]  # noqa: E731
-            konumlar.append({**e, "cizim": grafik.konum_seridi(
-                [(r["ad"], r["orta"], r["q1"], r["q3"],
-                  t(f"{r['ad']} · {r['n']} albüm · ortancası kütüphanenin "
-                    f"{round(r['orta'] * 100)}. yüzdeliğinde",
-                    f"{r['ad']} · {r['n']} albums · median at the "
-                    f"{round(r['orta'] * 100)}th percentile of your library"))
-                 for r in e["satirlar"]],
-                sol=kisa(e["dusuk"]), sag=kisa(e["yuksek"]), genislik=360,
-                renkler=[grafik.tarz_rengi(r["renk"]) for r in e["satirlar"]])})
+            konumlar.append({**e, "tanim": {
+                "tur": "aralik", "yuzde": True, "alan": [0, 100], "birim": "",
+                "uclar": [kisa(e["dusuk"]), kisa(e["yuksek"])],
+                "satirlar": [{"kume": r["kume"], "ad": r["ad"],
+                              "renk": grafik.tarz_rengi(r["renk"]),
+                              "orta": round(r["orta"] * 100), "alt": round(r["q1"] * 100),
+                              "ust": round(r["q3"] * 100),
+                              "not": t(f"{r['n']} albüm · kütüphanenin {round(r['orta'] * 100)}. yüzdeliği",
+                                       f"{r['n']} albums · {round(r['orta'] * 100)}th percentile of your library")}
+                             for r in e["satirlar"]]}})
 
         secili_eksen = istek.query_params.get("uc") or (
             ozet.iloc[0]["eksen"] if not ozet.empty else None)
@@ -902,19 +904,23 @@ async def ogrenme(istek):
                                "No feedback yet. This page fills up as you swipe in "
                                "Discover or decide on Recommendations.")))
 
-        kesif = grafik.aralik([
-            (strateji_adi(r["strateji"]), r["kesif_orani"], r["kesif_alt"], r["kesif_ust"],
-             t(f"{strateji_adi(r['strateji'])}: {r['toplam']} karar, "
-               f"{r['zaten_biliyorum']} tanesi «zaten biliyorum»",
-               f"{strateji_adi(r['strateji'])}: {r['toplam']} decisions, "
-               f"{r['zaten_biliyorum']} \"already know it\""))
-            for _, r in isabet.iterrows()], genislik=440)
+        # Grafik tanımları (grafikler.js). Oranlar yüzde, Wilson aralığıyla.
+        yuz = lambda x: round(float(x) * 100)  # noqa: E731
+        kesif = {"tur": "aralik", "yuzde": True, "alan": [0, 100], "birim": "%",
+                 "satirlar": [{"ad": strateji_adi(r["strateji"]), "renk": grafik.PALET["ikincil"],
+                               "orta": yuz(r["kesif_orani"]), "alt": yuz(r["kesif_alt"]),
+                               "ust": yuz(r["kesif_ust"]),
+                               "not": t(f"{r['toplam']} karar, {r['zaten_biliyorum']} «zaten biliyorum»",
+                                        f"{r['toplam']} decisions, {r['zaten_biliyorum']} «already know it»")}
+                              for _, r in isabet.iterrows()]}
         zevkli = isabet[isabet["zevk_n"] > 0]
-        zevk = grafik.aralik([
-            (strateji_adi(r["strateji"]), r["zevk_isabeti"], r["zevk_alt"], r["zevk_ust"],
-             t(f"{strateji_adi(r['strateji'])}: {r['begendim']} beğendim / {r['tutmadi']} tutmadı",
-               f"{strateji_adi(r['strateji'])}: {r['begendim']} liked / {r['tutmadi']} passed"))
-            for _, r in zevkli.iterrows()], genislik=440) if not zevkli.empty else None
+        zevk = {"tur": "aralik", "yuzde": True, "alan": [0, 100], "birim": "%",
+                "satirlar": [{"ad": strateji_adi(r["strateji"]), "renk": grafik.PALET["vurgu"],
+                              "orta": yuz(r["zevk_isabeti"]), "alt": yuz(r["zevk_alt"]),
+                              "ust": yuz(r["zevk_ust"]),
+                              "not": t(f"{r['begendim']} beğendim / {r['tutmadi']} tutmadı",
+                                       f"{r['begendim']} liked / {r['tutmadi']} passed")}
+                             for _, r in zevkli.iterrows()]} if not zevkli.empty else None
 
         return SABLONLAR.TemplateResponse(istek, "ogrenme.html", _ortam(
             istek, cumleler=ozet_cumleleri(isabet), isabet=isabet,
@@ -1365,9 +1371,17 @@ def kisi_resmi(anahtar: str, tembel: bool = True) -> Markup:
 
 
 def istatistik_sayfasi(istek):
-    """«Sayılarla sen»: etkileşimli pano (tarz seçince bütün grafikler süzülür)."""
+    """«Sayılarla sen»: etkileşimli pano.
+
+    Grafikler SUNUCUDA ÇİZİLMİYOR (2026-09-28): her grafik bir JSON tanımı
+    olarak gider, `statik/grafikler.js` Chart.js ile kartın GERÇEK
+    genişliğinde çizer. Sunucuda çizilen SVG viewBox'la ölçeklendiği için her
+    grafikte yazı boyutu ve çizgi kalınlığı farklı çıkıyordu. Tanımlar yalnız
+    sayı ve ham ad taşır; metinler burada `t()` ile kurulur (K22).
+    """
     from python import istatistik as ist
     from python.gerekce import strateji_adi
+    from python.profil import stem_verisi, tarz_konumlari
     from python.sen import onyil_adi
     from web import grafik
 
@@ -1375,6 +1389,10 @@ def istatistik_sayfasi(istek):
     conn = _baglanti()
     try:
         s = ist.hepsi(conn, calisma_id)
+        stem = stem_verisi(conn)
+        uyelik = pd.read_sql_query(
+            "SELECT album_id, kume_id, uyelik FROM memberships WHERE calisma_id = ?",
+            conn, params=(calisma_id,)) if calisma_id else pd.DataFrame()
     finally:
         conn.close()
     if not s["album"]:
@@ -1388,38 +1406,52 @@ def istatistik_sayfasi(istek):
         return t(*{"saglam": ("sağlam", "robust"), "karisik": ("karışık", "mixed"),
                    "oynak": ("oynak", "unsettled")}.get(durum, (durum, durum)))
 
-    p = s.get("pano")
-    adlar = {tz["kume"]: tarz_adi(tz["kume"]) for tz in (p or {}).get("tarzlar", [])}
-    renk = {tz["kume"]: grafik.tarz_rengi(tz["renk"]) for tz in (p or {}).get("tarzlar", [])}
+    p = s.get("pano") or {}
+    tarzlar = p.get("tarzlar", [])
+    adlar = {tz["kume"]: tarz_adi(tz["kume"]) for tz in tarzlar}
+    renk = {tz["kume"]: grafik.tarz_rengi(tz["renk"]) for tz in tarzlar}
     teshis = {k["kume"]: k for k in (s["tarzlar"] or {}).get("liste", [])}
     ciftler = (s["tarzlar"] or {}).get("ciftler", [])
+    ozet = lambda tz: {"kume": tz["kume"], "ad": adlar[tz["kume"]], "renk": renk[tz["kume"]]}  # noqa: E731
 
-    g: dict[str, tuple] = {}
+    g: dict[str, dict] = {}
     paneller = []
-
-    def iki(ciz, masa: int, tel: int = 360, **kw):
-        """Aynı grafik iki genişlikte: SVG yazısı viewBox'la ölçeklendiği için
-        telefonda geniş çizim okunmaz; CSS ekrana göre birini gösterir."""
-        return (ciz(genislik=masa, **kw), ciz(genislik=tel, **kw))
-    if p:
-        from functools import partial
-        g["harita"] = (grafik.tarz_haritasi(p["tarzlar"], ciftler, adlar),
-                       grafik.tarz_haritasi(p["tarzlar"], ciftler, adlar, genislik=360, yukseklik=340))
-        g["onyil"] = iki(partial(grafik.onyil_tarz, p["onyillar"], p["tarzlar"], adlar,
-                                 onyil_adi=onyil_adi), 620)
-        if p["tempo_alan"]:
-            g["tempo"] = iki(partial(grafik.tempo_seridi, p["tarzlar"], adlar, p["tempo_alan"],
-                                     birim=t("vuruş/dk", "bpm")), 620)
-        sirali = [tz for tz in p["tarzlar"] if tz["kume"] in teshis]
-        g["netlik"] = iki(partial(grafik.yigin_cubuk,
-            [(adlar[tz["kume"]], [teshis[tz["kume"]]["net"], teshis[tz["kume"]]["arada"]],
-              t(f"{adlar[tz['kume']]}: {teshis[tz['kume']]['net']} net, "
-                f"{teshis[tz['kume']]['arada']} arada · {saglik_adi(teshis[tz['kume']]['saglik'])}",
-                f"{adlar[tz['kume']]}: {teshis[tz['kume']]['net']} clear, "
-                f"{teshis[tz['kume']]['arada']} in between · {saglik_adi(teshis[tz['kume']]['saglik'])}"))
-             for tz in sirali], tarzlar=[tz["kume"] for tz in sirali],
-            renkler=[renk[tz["kume"]] for tz in sirali]), 480)
-        for tz in p["tarzlar"]:
+    if tarzlar:
+        g["harita"] = {"tur": "harita", "birim": t("albüm", "albums"),
+                       "tarzlar": [{**ozet(tz), "album": tz["album"], "x": tz["x"], "y": tz["y"]}
+                                   for tz in tarzlar],
+                       "kopruler": [[a, b, n] for a, b, n in ciftler]}
+        g["onyil"] = {"tur": "yigin_sutun", "etiketler": [onyil_adi(o) for o in p["onyillar"]],
+                      "birim": t("albüm", "albums"),
+                      "seriler": [{**ozet(tz), "veri": [tz["onyil"].get(o, 0) for o in p["onyillar"]]}
+                                  for tz in tarzlar]}
+        g["netlik"] = {"tur": "netlik", "birim": t("albüm", "albums"),
+                       "parcalar": [t("net ait", "clearly belong"), t("iki tarz arasında", "in between")],
+                       "satirlar": [{**ozet(tz), "net": teshis[tz["kume"]]["net"],
+                                     "arada": teshis[tz["kume"]]["arada"]}
+                                    for tz in tarzlar if tz["kume"] in teshis]}
+        if p.get("tempo_alan"):
+            g["tempo"] = {"tur": "aralik", "birim": t("vuruş/dk", "bpm"), "yuzde": False,
+                          "alan": [p["tempo_alan"][0], p["tempo_alan"][1]],
+                          "satirlar": [{**ozet(tz), "orta": tz["tempo"][0], "alt": tz["tempo"][1],
+                                        "ust": tz["tempo"][2]} for tz in tarzlar if tz.get("tempo")]}
+        # Ses imzası: her tarzın ortanca albümünün kütüphanedeki YÜZDELİK sırası
+        # (K13: referans yalnız bu kütüphane; 50 = kütüphanenin ortası).
+        if not stem.empty and not uyelik.empty:
+            U = uyelik.pivot(index="album_id", columns="kume_id", values="uyelik").fillna(0.0)
+            konum = tarz_konumlari(stem, U, adlar, "genel")
+            if len(konum) >= 3:
+                g["imza"] = {
+                    "tur": "radar",
+                    "eksenler": [bas_harf(e["eksen"]) for e in konum],
+                    "uclar": [[e["dusuk"].split(" / ")[0], e["yuksek"].split(" / ")[0]] for e in konum],
+                    "referans": t("kütüphanenin ortası", "middle of your library"),
+                    "seriler": [{"kume": k, "ad": adlar.get(k, str(k)), "renk": renk.get(k, grafik.DIGER),
+                                 "veri": [round(next((r["orta"] for r in e["satirlar"] if r["kume"] == k),
+                                                     0.5) * 100) for e in konum]}
+                                for k in [tz["kume"] for tz in tarzlar]
+                                if any(r["kume"] == k for e in konum for r in e["satirlar"])]}
+        for tz in tarzlar:
             k = tz["kume"]
             ortaklar = sorted(((b if a == k else a, n) for a, b, n in ciftler if k in (a, b)),
                               key=lambda x: -x[1])
@@ -1427,34 +1459,38 @@ def istatistik_sayfasi(istek):
                              "saglik": teshis.get(k, {}).get("saglik"),
                              "stabilite": teshis.get(k, {}).get("stabilite"),
                              "net": teshis.get(k, {}).get("net"),
+                             "arada": teshis.get(k, {}).get("arada"),
                              "pay": tz["album"] / max(1, s["album"]),
                              "ortaklar": [(adlar.get(o, o), n) for o, n in ortaklar[:3]]})
     if s["cesitlilik"]:
-        st = (p or {}).get("sanatci_tarzi", {})
-        ilk = s["cesitlilik"]["ilk"]
-        from functools import partial
-        g["cesit"] = iki(partial(grafik.yatay_cubuk,
-            [(a, n) for a, n in ilk], basamak=0, birim=t(" albüm", " albums"),
-            renkler=[renk.get(st.get(a), grafik.DIGER) for a, _ in ilk],
-            tarzlar=[st.get(a) for a, _ in ilk],
-            ipuclari=[f"{a} · {adlar.get(st.get(a), '—')}" for a, _ in ilk]), 480)
+        st = p.get("sanatci_tarzi", {})
+        g["cesit"] = {"tur": "cubuk", "birim": t("albüm", "albums"),
+                      "satirlar": [{"ad": a, "deger": n, "kume": st.get(a),
+                                    "renk": renk.get(st.get(a), grafik.DIGER),
+                                    "not": adlar.get(st.get(a), "")} for a, n in s["cesitlilik"]["ilk"]]}
     if s["kesif"]:
         k = s["kesif"]
-        from functools import partial
-        g["karar"] = iki(partial(grafik.yigin_cubuk,
-            [("", [k["begendim"], k["tutmadi"], k["bilinen"]],
-              t(f"{k['begendim']} listene · {k['tutmadi']} geçtin · {k['bilinen']} biliyordun",
-                f"{k['begendim']} saved · {k['tutmadi']} passed · {k['bilinen']} already known"))],
-            etiket_eni=0), 480)
+        g["karar"] = {"tur": "halka",
+                      "merkez": yuzde(k["oran"]) if k["oran"] is not None else "—",
+                      "merkez_alt": t("beğeni", "liked"),
+                      "parcalar": [{"ad": t("listene ekledin", "saved"), "deger": k["begendim"],
+                                    "renk": grafik.PALET["vurgu"]},
+                                   {"ad": t("geçtin", "passed"), "deger": k["tutmadi"],
+                                    "renk": grafik.PALET["ikincil"]},
+                                   {"ad": t("zaten biliyordun", "already knew"), "deger": k["bilinen"],
+                                    "renk": grafik.DIGER}]}
+        if len(k["seri"]) >= 2:
+            g["seri"] = {"tur": "kivilcim", "veri": [round(x * 100) for x in k["seri"]],
+                         "ad": t("beğeni oranı", "like rate")}
         if k["kaynaklar"]:
-            g["kaynak"] = iki(partial(grafik.aralik,
-                [(strateji_adi(x["strateji"]), x["oran"], x["alt"], x["ust"],
-                  t(f"{x['begendim']}/{x['n']} beğendin · aralık {yuzde(x['alt'])}–{yuzde(x['ust'])}",
-                    f"liked {x['begendim']}/{x['n']} · range {yuzde(x['alt'])}–{yuzde(x['ust'])}"))
-                 for x in k["kaynaklar"]]), 480)
-    tepe_onyil = None
-    if s["zaman"]:
-        tepe_onyil = max(s["zaman"]["onyillar"], key=lambda o: o[1])[0]
+            g["kaynak"] = {"tur": "aralik", "birim": "%", "yuzde": True, "alan": [0, 100],
+                           "satirlar": [{"ad": strateji_adi(x["strateji"]), "renk": grafik.PALET["ikincil"],
+                                         "orta": round(x["oran"] * 100), "alt": round(x["alt"] * 100),
+                                         "ust": round(x["ust"] * 100),
+                                         "not": t(f"{x['begendim']}/{x['n']} beğendin",
+                                                  f"liked {x['begendim']}/{x['n']}")}
+                                        for x in k["kaynaklar"]]}
+    tepe_onyil = max(s["zaman"]["onyillar"], key=lambda o: o[1])[0] if s["zaman"] else None
     return SABLONLAR.TemplateResponse(istek, "istatistik.html", _ortam(
         istek, s=s, g=g, paneller=paneller, tarz_adi=tarz_adi, saglik_adi=saglik_adi,
         tepe_onyil=tepe_onyil, onyil_adi=onyil_adi,

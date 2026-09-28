@@ -2632,3 +2632,26 @@ alt alta/yan yana değil, gerçek bir pano.»
   okunmuyordu.
 - **Yöntem notu** hocalara danışmak için ayrı bir sayfa olarak hazırlandı
   (matris, hat, consensus yapılmadığı, açık sorular).
+
+## 2026-09-28 (14) — Grafikler tarayıcıda: Chart.js (K15'in grafik kısmı değişti)
+
+**Geri bildirim:** «Grafikler daha uyumlu görünmeli; daha güçlü, modern bir pano.»
+
+**Teşhis:** sunucuda üretilen SVG viewBox'la ölçekleniyordu; aynı 12 px yazı
+bir kartta ~9, ötekinde ~17 px çıkıyor, çizgi kalınlıkları grafikten grafiğe
+değişiyordu. İki genişlikte çizmek (masa/telefon) yamaydı, kök sebebi çözmüyordu.
+
+**Karar (kullanıcı seçti):** Chart.js 4.4.4, `web/statik/vendor/`e gömülü
+(MIT, ~200 KB, dış sunucuya bağlanmaz; CSP `script-src 'self'` değişmedi).
+K15'te Vega'yı eleyen iki gerekçe burada geçerli değil: tipografi ve renkler
+`grafikler.js`te doğrudan stil.css tokenlarından okunuyor, boyut kabul edildi.
+Seçenek olarak «kendi küçük çizicimiz» de sunuldu.
+
+- Sunucu yalnız JSON TANIMI üretir (`{tur: harita|yigin_sutun|netlik|aralik|
+  cubuk|halka|radar|kivilcim, ...}`), `_grafik.html` makrosu gömer; metinler
+  sunucuda `t()` ile (K22). `tojson` `</script>`i kaçırıyor (test var).
+- `web/grafik.py` yalnız palete indi; SVG çiziciler ve testleri kaldırıldı.
+- Pano yeni kartlar: ses imzası (radar; tarzın ortanca albümünün kütüphane
+  yüzdeliği, 50 = orta — K13), beğeni oranı seyri (kıvılcım, tarih değil karar
+  sırası), kararlar halkası. Profil şeritleri ve «Ne tuttu?» aralıkları aynı
+  çiziciye taşındı.

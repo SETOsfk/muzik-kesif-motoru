@@ -222,7 +222,7 @@ stabilite yordamı yerine kendi kodumuz. Karşılığında algoritmalar görün�
 | Davul ayrıştırma | Python (demucs htdemucs, MPS) | K12 — davulcu karakteri yalnız stem'den ölçülebiliyor |
 | Kümeleme | Python (numpy — FCM, Xie-Beni, PE, bootstrap Jaccard elde yazılı) | K8 — tek çalışma zamanı |
 | Boyut indirgeme | Python (numpy SVD/PCA; `umap-learn` opsiyonel) | Aynı |
-| Arayüz | Starlette + Jinja2 + elle SVG + vanilla JS (deste) | K15, K23 — İki Ay teması (kitap kapağı), üç sekme; iki dil (K22) |
+| Arayüz | Starlette + Jinja2 + vanilla JS (deste) + Chart.js (gömülü, `web/statik/vendor/`) | K15, K23 — İki Ay teması (kitap kapağı), üç sekme; iki dil (K22) |
 | Dağıtım | Docker (tek imaj, torch CPU) + Caddy (otomatik HTTPS) | Kalıcı disk şart (her karar SQLite'a yazılır) — `docs/yayin.md` |
 | Kalıcılık | SQLite | Tek dosya, taşınabilir |
 | Özetleme | Çıkarımsal (varsayılan) / Ollama / Anthropic API | K2 — takılıp çıkarılabilir, varsayılan 0 TL |
@@ -239,6 +239,9 @@ ver"; (2) durum URL'de yok, bağlantı verilemiyor, geri tuşu çalışmıyor;
 Yerine Starlette + Jinja2 + uvicorn — üçü de zaten kuruluydu, **yeni bağımlılık
 yok**. Grafikler elle SVG (`web/grafik.py`): Vega ~350 KB JS ve kendi tipografi
 varsayımlarını getiriyordu, sunucuda PNG yakınlaştırınca bulanıklaşıyordu.
+**Değişti (2026-09-28):** SVG viewBox ölçeklemesi yazı boyutlarını kartlar arası
+tutarsız yaptı; grafikler artık Chart.js ile tarayıcıda (`statik/grafikler.js`),
+sunucu yalnız JSON tanımı verir. Karar günlüğü 2026-09-28 (14).
 
 Taşıma yalnız görüntü katmanını ilgilendirdi; `python/` altındaki hesap modülleri
 hiç değişmedi. Yan kazanç: görüntü katmanı artık test edilebilir.
@@ -475,7 +478,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 321 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 314 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.

@@ -29,55 +29,6 @@ def _kosul(ad, fn):
 # SVG üretimi
 # --------------------------------------------------------------------------- #
 
-def test_xml_kacisi():
-    """Sanatçı adlarında & ve < gerçekten geçiyor; kaçırılmazsa SVG bozulur."""
-    cizim = grafik.yatay_cubuk([("AC/DC & <Guns>", 1.0)])
-    assert "&amp;" in cizim.svg and "&lt;Guns&gt;" in cizim.svg
-    assert "<Guns>" not in cizim.svg
-
-
-def test_bos_veri_cokmez():
-    for fn in (
-        lambda: grafik.yatay_cubuk([]),
-        lambda: grafik.aralik([]),
-        lambda: grafik.sacilim([], x_baslik="x", y_baslik="y"),
-        lambda: grafik.isi_haritasi([], [], {}),
-    ):
-        assert fn().svg.startswith("<svg"), "boş veride de geçerli SVG dönmeli"
-
-
-def test_tek_noktali_sacilim_bolme_hatasi_vermez():
-    """Tüm noktalar aynı yerdeyse (x1-x0)=0 olur — sıfıra bölme riski."""
-    cizim = grafik.sacilim([(0.5, 0.5, "a", "tek")], x_baslik="x", y_baslik="y")
-    assert "circle" in cizim.svg
-    # Düz `"nan" in svg` YANLIŞ bir kontrol: `domiNANt-baseline` eşleşiyor.
-    # Aranan şey, bir SAYI alanında NaN olması.
-    import re
-    assert not re.search(r'="[^"]*nan[^"]*"', cizim.svg, re.I) or \
-        not re.search(r'(cx|cy|x|y|width|height)="nan"', cizim.svg, re.I), cizim.svg[:200]
-
-
-def test_isi_haritasi_eksik_hucreyi_bos_birakir():
-    """Ölçülmemiş küme×eksen kutusu renklendirilmemeli — sıfır sanılmasın."""
-    cizim = grafik.isi_haritasi(
-        ["e1", "e2"], ["k1"], {("e1", "k1"): 0.4})
-    assert cizim.svg.count("<rect") == 2, "iki hücre olmalı"
-    assert "opacity=\"0.35\"" in cizim.svg, "eksik hücre soluk çizilmeli"
-
-
-def test_sapma_yonu_renk_degistirir():
-    """İki yönlü ölçüde sıfırın iki yanı farklı renk almalı."""
-    arti = grafik.isi_haritasi(["e"], ["k"], {("e", "k"): 0.5}).svg
-    eksi = grafik.isi_haritasi(["e"], ["k"], {("e", "k"): -0.5}).svg
-    assert grafik.PALET["ikincil"][1:] in arti
-    assert grafik.PALET["vurgu"][1:] in eksi
-
-
-def test_aralik_ipucu_tasir():
-    cizim = grafik.aralik([("sahne", 0.2, 0.07, 0.46, "10 karardan 8'i bilinen")])
-    assert "<title>10 karardan 8&#x27;i bilinen</title>" in cizim.svg
-
-
 def test_kategorik_renkler_donmez():
     """Renkler döngüye girmez (iki grup aynı rengi almasın): 8 doğrulanmış
     renk, dokuzuncu grup ve sonrası «diğer» gri (2026-09-28)."""
@@ -85,15 +36,6 @@ def test_kategorik_renkler_donmez():
     assert grafik.tarz_rengi(8) == grafik.DIGER
     assert grafik.DIGER not in grafik.TARZ_RENKLERI
 
-
-def test_nan_deger_cizilmez():
-    cizim = grafik.yatay_cubuk([("a", float("nan"))])
-    assert "—" in cizim.svg
-
-
-# --------------------------------------------------------------------------- #
-# Yönlendirmeler
-# --------------------------------------------------------------------------- #
 
 def test_tum_sayfalar_acilir():
     """Her sayfa 200 dönmeli — veritabanı boş olsa bile."""
@@ -602,3 +544,40 @@ if __name__ == "__main__":
         print(f"{len(_kalan)} test kaldı")
         raise SystemExit(1)
     print("tüm testler geçti")
+
+
+def test_pano_grafik_tanimlari_gecerli_json():
+    """Pano grafikleri tarayıcıda çizilir (grafikler.js): sayfa her tuval için
+    ayrıştırılabilir bir JSON tanımı taşımalı, Chart.js ve çizici sunulmalı."""
+    import json
+    import re
+    import tempfile
+
+    import python.db as D
+
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci = _oturumlu_istemci(tmp)
+        conn = D.baglan_kullanici(1)
+        with conn:
+            for i in range(12):
+                # Adında </script> geçen sanatçı: JSON gömülürken kaçmalı.
+                sanatci = "Kötü</script><b>" if i == 0 else f"S{i % 5}"
+                conn.execute("INSERT INTO albums (album_id, artist, title, year) VALUES (?,?,?,?)",
+                             (f"a{i}", sanatci, f"T{i}", 1980 + i * 3))
+                u0 = 0.85 if i < 6 else 0.2
+                conn.execute("INSERT INTO memberships VALUES (?,?,?,?)", (f"a{i}", 0, u0, "c1"))
+                conn.execute("INSERT INTO memberships VALUES (?,?,?,?)", (f"a{i}", 1, 1 - u0, "c1"))
+            for k in (0, 1):
+                conn.execute("INSERT INTO clusters VALUES (?,?,?,?,?)", (k, "c1", f"tarz{k}", 0.8, 1))
+        conn.close()
+        yanit = istemci.get("/istatistik?calisma=c1")
+        assert yanit.status_code == 200
+        assert "</script><b>" not in yanit.text
+        kaynaklar = re.findall(r'data-kaynak="([^"]+)"', yanit.text)
+        assert {"g-harita", "g-onyil", "g-netlik"} <= set(kaynaklar)
+        for k in kaynaklar:
+            govde = re.search(rf'<script type="application/json" id="{k}">(.*?)</script>',
+                              yanit.text, re.S).group(1)
+            assert "tur" in json.loads(govde), k
+        for yol in ("/statik/vendor/chart.umd.js", "/statik/grafikler.js"):
+            assert istemci.get(yol).status_code == 200, yol

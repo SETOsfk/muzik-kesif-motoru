@@ -1,38 +1,49 @@
 {% extends "taban.html" %}
 {% block baslik %}{{ t("Sayılarla sen", "You in numbers") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
-{% macro ciz(ikili) %}<div class="g-masa">{{ ikili[0] }}</div><div class="g-tel">{{ ikili[1] }}</div>{% endmacro %}
-{# «Sayılarla sen» — ETKİLEŞİMLİ PANO (2026-09-28, üçüncü sürüm).
-   Bir tarz seçilince (şerit, harita kabarcığı ya da `#tarz-N` bağlantısı)
-   bütün grafiklerde öbür tarzlar solar ve sağdaki panel o tarzı anlatır.
-   Her renkli işaret `data-tarz` taşır; süzgeç `uygulama.js`te. Sunucu her
-   zaman tam resmi çizer, yani JS olmadan da sayfa eksiksiz. Hesap:
-   python/istatistik.py; renkler: web/grafik.py:TARZ_RENKLERI. #}
-<div class="ist pano" data-pano>
-  <header class="pano-bas">
-    <p class="etiket-ust">{{ t("sen", "you") }}</p>
-    <h1>{{ t("Sayılarla sen", "You in numbers") }}</h1>
-    <p>{{ t("Arka planda dönen hesapların panosu. Bir tarza dokun: bütün grafikler ona göre değişir.",
+{# «Sayılarla sen» — ETKİLEŞİMLİ PANO (dördüncü sürüm, 2026-09-28).
+   Grafikler tarayıcıda Chart.js ile, kartın gerçek genişliğinde çizilir
+   (statik/grafikler.js); sunucu yalnız JSON tanımı verir (web/sunucu.py:
+   istatistik_sayfasi). Tarz seçimi: şerit, harita kabarcığı ya da #tarz-N;
+   `pano:secim` olayıyla bütün grafikler öbür tarzları soldurur. #}
+{% macro grafik(ad, boy="orta", etiket="") -%}
+  {%- if g[ad] -%}
+  <div class="grafik-kutu {{ boy }}"{% if g[ad].satirlar is defined %} style="--satir: {{ g[ad].satirlar|length }}"{% endif %}><canvas data-kaynak="g-{{ ad }}" role="img" aria-label="{{ etiket }}"></canvas></div>
+  <script type="application/json" id="g-{{ ad }}">{{ g[ad]|tojson }}</script>
+  {%- endif -%}
+{%- endmacro %}
+{% macro yontem(tr, en) -%}
+  <details class="kart-yontem"><summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary><p>{{ t(tr, en) }}</p></details>
+{%- endmacro %}
+
+<div class="pano2" data-pano>
+  <header class="pano2-bas">
+    <div>
+      <p class="etiket-ust">{{ t("sen", "you") }}</p>
+      <h1>{{ t("Sayılarla sen", "You in numbers") }}</h1>
+    </div>
+    <p>{{ t("Arka planda dönen hesapların panosu. Bir tarza dokun, bütün grafikler ona göre değişsin.",
             "A dashboard of the maths underneath. Tap a style and every chart follows it.") }}</p>
   </header>
 
-  <div class="kpi">
-    <div><span>{{ t("albüm", "albums") }}</span><b>{{ s.album|sayi(0) }}</b>
+  <section class="kpi2" aria-label="{{ t('Özet', 'Summary') }}">
+    <div class="kpi2-kutu"><span>{{ t("albüm", "albums") }}</span><b>{{ s.album|sayi(0) }}</b>
       {% if s.cesitlilik %}<small>{{ s.cesitlilik.sanatci|sayi(0) }} {{ t("sanatçıdan", "artists") }}</small>{% endif %}</div>
     {% if s.tarzlar %}
-    <div><span>{{ t("tarz", "styles") }}</span><b>{{ s.tarzlar.kume_sayisi }}</b>
+    <div class="kpi2-kutu"><span>{{ t("tarz", "styles") }}</span><b>{{ s.tarzlar.kume_sayisi }}</b>
       <small>{{ s.tarzlar.saglam_sayisi }} {{ t("tanesi sağlam", "robust") }}</small></div>
-    <div><span>{{ t("ayrışma", "separation") }}</span><b>{{ yuzde(s.tarzlar.ayrisma) }}</b>
-      <span class="kpi-olcek" aria-hidden="true"><i style="width:{{ (s.tarzlar.ayrisma*100)|round(1) }}%"></i></span>
-      <small>{{ t("tarzların ne kadar net ayrılıyor", "how cleanly your styles separate") }}</small></div>
-    <div><span>{{ t("köprü albüm", "bridge albums") }}</span><b>{{ s.tarzlar.kopru_sayisi }}</b>
+    <div class="kpi2-kutu"><span>{{ t("ayrışma", "separation") }}</span><b>{{ yuzde(s.tarzlar.ayrisma) }}</b>
+      <span class="kpi2-olcek" aria-hidden="true"><i style="width:{{ (s.tarzlar.ayrisma*100)|round(1) }}%"></i></span>
+      <small>{{ t("tarzların ne kadar net ayrılıyor", "how cleanly styles separate") }}</small></div>
+    <div class="kpi2-kutu"><span>{{ t("köprü albüm", "bridge albums") }}</span><b>{{ s.tarzlar.kopru_sayisi }}</b>
       <small>{{ t("iki tarza birden bağlı", "tied to two styles") }}</small></div>
     {% endif %}
     {% if s.kesif and s.kesif.oran is not none %}
-    <div><span>{{ t("beğeni oranı", "like rate") }}</span><b>{{ yuzde(s.kesif.oran) }}</b>
+    <div class="kpi2-kutu kpi2-seri"><span>{{ t("beğeni oranı", "like rate") }}</span><b>{{ yuzde(s.kesif.oran) }}</b>
+      {% if g.seri %}{{ grafik("seri", "kivilcim", t("Beğeni oranının karar sırasına göre seyri", "Like rate over your decisions")) }}{% endif %}
       <small>{{ s.kesif.sanatci }} {{ t("sanatçı kararından", "artist decisions") }}</small></div>
     {% endif %}
-  </div>
+  </section>
 
   {% if paneller %}
   <nav class="tarz-secici" aria-label="{{ t('Tarz seç', 'Pick a style') }}">
@@ -44,146 +55,178 @@
   </nav>
   {% endif %}
 
-  <div class="pano-izgara">
+  <div class="pano2-izgara">
     {% if g.harita %}
-    <section class="adim ist-kart p-harita">
-      <p class="etiket-ust">{{ t("tarz haritası", "style map") }}</p>
-      <h2>{{ t("Tarzların birbirine ne kadar yakın?", "How close are your styles?") }}</h2>
-      <p class="kart-alt">{{ t("Kabarcık büyüdükçe tarz kalabalıklaşır. Yakın duran ve çizgiyle bağlanan tarzlar albümlerini paylaşıyor; çizgi kalınlaştıkça ortak albüm artar.",
-                               "Bigger bubble, bigger style. Styles that sit close and are joined by a line share albums; the thicker the line, the more they share.") }}</p>
-      {{ ciz(g.harita) }}
+    <section class="kart2 s8">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("tarz haritası", "style map") }}</p>
+        <h2>{{ t("Tarzların birbirine ne kadar yakın?", "How close are your styles?") }}</h2></header>
+      <p class="kart2-alt">{{ t("Kabarcık büyüdükçe tarz kalabalıklaşır. Yakın duran, çizgiyle bağlı tarzlar albümlerini paylaşıyor; çizgi kalınlaştıkça ortak albüm artar. Kabarcığa dokun.",
+                                "Bigger bubble, bigger style. Styles that sit close and are linked share albums; thicker line, more shared. Tap a bubble.") }}</p>
+      {{ grafik("harita", "buyuk", t("Tarz haritası", "Style map")) }}
+      {{ yontem("Konumlar tarzların birlikte-üyeliğinden (iki tarz aynı albümlerde birlikte yüksek üyelik alıyor mu?) klasik çok boyutlu ölçekleme ile bulundu. Eksenlerin anlamı yok; yalnız yakınlık okunur.",
+                "Positions come from the styles' co-membership (do two styles score high on the same albums?) via classical multidimensional scaling. The axes carry no meaning; only closeness does.") }}
     </section>
     {% endif %}
 
-    <aside class="adim ist-kart p-panel" aria-live="polite">
+    <aside class="kart2 s4 panel2" aria-live="polite">
       <div data-panel="tum">
-        <p class="etiket-ust">{{ t("özet", "overview") }}</p>
-        {% if s.tarzlar %}
-        {% set onda = (s.tarzlar.net_pay * 10)|round|int %}
-        <h2>{{ t("Her 10 albümünden " ~ onda ~ " tanesi tek bir tarza net ait", onda ~ " in every 10 albums clearly belong to one style") }}</h2>
+        <header class="kart2-bas"><p class="etiket-ust">{{ t("özet", "overview") }}</p>
+          {% if s.tarzlar %}{% set onda = (s.tarzlar.net_pay * 10)|round|int %}
+          <h2>{{ t("Her 10 albümünden " ~ onda ~ " tanesi tek bir tarza net ait", onda ~ " in every 10 albums clearly belong to one style") }}</h2>{% endif %}</header>
         {% if paneller %}
         <p>{{ t("En büyük tarzın " ~ paneller[0].ad ~ " (" ~ paneller[0].album ~ " albüm).", "Your biggest style is " ~ paneller[0].ad ~ " (" ~ paneller[0].album ~ " albums).") }}
           {% if s.tarzlar.ciftler %}{{ t("En çok " ~ tarz_adi(s.tarzlar.ciftler[0][0]) ~ " ile " ~ tarz_adi(s.tarzlar.ciftler[0][1]) ~ " iç içe geçiyor.", tarz_adi(s.tarzlar.ciftler[0][0]) ~ " and " ~ tarz_adi(s.tarzlar.ciftler[0][1]) ~ " overlap the most.") }}{% endif %}</p>
         {% endif %}
-        {% set sorunlu = s.tarzlar.liste|rejectattr("saglik", "equalto", "saglam")|list %}
+        {% if s.tarzlar %}{% set sorunlu = s.tarzlar.liste|rejectattr("saglik", "equalto", "saglam")|list %}
         {% if sorunlu %}
         <h3>{{ t("Dikkat isteyen tarzlar", "Styles to watch") }}</h3>
-        <ul class="saglik-liste">
-          {% for k in sorunlu %}
-          <li><span class="saglik {{ k.saglik }}">{{ saglik_adi(k.saglik) }}</span><b>{{ tarz_adi(k.kume) }}</b></li>
-          {% endfor %}
+        <ul class="panel2-liste">
+          {% for k in sorunlu %}<li><b>{{ tarz_adi(k.kume) }}</b><span class="saglik {{ k.saglik }}">{{ saglik_adi(k.saglik) }}</span></li>{% endfor %}
         </ul>
-        <p class="kart-alt">{{ t("Karışık: albümleri başka tarzlarla da bağlı, önerileri dağınık gelebilir. Oynak: veri yeniden örneklenince dağılıyor.",
-                                 "Mixed: its albums lean into other styles too, so picks can feel scattered. Unsettled: it falls apart when the data is resampled.") }}</p>
-        {% endif %}
-        {% endif %}
-        <p class="kart-alt ipucu-satir">{{ t("Bir tarza dokun, ayrıntısı burada açılır.", "Tap a style to see it here.") }}</p>
+        <p class="kart2-alt">{{ t("Karışık: albümleri başka tarzlarla da bağlı, önerileri dağınık gelebilir. Oynak: veri yeniden örneklenince dağılıyor.",
+                                  "Mixed: its albums lean into other styles, so picks can feel scattered. Unsettled: falls apart when the data is resampled.") }}</p>
+        {% endif %}{% endif %}
+        <p class="panel2-ipucu">{{ t("Bir tarza dokun, ayrıntısı burada açılır.", "Tap a style to see it here.") }}</p>
       </div>
       {% for p in paneller %}
       <div data-panel="{{ p.kume }}" hidden>
-        <p class="etiket-ust"><i class="tarz-nokta" style="background:{{ p.renk_hex }}" aria-hidden="true"></i>{{ t("tarz", "style") }}</p>
-        <h2>{{ p.ad }}</h2>
-        <div class="panel-sayilar">
+        <header class="kart2-bas"><p class="etiket-ust"><i class="tarz-nokta" style="background:{{ p.renk_hex }}" aria-hidden="true"></i>{{ t("tarz", "style") }}</p>
+          <h2>{{ p.ad }}</h2></header>
+        <div class="panel2-sayilar">
           <div><b>{{ p.album }}</b><span>{{ t("albüm", "albums") }} · {{ yuzde(p.pay) }}</span></div>
           <div><b>{{ yuzde(p.uyum) }}</b><span>{{ t("ortalama aidiyet", "avg. belonging") }}</span></div>
-          {% if p.tempo %}<div><b>{{ p.tempo[0]|round|int }}</b><span>{{ t("vuruş/dk ortanca", "median bpm") }}</span></div>{% endif %}
+          {% if p.tempo %}<div><b>{{ p.tempo[0]|round|int }}</b><span>{{ t("vuruş/dk", "bpm") }}</span></div>{% endif %}
         </div>
-        {% if p.saglik %}<p class="kart-alt"><span class="saglik {{ p.saglik }}">{{ saglik_adi(p.saglik) }}</span>
-          {% if p.stabilite is not none %}{{ t("yeniden örneklemede tutarlılık", "consistency under resampling") }} {{ p.stabilite|sayi(2) }}{% endif %}</p>{% endif %}
+        {% if p.saglik %}
+        <div class="panel2-netlik" title="{{ p.net }} / {{ p.album }}">
+          <span class="saglik {{ p.saglik }}">{{ saglik_adi(p.saglik) }}</span>
+          {% if p.stabilite is not none %}<small>{{ t("yeniden örneklemede tutarlılık", "consistency under resampling") }} {{ p.stabilite|sayi(2) }}</small>{% endif %}
+        </div>{% endif %}
         <h3>{{ t("En çok albümü olanlar", "Most albums") }}</h3>
-        <ul class="panel-liste">{% for a, n in p.sanatcilar %}<li>{{ a }}<span>{{ n }}</span></li>{% endfor %}</ul>
+        <ul class="panel2-liste">{% for a, n in p.sanatcilar %}<li>{{ a }}<span>{{ n }}</span></li>{% endfor %}</ul>
         {% if p.ortaklar %}
         <h3>{{ t("En çok karıştığı tarzlar", "Overlaps most with") }}</h3>
-        <ul class="panel-liste">{% for ad, n in p.ortaklar %}<li>{{ ad }}<span>{{ n }} {{ t("köprü", "bridges") }}</span></li>{% endfor %}</ul>
+        <ul class="panel2-liste">{% for ad, n in p.ortaklar %}<li>{{ ad }}<span>{{ n }} {{ t("köprü", "bridges") }}</span></li>{% endfor %}</ul>
         {% endif %}
-        <p class="panel-eylem"><a class="dugme birincil" href="/kesfet?eksen={{ p.kume }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">{{ t("Bu tarzı besle →", "Grow this style →") }}</a>
+        <p class="panel2-eylem"><a class="dugme birincil" href="/kesfet?eksen={{ p.kume }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">{{ t("Bu tarzı besle →", "Grow this style →") }}</a>
           <a class="dugme" href="/tarzlar">{{ t("Adını değiştir", "Rename") }}</a></p>
       </div>
       {% endfor %}
     </aside>
 
+    {% if g.imza %}
+    <section class="kart2 s5">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("ses imzası", "sound signature") }}</p>
+        <h2>{{ t("Tarzların kulağa nasıl geliyor?", "What do your styles sound like?") }}</h2></header>
+      <p class="kart2-alt">{{ t("Merkezden uzaklaştıkça o özellik artar; koyu halka kütüphanenin ortası. Bir tarz seçince yalnız o öne çıkar.",
+                                "Further from the centre means more of that trait; the dark ring is the middle of your library. Pick a style to bring it forward.") }}</p>
+      {{ grafik("imza", "kare", t("Tarzların ses imzası", "Sound signature of your styles")) }}
+      {{ yontem("Davul, bas, gitar ve vokal kayıttan ayrıştırılıp ölçüldü. Her tarzın ortanca albümünün kütüphanendeki yüzdelik sırası: 0 en düşük, 100 en yüksek albümün.",
+                "Drums, bass, guitar and vocals were separated out of the recordings and measured. Each style's median album is placed by its percentile in your library: 0 is the lowest album, 100 the highest.") }}
+    </section>
+    {% endif %}
+
     {% if g.onyil %}
-    <section class="adim ist-kart p-genis">
-      <p class="etiket-ust">{{ t("zaman", "time") }}</p>
-      <h2>{{ t("Kalbin " ~ onyil_adi(tepe_onyil) ~ " müziğinde", "Your heart is in " ~ onyil_adi(tepe_onyil)) }}</h2>
-      <p class="kart-alt">{{ t("Her on yılda kaç albümün var, tarzlara göre. Albümlerinin yarısı " ~ s.zaman.medyan_yil ~ " ve öncesinden.",
-                               "Albums per decade, by style. Half your albums are from " ~ s.zaman.medyan_yil ~ " or earlier.") }}</p>
-      {{ ciz(g.onyil) }}
+    <section class="kart2 {{ 's7' if g.imza else 's12' }}">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("zaman", "time") }}</p>
+        <h2>{{ t("Kalbin " ~ onyil_adi(tepe_onyil) ~ " müziğinde", "Your heart is in " ~ onyil_adi(tepe_onyil)) }}</h2></header>
+      <p class="kart2-alt">{{ t("Her on yılda kaç albümün var, tarzlara göre. Albümlerinin yarısı " ~ s.zaman.medyan_yil ~ " ve öncesinden.",
+                                "Albums per decade, by style. Half your albums are from " ~ s.zaman.medyan_yil ~ " or earlier.") }}</p>
+      {{ grafik("onyil", "orta", t("On yıllara göre albümler", "Albums by decade")) }}
     </section>
     {% endif %}
 
     {% if g.netlik %}
-    <section class="adim ist-kart p-dar">
-      <p class="etiket-ust">{{ t("netlik", "clarity") }}</p>
-      <h2>{{ t("Hangi tarz ne kadar net?", "How clear is each style?") }}</h2>
-      <p class="kart-alt">{{ t("Koyu kısım tarza net ait albümler, açık kısım iki tarz arasında kalanlar.",
-                               "The solid part is albums that clearly belong; the pale part sits between two styles.") }}</p>
-      {{ ciz(g.netlik) }}
-      <details class="ist-yontem">
-        <summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
-        <p>{{ t("Bulanık kümeleme: her albüm her tarza 0–1 arası bir üyelik alır. En yüksek üyelik %" ~ (net_esik*100)|int ~ " ya da fazlaysa albüm «net». Tutarlılık: veri yüzlerce kez yeniden örneklenip (bootstrap) kümeleme tekrarlandı; aynı albümleri toplayan tarz sağlam. Ayrışma, ortalama en yüksek üyeliğin %0 (her albüm her tarza eşit) ile %100 (her albüm tek tarzda) arasındaki yeri.",
-                "Fuzzy clustering: every album gets a 0–1 membership in every style. An album is «clear» if its top membership is " ~ (net_esik*100)|int ~ "% or more. Consistency: the data was resampled hundreds of times (bootstrap) and re-clustered; a style that keeps gathering the same albums is robust. Separation places the average top membership between 0% (every album equally everywhere) and 100% (every album in one style).") }}</p>
-      </details>
+    <section class="kart2 s6">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("netlik", "clarity") }}</p>
+        <h2>{{ t("Hangi tarz ne kadar net?", "How clear is each style?") }}</h2></header>
+      <p class="kart2-alt">{{ t("Dolu kısım tarza net ait albümler, açık kısım iki tarz arasında kalanlar.", "Solid: albums that clearly belong. Pale: albums in between.") }}</p>
+      {{ grafik("netlik", "liste", t("Tarz netliği", "Style clarity")) }}
+      {{ yontem("Bulanık kümeleme: her albüm her tarza 0–1 arası bir üyelik alır. En yüksek üyelik %" ~ (net_esik*100)|int ~ " ya da fazlaysa albüm «net». Tutarlılık: veri yüzlerce kez yeniden örneklenip (bootstrap) kümeleme tekrarlandı; hep aynı albümleri toplayan tarz sağlam. Ayrışma, ortalama en yüksek üyeliğin %0 (her albüm her tarza eşit) ile %100 (her albüm tek tarzda) arasındaki yeri.",
+                "Fuzzy clustering: every album gets a 0–1 membership in every style. An album is «clear» if its top membership is " ~ (net_esik*100)|int ~ "% or more. Consistency: the data was resampled hundreds of times (bootstrap) and re-clustered; a style that keeps gathering the same albums is robust. Separation places the average top membership between 0% (every album equally everywhere) and 100% (every album in one style).") }}
     </section>
     {% endif %}
 
     {% if g.tempo %}
-    <section class="adim ist-kart p-genis">
-      <p class="etiket-ust">{{ t("ses", "sound") }}</p>
-      <h2>{{ t("Tarzlarının temposu", "Your styles' tempo") }}</h2>
-      <p class="kart-alt">{{ t("Nokta tarzın ortanca temposu, bant albümlerinin ortadaki yarısı. Ölçüm senin ses dosyalarından (vuruş takibi).",
-                               "The dot is the style's median tempo; the band is the middle half of its albums. Measured from your own audio files (beat tracking).") }}</p>
-      {{ ciz(g.tempo) }}
-      <p class="kart-alt"><a href="/profil">{{ t("Davul, bas, gitar ve vokale ayrı ayrı bak →", "Look at drums, bass, guitar and vocals →") }}</a></p>
+    <section class="kart2 s6">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("tempo", "tempo") }}</p>
+        <h2>{{ t("Tarzlarının temposu", "Your styles' tempo") }}</h2></header>
+      <p class="kart2-alt">{{ t("Nokta tarzın ortanca temposu, bant albümlerinin ortadaki yarısı.", "The dot is the style's median tempo; the band is the middle half of its albums.") }}</p>
+      {{ grafik("tempo", "liste", t("Tarzlara göre tempo", "Tempo by style")) }}
+      {{ yontem("Senin ses dosyalarından vuruş takibi: her parçanın temposu ölçüldü, albüm için parçaların ortancası alındı.",
+                "Beat tracking on your own audio files: each track's tempo was measured and the album takes the median.") }}
     </section>
     {% endif %}
 
     {% if g.cesit %}
-    <section class="adim ist-kart p-dar">
-      <p class="etiket-ust">{{ t("çeşitlilik", "variety") }}</p>
-      <h2>{{ t("Kütüphanen " ~ (s.cesitlilik.etkin|round|int) ~ " sanatçı kadar çeşitli", "As varied as " ~ (s.cesitlilik.etkin|round|int) ~ " artists") }}</h2>
-      <p class="kart-alt">{{ t(s.cesitlilik.sanatci ~ " sanatçının " ~ s.cesitlilik.tek_albumlu ~ " tanesi tek albümle duruyor. Çubuğun rengi sanatçının tarzı.",
-                               s.cesitlilik.tek_albumlu ~ " of your " ~ s.cesitlilik.sanatci ~ " artists appear with a single album. Bar colour is the artist's style.") }}</p>
-      {{ ciz(g.cesit) }}
-      <details class="ist-yontem">
-        <summary>{{ t("Nasıl ölçtük?", "How was this measured?") }}</summary>
-        <p>{{ t("Shannon çeşitliliği (Hill sayısı): albümlerin sanatçılara dağılımından entropi hesaplanır ve «eşit yer kaplayan kaç sanatçıya denk?» sorusuna çevrilir.",
-                "Shannon diversity (Hill number): the entropy of how albums spread across artists, turned into «how many equally-sized artists is this worth?».") }}</p>
-      </details>
+    <section class="kart2 s5">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("çeşitlilik", "variety") }}</p>
+        <h2>{{ t("Kütüphanen " ~ (s.cesitlilik.etkin|round|int) ~ " sanatçı kadar çeşitli", "As varied as " ~ (s.cesitlilik.etkin|round|int) ~ " artists") }}</h2></header>
+      <p class="kart2-alt">{{ t("En çok albümü olan sanatçılar; renk sanatçının tarzı.", "Artists with the most albums; colour is the artist's style.") }}</p>
+      {{ grafik("cesit", "liste-uzun", t("En çok albümü olan sanatçılar", "Artists with the most albums")) }}
+      {{ yontem("Shannon çeşitliliği (Hill sayısı): albümlerin sanatçılara dağılımından entropi hesaplanır ve «eşit yer kaplayan kaç sanatçıya denk?» sorusuna çevrilir. " ~ s.cesitlilik.tek_albumlu ~ " sanatçı tek albümle duruyor.",
+                "Shannon diversity (Hill number): the entropy of how albums spread across artists, turned into «how many equally-sized artists is this worth?». " ~ s.cesitlilik.tek_albumlu ~ " artists appear with a single album.") }}
     </section>
     {% endif %}
 
     {% if s.tarzlar and s.tarzlar.kopruler %}
-    <section class="adim ist-kart p-yarim">
-      <p class="etiket-ust">{{ t("köprüler", "bridges") }}</p>
-      <h2>{{ t("Zevklerinin buluştuğu albümler", "Where your tastes meet") }}</h2>
-      <ul class="ist-kopru">
+    <section class="kart2 s4">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("köprüler", "bridges") }}</p>
+        <h2>{{ t("Zevklerinin buluştuğu albümler", "Where your tastes meet") }}</h2></header>
+      <ul class="kopru2">
         {% for k in s.tarzlar.kopruler %}
-        <li data-tarz="{{ k.kume1 }} {{ k.kume2 }}"><b>{{ k.artist }}</b> — {{ k.title }}
-          <span>{{ tarz_adi(k.kume1) }} {{ yuzde(k.u1) }} · {{ tarz_adi(k.kume2) }} {{ yuzde(k.u2) }}</span></li>
+        <li data-tarz="{{ k.kume1 }} {{ k.kume2 }}"><b>{{ k.artist }}</b><span>{{ k.title }}</span>
+          <span class="kopru2-oran"><i style="flex:{{ k.u1 }}; background:{{ (paneller|selectattr('kume','equalto',k.kume1)|first).renk_hex if paneller else '' }}"></i><i style="flex:{{ k.u2 }}; background:{{ (paneller|selectattr('kume','equalto',k.kume2)|first).renk_hex if paneller else '' }}"></i></span>
+          <small>{{ tarz_adi(k.kume1) }} {{ yuzde(k.u1) }} · {{ tarz_adi(k.kume2) }} {{ yuzde(k.u2) }}</small></li>
         {% endfor %}
       </ul>
     </section>
     {% endif %}
 
-    <section class="adim ist-kart p-yarim">
-      <p class="etiket-ust">{{ t("keşif karnen", "discovery report") }}</p>
-      {% if s.kesif and s.kesif.oran is not none %}
-      <h2>{{ t("Beğeni oranın " ~ yuzde(s.kesif.oran), "Like rate " ~ yuzde(s.kesif.oran)) }}</h2>
-      <p class="kart-alt">{{ t(s.kesif.begendim ~ " listene · " ~ s.kesif.tutmadi ~ " geçtin · " ~ s.kesif.bilinen ~ " zaten biliyordun", s.kesif.begendim ~ " saved · " ~ s.kesif.tutmadi ~ " passed · " ~ s.kesif.bilinen ~ " already known") }}</p>
-      {{ ciz(g.karar) }}
+    <section class="kart2 s3 kesif2">
+      <header class="kart2-bas"><p class="etiket-ust">{{ t("keşif karnen", "discovery report") }}</p>
+        <h2>{{ t("Öneriler ne kadar tuttu?", "How well did picks land?") }}</h2></header>
+      {% if s.kesif %}
+      {{ grafik("karar", "halka", t("Kararlarının dağılımı", "Your decisions")) }}
+      <ul class="kesif2-efsane">
+        <li><i style="background:var(--vurgu)"></i>{{ t("listene ekledin", "saved") }}<b>{{ s.kesif.begendim }}</b></li>
+        <li><i style="background:var(--ikincil)"></i>{{ t("geçtin", "passed") }}<b>{{ s.kesif.tutmadi }}</b></li>
+        <li><i style="background:#9a9ca3"></i>{{ t("zaten biliyordun", "already knew") }}<b>{{ s.kesif.bilinen }}</b></li>
+      </ul>
       {% if g.kaynak %}
         <h3>{{ t("Hangi yol daha iyi tutuyor?", "Which route lands better?") }}</h3>
-        {{ ciz(g.kaynak) }}
+        {{ grafik("kaynak", "liste", t("Yollara göre beğeni", "Like rate by route")) }}
       {% else %}
-        <p class="kart-alt">{{ t("Yolları kıyaslamak için her birinde en az " ~ s.kesif.asgari_n ~ " karar gerekiyor.", "Comparing routes needs at least " ~ s.kesif.asgari_n ~ " decisions each.") }}</p>
+        <p class="kart2-alt">{{ t("Yolları kıyaslamak için her birinde en az " ~ s.kesif.asgari_n ~ " karar gerekiyor.", "Comparing routes needs at least " ~ s.kesif.asgari_n ~ " decisions each.") }}</p>
       {% endif %}
-      <p class="kart-alt"><a href="/ogrenme">{{ t("Ayrıntı →", "Details →") }}</a></p>
+      <p class="kart2-alt"><a href="/ogrenme">{{ t("Ayrıntı →", "Details →") }}</a></p>
       {% else %}
-      <h2>{{ t("Henüz karar yok", "No decisions yet") }}</h2>
+      <p>{{ t("Henüz karar yok.", "No decisions yet.") }}</p>
       <p><a class="dugme" href="/kesfet">{{ t("Kaydırmaya başla →", "Start swiping →") }}</a></p>
       {% endif %}
     </section>
   </div>
+
+  {% if paneller %}
+  <details class="kart2 tablo2">
+    <summary>{{ t("Tarzları tablo olarak gör", "See styles as a table") }}</summary>
+    <div class="tablo-sarmal"><table>
+      <thead><tr><th>{{ t("tarz", "style") }}</th><th class="sayi">{{ t("albüm", "albums") }}</th>
+        <th class="sayi">{{ t("net", "clear") }}</th><th class="sayi">{{ t("arada", "between") }}</th>
+        <th class="sayi">{{ t("aidiyet", "belonging") }}</th><th class="sayi">{{ t("tutarlılık", "consistency") }}</th>
+        <th>{{ t("durum", "status") }}</th><th class="sayi">{{ t("tempo", "tempo") }}</th></tr></thead>
+      <tbody>{% for p in paneller %}
+        <tr><td><i class="tarz-nokta" style="background:{{ p.renk_hex }}"></i>{{ p.ad }}</td><td class="sayi">{{ p.album }}</td>
+          <td class="sayi">{{ p.net if p.net is not none else '—' }}</td><td class="sayi">{{ p.arada if p.arada is not none else '—' }}</td>
+          <td class="sayi">{{ yuzde(p.uyum) }}</td><td class="sayi">{{ p.stabilite|sayi(2) if p.stabilite is not none else '—' }}</td>
+          <td>{{ saglik_adi(p.saglik) if p.saglik else '—' }}</td><td class="sayi">{{ p.tempo[0]|round|int if p.tempo else '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
 </div>
+{% endblock %}
+{% block betik %}
+<script src="{{ statik('vendor/chart.umd.js') }}"></script>
+<script src="{{ statik('grafikler.js') }}"></script>
 {% endblock %}

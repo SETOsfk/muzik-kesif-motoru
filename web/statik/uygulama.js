@@ -344,7 +344,11 @@ document.addEventListener('click', async (olay) => {
     try {
       history.replaceState(null, '', k ? `#tarz-${k}` : location.pathname + location.search);
     } catch (_) { /* çerçeve içinde izin verilmeyebilir */ }
+    // Chart.js grafikleri (grafikler.js) kendilerini bu olayla boyar.
+    document.dispatchEvent(new CustomEvent('pano:secim', { detail: k }));
   };
+  // Harita kabarcığı (tuval) buradan seçer; ikinci dokunuş seçimi kaldırır.
+  window.panoSec = (k, degistir) => sec(degistir && pano.dataset.secili === k ? '' : k);
   const tikla = (hedef) => {
     const k = hedef.dataset.sec !== undefined ? hedef.dataset.sec : hedef.dataset.tarz;
     sec(pano.dataset.secili === k ? '' : k);
