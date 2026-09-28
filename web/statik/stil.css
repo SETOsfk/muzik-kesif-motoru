@@ -1271,3 +1271,27 @@ kbd, .kisayol kbd { font-family: var(--font-govde); border: 1.5px solid var(--ke
 .elle-liste { order: 5; }
 .elle-liste > summary { cursor: pointer; color: var(--metin-2); font-size: 1.02rem; }
 .elle-liste[open] > summary { margin-bottom: var(--b3); }
+
+/* «Sen» — portre: büyük özet cümle, el yazısı etiketler, sade kartlar. */
+.sen { max-width: 60rem; }
+.sen-bas { position: relative; padding-right: 150px; margin-bottom: var(--b5); }
+.sen-bas .cizim { position: absolute; right: 0; top: 0; width: 130px; }
+.sen-ozet { font-family: var(--font-baslik); font-size: clamp(1.25rem, 1rem + 1vw, 1.6rem);
+            line-height: 1.4; margin: var(--b3) 0 0; color: var(--metin); }
+.sen-etiketler { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; padding: 0; margin: 0 0 var(--b5); }
+.sen-etiketler a { display: inline-block; padding: 6px 16px; font-size: 1.1rem; color: var(--metin);
+  border: 2px solid var(--kenar-parlak); border-radius: var(--cizim-kose-2); background: var(--kart);
+  box-shadow: 2px 3px 0 var(--kenar-parlak); text-decoration: none; }
+.sen-etiketler li:nth-child(3n+1) a { transform: rotate(-1.5deg); }
+.sen-etiketler li:nth-child(3n+2) a { transform: rotate(1deg); }
+.sen-etiketler li:first-child a { background: var(--vurgu); color: var(--vurgu-metin); }
+.sen-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+              gap: var(--b4); align-items: start; }
+.sen-izgara .adim h2 { font-size: 1.2rem; }
+.sen-liste { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; font-size: 1.05rem; }
+.sen-liste li span { color: var(--metin-3); margin-left: 8px; font-size: .95rem; }
+.sen-buyuk { font-family: var(--font-baslik); font-size: 2rem; line-height: 1.1; margin: 0 0 6px;
+             color: var(--vurgu); }
+.sen-not, .sen-dipnot { color: var(--metin-3); font-size: .95rem; }
+.sen-dipnot { margin-top: var(--b5); }
+@media (max-width: 700px) { .sen-bas { padding-right: 0; } .sen-bas .cizim { width: 80px; top: -6px; } }

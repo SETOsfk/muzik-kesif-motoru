@@ -25,11 +25,12 @@
 {% set sekmeler = [
   ('kesfet', t('Keşfet', 'Discover'), '◈', [
       ('/kesfet', t('Kaydır', 'Swipe')), ('/oneriler', t('Öneriler', 'Recommendations')),
-      ('/ses-kumeleri', t('Ses kümeleri', 'Sound clusters')), ('/etiketler', t('Etiketler', 'Tags'))]),
+      ('/ses-kumeleri', t('Ses kümeleri', 'Sound clusters'))]),
   ('listem', t('Listem', 'My list'), '♥', [
       ('/listem', t('Liste', 'List')), ('/ogrenme', t('Ne öğrendik', 'What we learned'))]),
   ('kutuphane', t('Kütüphane', 'Library'), '◍', [
-      ('/profil', t('Profilin', 'Your profile')), ('/muzisyenler', t('Müzisyenler', 'Musicians')),
+      ('/sen', t('Sen', 'You')), ('/etiketler', t('Etiketler', 'Tags')),
+      ('/profil', t('Ölçümler', 'Measurements')), ('/muzisyenler', t('Müzisyenler', 'Musicians')),
       ('/kumeler', t('Kümeler', 'Clusters')), ('/veri', t('Veri seti', 'Dataset')),
       ('/eslestirme', t('Eşleştirme', 'Matching')), ('/sozluk', t('Sözlük', 'Glossary'))]),
 ] %}
@@ -67,7 +68,7 @@
       {% include "_dil_secici.html" %}
       <nav class="menu-baglantilar">
         <a href="/listem">♥ {{ t("Listem", "My list") }}</a>
-        <a href="/profil">◍ {{ t("Profilim", "My profile") }}</a>
+        <a href="/sen">◍ {{ t("Sen", "You") }}</a>
         <a href="/gizlilik">🔒 {{ t("Gizlilik ve hesap", "Privacy & account") }}</a>
         <a href="/cikis">↩ {{ t("Çıkış yap", "Sign out") }}</a>
       </nav>

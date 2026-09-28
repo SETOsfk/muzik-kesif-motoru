@@ -1272,6 +1272,32 @@ async def sozluk_sayfasi(istek):
         istek, gruplar=gruplar, sozluk=_kaynak()))
 
 
+def sen_sayfasi(istek):
+    """«Sen»: düz dille portre (bkz. python/sen.py)."""
+    from python.sen import eksen_adi, onyil_adi, ozet_cumlesi, portre
+
+    calisma_id = _calisma_sec(istek)
+    conn = _baglanti()
+    try:
+        p = portre(conn, calisma_id)
+    finally:
+        conn.close()
+    if not p["album"]:
+        return RedirectResponse("/basla", status_code=303)
+    etiketler = [{"ad": eksen_adi(e), "adres": f"/kesfet?eksen={e['kume']}"}
+                 for e in p["eksenler"][:3]]
+    etiketler += [{"ad": x["etiket"], "adres": f"/etiketler?etiket={x['etiket']}"}
+                  for x in p["turler"][:3]]
+    if p["donem"]:
+        etiketler.append({"ad": onyil_adi(p["donem"]["onyil"]), "adres": "#donem"})
+    gorulen: set[str] = set()
+    etiketler = [e for e in etiketler
+                 if not (e["ad"].casefold() in gorulen or gorulen.add(e["ad"].casefold()))]
+    return SABLONLAR.TemplateResponse(istek, "sen.html", _ortam(
+        istek, p=p, ozet=ozet_cumlesi(p), etiketler=etiketler,
+        eksen_adi=eksen_adi, onyil_adi=onyil_adi))
+
+
 async def etiketler(istek):
     """Çok boyutlu etiketler ve tarifler."""
     from python.etiket import ACIKLAMALAR, tarifler
@@ -2297,6 +2323,7 @@ ROTALAR = [
     Route("/veri", veri_seti),
     Route("/eslestirme", eslestirme),
     Route("/etiketler", etiketler),
+    Route("/sen", sen_sayfasi),
     Route("/ses-kumeleri", ses_kumeleri),
     Route("/api/onizleme/{parca_id}", taze_onizleme),
     Route("/api/ses-kume-adi", ses_kume_adlandir, methods=["POST"]),
@@ -2399,6 +2426,7 @@ SABLONLAR.env.globals["t"] = t
 SABLONLAR.env.globals["dil"] = etkin_dil
 SABLONLAR.env.filters["sayi"] = dil_sayi
 SABLONLAR.env.filters["yuzde"] = yuzde
+SABLONLAR.env.globals["yuzde"] = yuzde
 from python.ceviri import etiket_aciklama, etiket_adi, rol_adi  # noqa: E402
 from python.gerekce import strateji_adi  # noqa: E402
 SABLONLAR.env.filters["etiket_adi"] = etiket_adi

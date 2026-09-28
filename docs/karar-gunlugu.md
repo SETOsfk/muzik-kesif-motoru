@@ -2463,3 +2463,22 @@ Yol boyunca bulunan iki hata:
   artık `python.aktarim` süreçlerini testte açtırmıyor.
 - Adayı olup kümeleme çalışması olmayan hesap `/basla` ↔ `/kesfet` arasında
   yönlendirme döngüsüne giriyordu; `/basla` artık çalışma da arıyor.
+
+## 2026-09-28 (7) — «Sen»: düz dille portre
+
+Kullanıcı: "Daha güçlü bir etiket sekmesi; kullanıcıya sen şöyle böylesin
+diyebilelim. Grafik ve terimden kaçın, anlaşılır yaz, gereksiz yazı yok."
+
+`/sen` (Kütüphane sekmesinin ilk sayfası, `python/sen.py`): tek cümlelik
+özet, el yazısı etiket çipleri, beş kısa kart (damarların, dönemin,
+türlerin, en çok albümün olanlar, keşif tarzın). Grafik yok.
+
+Neyin söylenmediği kadar önemli:
+- Ölçüm etiketleri ("hızlı", "ride ağırlıklı") portreye girmez: eşikleri
+  kütüphanenin kendi %20'lik kuyruğu, yani her kütüphane %20 "hızlı".
+- Sesten sıfırdan tür tahmini kullanılmaz: 2026-08-18'de tüm kütüphanede
+  çöktüğü ölçülmüştü (istem yanlılığı). Tür yalnız MusicBrainz etiketinden
+  ve albümlerin ≥%40'ında etiket varsa; liste/Spotify kullanıcısında tür
+  cümlesi hiç kurulmaz.
+- Türkçe ekler sayıya göre değiştiği için sayıya ek getiren kuruluşlardan
+  kaçınıldı; on yıl eki okunuşa göre tablodan ("1990'lar", "1980'ler").

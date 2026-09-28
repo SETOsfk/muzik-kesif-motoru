@@ -1,0 +1,85 @@
+{% extends "taban.html" %}
+{% block baslik %}{{ t("Sen", "You") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block govde %}
+{# «Sen» — düz dille portre. Grafik ve terim yok; her cümlenin dayanağı
+   python/sen.py belgesinde. #}
+<div class="sen">
+  <header class="sen-bas">
+    <img class="cizim" src="{{ statik('cizim/plak.svg') }}" alt="" width="140" height="130">
+    <p class="etiket-ust">{{ t("sen", "you") }}</p>
+    <h1>{{ t("Senin müziğin", "Your music") }}</h1>
+    {% if ozet %}<p class="sen-ozet">{{ ozet }}</p>{% endif %}
+  </header>
+
+  {% if etiketler %}
+  <ul class="sen-etiketler" aria-label="{{ t('Seni anlatan sözcükler', 'Words that describe you') }}">
+    {% for e in etiketler %}<li><a href="{{ e.adres }}">{{ e.ad }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="sen-izgara">
+    {% if p.eksenler %}
+    <section class="adim">
+      <h2>{{ t("Damarların", "Your veins") }}</h2>
+      <ol class="sen-liste">
+        {% for e in p.eksenler %}
+        <li><a href="/kesfet?eksen={{ e.kume }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">{{ eksen_adi(e) }}</a>
+            <span>{{ yuzde(e.pay) }}</span></li>
+        {% endfor %}
+      </ol>
+      <p class="sen-not">{{ t("Birine dokun, o damarda keşfe çık.", "Tap one to discover along that vein.") }}</p>
+    </section>
+    {% endif %}
+
+    {% if p.donem %}
+    <section class="adim" id="donem">
+      <h2>{{ t("Dönemin", "Your era") }}</h2>
+      <p class="sen-buyuk">{{ onyil_adi(p.donem.onyil) }}</p>
+      {# Sayıya ek getirmeyen kuruluş: "%41'i", "2020'ye" gibi ekler sayıya göre değişiyor. #}
+      <p>{{ t("Albümlerin arasında en kalabalık on yıl bu: " ~ yuzde(p.donem.pay) ~ ".",
+              "The busiest decade in your library: " ~ yuzde(p.donem.pay) ~ " of your albums.") }}</p>
+      <p class="sen-not">{{ t("En eski albüm: " ~ p.donem.en_eski ~ " · en yeni: " ~ p.donem.en_yeni,
+                              "Oldest: " ~ p.donem.en_eski ~ " · newest: " ~ p.donem.en_yeni) }}</p>
+    </section>
+    {% endif %}
+
+    {% if p.turler %}
+    <section class="adim">
+      <h2>{{ t("Türlerin", "Your genres") }}</h2>
+      <ol class="sen-liste">
+        {% for x in p.turler %}<li><a href="/etiketler?etiket={{ x.etiket|urlencode }}">{{ x.etiket }}</a><span>{{ yuzde(x.pay) }}</span></li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+
+    {% if p.sanatcilar %}
+    <section class="adim">
+      <h2>{{ t("En çok albümün olanlar", "Most albums from") }}</h2>
+      <ol class="sen-liste">
+        {% for s in p.sanatcilar %}<li>{{ s.ad }}<span>{{ s.album }} {{ t("albüm", "albums") }}</span></li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+
+    {% if p.kesif %}
+    <section class="adim">
+      <h2>{{ t("Keşif tarzın", "How you discover") }}</h2>
+      <p class="sen-buyuk">{{ p.kesif.sanatci }} {{ t("sanatçı", "artists") }}</p>
+      <p>{{ t("Listene eklediğin: " ~ p.kesif.begendim ~ " · geçtiğin: " ~ p.kesif.tutmadi ~ " · zaten bildiğin: " ~ p.kesif.biliyorum,
+              "You saved " ~ p.kesif.begendim ~ ", passed on " ~ p.kesif.tutmadi ~ " and already knew " ~ p.kesif.biliyorum ~ ".") }}</p>
+      {% if p.kesif.liste %}<p><a href="/listem">{{ t("Listende bekleyen albüm: " ~ p.kesif.liste ~ " →", p.kesif.liste ~ " albums waiting in your list →") }}</a></p>{% endif %}
+    </section>
+    {% else %}
+    <section class="adim">
+      <h2>{{ t("Keşif tarzın", "How you discover") }}</h2>
+      <p>{{ t("Keşfet'te kaydırdıkça burası dolacak.", "This fills up as you swipe in Discover.") }}</p>
+      <p><a href="/kesfet">{{ t("Kaydırmaya başla →", "Start swiping →") }}</a></p>
+    </section>
+    {% endif %}
+  </div>
+
+  <p class="sen-dipnot">{{ t("Kaynak: kütüphanendeki albümler (" ~ p.album ~ ") ve kaydırma kararların.",
+                             "Built from the " ~ p.album ~ " albums in your library and your decisions.") }}
+    {% if p.turler %}<a href="/etiketler">{{ t("Ayrıntılı etiketler", "Detailed tags") }}</a>{% endif %}</p>
+</div>
+{% endblock %}
