@@ -1,0 +1,34 @@
+# Keşif Motoru — sunucuda çalıştırma (bkz. docs/yayin.md).
+#
+#   cp .env.ornek .env    # ALAN_ADI ve KESIF_JETON_ANAHTARI doldur
+#   docker compose up -d --build
+#
+# Caddy HTTPS sertifikasını Let's Encrypt'ten kendisi alır ve yeniler.
+services:
+  kesif:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      KESIF_HTTPS: "1"          # secure çerez + X-Forwarded-For (Caddy arkasında)
+    volumes:
+      - ./data:/app/data        # veritabanları, gömüler, CLAP modeli — kalıcı
+    expose:
+      - "8800"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ALAN_ADI: ${ALAN_ADI:?.env içinde ALAN_ADI tanımlı değil}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_veri:/data
+    depends_on:
+      - kesif
+
+volumes:
+  caddy_veri:

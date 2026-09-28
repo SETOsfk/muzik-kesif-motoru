@@ -1,0 +1,6 @@
+# ALAN_ADI .env'den gelir. Alan adın yoksa sunucunun IP'siyle
+# 203-0-113-7.sslip.io biçimi çalışır (Let's Encrypt onu da imzalar).
+{$ALAN_ADI} {
+	encode zstd gzip
+	reverse_proxy kesif:8800
+}

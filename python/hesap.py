@@ -252,6 +252,44 @@ def kullanici_sayisi(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM kullanici").fetchone()[0])
 
 
+#: Kullanıcı klasöründe hesaba ait dosyaların sonekleri. Paylaşımlı veri
+#: (gömüler, çalma listeleri, krediler) ALBÜMÜ tarif ediyor, kişiyi değil;
+#: ona dokunulmaz (K20).
+KULLANICI_DOSYALARI = (".sqlite", ".sqlite-wal", ".sqlite-shm", ".aktarim.json",
+                       ".aktarim.log", ".aktarim.tmp", ".liste.json", ".clap.parquet")
+
+
+def hesap_sil(conn: sqlite3.Connection, kullanici_id: int) -> bool:
+    """Hesabı ve kişisel verisini sil (KVKK/GDPR silme hakkı).
+
+    Sürmekte olan bir aktarım varsa önce durdurulur: yoksa süreç silinen
+    dosyayı yeniden yaratırdı. Hesap yoksa False.
+    """
+    import os
+    import signal
+
+    import python.db as _db
+    from python.aktarim import calisiyor_mu, durum_oku
+
+    if kullanici_bul(conn, kullanici_id=kullanici_id) is None:
+        return False
+    if calisiyor_mu(kullanici_id):
+        pid = (durum_oku(kullanici_id) or {}).get("pid")
+        if isinstance(pid, int):
+            try:
+                os.killpg(pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
+    with conn:
+        conn.execute("DELETE FROM oturum WHERE kullanici_id = ?", (kullanici_id,))
+        conn.execute("DELETE FROM kullanici WHERE kullanici_id = ?", (kullanici_id,))
+    for sonek in KULLANICI_DOSYALARI:
+        dosya = _db.KULLANICI_KOK / f"{kullanici_id}{sonek}"
+        if dosya.exists():
+            dosya.unlink()
+    return True
+
+
 # --------------------------------------------------------------------------- #
 # Komut satırı — hesap yönetimi
 # --------------------------------------------------------------------------- #
@@ -370,19 +408,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.fn == "sil":
-            from python.db import kullanici_db
             kayit = kullanici_bul(conn, kullanici_id=args.id)
-            if kayit is None:
+            if kayit is None or not hesap_sil(conn, args.id):
                 print("hesap bulunamadı"); return 1
-            with conn:
-                conn.execute("DELETE FROM oturum WHERE kullanici_id = ?", (args.id,))
-                conn.execute("DELETE FROM kullanici WHERE kullanici_id = ?", (args.id,))
-            # Kütüphane dosyası da gider; paylaşımlı veriye dokunulmaz.
-            yol = kullanici_db(args.id)
-            for ek in ("", "-wal", "-shm"):
-                dosya = type(yol)(str(yol) + ek)
-                if dosya.exists():
-                    dosya.unlink()
             print(f"silindi: {kayit['ad']} (kütüphane dosyası dahil)")
             return 0
     finally:

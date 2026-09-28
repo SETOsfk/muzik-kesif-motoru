@@ -2264,3 +2264,92 @@ yalnız yerel yol (açık yönlendirme yok). Açılışta kullanıcı önbellekl
 arka planda ısıtılıyor: ilk deste isteği 1,9 sn → 0,17 sn.
 
 271 test geçiyor (237'den; biri hiçbir şey denetlemiyordu).
+
+## 2026-09-28 — v0.1.0: yayın kıvamı
+
+Kullanıcının isteği: "Yayınlanacak bir kıvama getir. Basit de olsa bir sürüm
+yayınlayalım ve insanlar kullanmaya başlasın." 2026-09-15'teki "yayınlama
+ertelendi" kararı bununla kalktı.
+
+### Asıl engel giriş kapısıydı, sunucu değil
+
+Yeni kullanıcı öneri alabilmek için Spotify'a bağlanmak ZORUNDAYDI ve
+Spotify Development Mode beş davetli hesap taşıyor. Yani uygulamayı
+yayınlamak, altıncı kişiye "burada yapacak bir şey yok" demekti.
+
+**Çözüm: sanatçı listesiyle başlama** (`aktarim.liste_ayristir`,
+`/api/aktar/liste`). Satır başına bir sanatçı ya da «Sanatçı — Albüm».
+Albümsüz sanatçı Deezer'daki en popüler parçalarından İKİ ayrı albümle
+temsil ediliyor (`LISTE_SANATCI_ALBUM`): bir albüm sanatçıyı tek döneme
+bağlıyor, üç ve fazlası kümeleri sanatçı sınırına kilitliyor ve aktarımı
+uzatıyor. Hattın geri kalanı değişmedi (K19: kümeleme ve aday üretimi
+Spotify yolunda ölçülmüş olanla aynı). Kümelemeye yetmeyecek kısa liste
+(< 20 albüm) süreç açılmadan, yazılan metin korunarak geri çevriliyor.
+
+**Ölçülmedi:** liste yolunun öneri kalitesi. Gizleme sınaması yalnız
+seto'nun kütüphanesinde var ve oradaki ses-yalnız sonuç (2026-09-21) bu yola
+da uygulanıyor; ama "iki popüler albüm" ile "kullanıcının kaydettiği albüm"
+aynı sinyal değil. İlk kullanıcıların kararlarıyla ölçülecek (K21 destesi).
+
+### Hesap tavanı ortam değişkeni oldu
+
+`AZAMI_KULLANICI = 5` Spotify'ın sınırıydı; liste yolu Spotify istemediği
+için artık uygulamanın sınırı değil. `KESIF_AZAMI_KULLANICI` (varsayılan
+5 — yerelde davranış değişmedi; yayın örneğinde 25). Asıl kaynak kısıtı
+bellek: her aktarım CLAP için ~2 GB. `KESIF_ES_ZAMANLI_AKTARIM` (2) dolunca
+yeni aktarım "sunucu meşgul" der ve liste korunur.
+
+### KVKK asgarisi (ürün yolu, madde 8.3)
+
+`/gizlilik` oturumsuz açık: ne saklanıyor, neyin paylaşıldığı (albümü tarif
+eden gömü ve havuz — kişiyi değil), dışarı ne gidiyor (Deezer araması;
+önizlemeyi tarayıcı doğrudan Deezer'dan aldığı için Deezer IP'yi görür).
+`hesap.hesap_sil`: satırlar + kullanıcı klasöründeki bütün dosyalar
+(veritabanı, WAL, aktarım durumu/günlüğü, liste, CLAP matrisi); süren
+aktarım önce durduruluyor, yoksa süreç silinen dosyayı yeniden yaratırdı.
+Paylaşımlı havuza dokunulmuyor ve test bunu koruyor. `AUTOINCREMENT`
+sayesinde silinen kimlik yeniden verilmiyor: kullanıcı anahtarlı
+önbellekler (K20) yeni hesaba sızamaz.
+
+### Dağıtım: tek imaj, Caddy, kalıcı klasör
+
+2026-09-15'teki asıl kısıt "kalıcı disk"ti. Seçilen: Oracle Always Free ARM
+(24 GB, kalıcı disk) üzerinde `docker compose` — kesif + Caddy. Caddy
+sertifikayı kendisi alıyor; alan adı yoksa `IP.sslip.io`. Caddy gelen
+`X-Forwarded-For`u güvenilmeyen istemciden kabul etmediği için
+`KESIF_HTTPS=1`in vekil başlığına güvenmesi doğru kalıyor.
+
+Tek imaj, çünkü web aktarımı AYNI konteynerde alt süreç olarak başlatıyor.
+torch CPU tekerleğiyle (~200 MB). CLAP modeli `HF_HOME=/app/data/hf`:
+yeniden derlemede tekrar inmesin.
+
+**Doğrulanan:** imajın içeriğiyle aynı düzen (yalnız `python/` + `web/`,
+yalnız `requirements-sunucu.txt`) temiz bir sanal ortamda kalktı; `/saglik`,
+giriş/üyelik/gizlilik 200, `secure` çerez `KESIF_HTTPS=1` ile geliyor; liste
+aktarımı süreci başladı. **Doğrulanamayan:** imaj derlemesi ve gerçek bir
+aktarım — bu ortamda Docker servisi yok, Deezer/HuggingFace/PyTorch
+adreslerine çıkış kapalı. Yayından sonra denetim listesi `docs/yayin.md`.
+
+### Yol boyunca bulunan
+
+- Temiz kurulumda test paketi düşüyordu: `python-multipart` ve `httpx`
+  bağımlılıklarda yoktu (geliştiricinin makinesinde başka yoldan kuruluydu).
+- `test_temsilci_ayni_sanatciyi_cezalandirir` FCM küme numarasının 0 olmasına
+  bağlıydı; numpy 2.4'te tek sanatçılık küme 0 çıktı ve test imkânsız hâle
+  geldi. Küme ölçülerek seçiliyor; ceza artık "cezasızdan daha çeşitli"
+  diye sınanıyor (önceki hâli cezayı kaldırsan da geçerdi).
+- Ağ yokken aktarım sanatçı başına ~30 sn yeniden deniyordu (4 deneme,
+  artan bekleme); 12 sanatçılık liste dakikalarca "çalışıyor" gösterdi.
+  Art arda üç hatada `AktarimHatasi` — ölçüldü: ~100 sn'de açık mesaj.
+- **Zombi süreç "çalışıyor" sayılıyordu.** Hesap silmede durdurulan aktarım
+  `ps`te `<defunct>` kaldı: sunucu çocuğunu biçmiyor, `kill(pid, 0)` zombiyi
+  yaşıyor sayıyor. Aynı şey bellek yetmezliğinde ölen bir aktarımda kullanıcıyı
+  sonsuza dek "çalışıyor"da ve eşzamanlılık yuvasını dolu tutardı (yuva dolunca
+  yeni `Popen` de çağrılmadığı için `subprocess`in kendi temizliği de hiç
+  çalışmazdı). `calisiyor_mu` önce `waitpid(WNOHANG)` deniyor. Test düzeltmesiz
+  kodda düşüyor.
+- Aktarımı başlatan taraf durumu hemen yazıyor (`baslangic_yaz`): alt süreç
+  kendi dosyasını ~1 sn sonra yazdığı için `/basla`ya dönen kullanıcı ilerleme
+  yerine formu görüyordu ve ikinci tıklama ikinci süreç açabiliyordu.
+
+285 test geçiyor (271'den).

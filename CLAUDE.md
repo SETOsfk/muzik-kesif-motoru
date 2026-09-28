@@ -220,6 +220,7 @@ stabilite yordamı yerine kendi kodumuz. Karşılığında algoritmalar görün�
 | Kümeleme | Python (numpy — FCM, Xie-Beni, PE, bootstrap Jaccard elde yazılı) | K8 — tek çalışma zamanı |
 | Boyut indirgeme | Python (numpy SVD/PCA; `umap-learn` opsiyonel) | Aynı |
 | Arayüz | Starlette + Jinja2 + elle SVG + vanilla JS (deste) | K15, K23 — Neon tek tema, üç sekme; iki dil (K22) |
+| Dağıtım | Docker (tek imaj, torch CPU) + Caddy (otomatik HTTPS) | Kalıcı disk şart (her karar SQLite'a yazılır) — `docs/yayin.md` |
 | Kalıcılık | SQLite | Tek dosya, taşınabilir |
 | Özetleme | Çıkarımsal (varsayılan) / Ollama / Anthropic API | K2 — takılıp çıkarılabilir, varsayılan 0 TL |
 
@@ -415,7 +416,13 @@ yolu girişe zorlar (önek eşleşmesi: `/giris/*` açıktır).
 **Tekrarlayan hata sınıfı:** kullanıcı kimliğini anahtarına katmayan her önbellek
 (`lru_cache`, dosya önbelleği) veri sızdırır. Yeni önbellek eklerken önce bunu sor.
 
-Ayrıntı: `docs/karar-gunlugu.md` 2026-09-15 bölümleri.
+**Tavan artık ortam değişkeni (2026-09-28):** `KESIF_AZAMI_KULLANICI` (varsayılan 5).
+Beş, Spotify Development Mode'un sınırıydı; sanatçı listesiyle başlama yolu Spotify
+istemediği için yayında yükseltilebilir. Asıl kısıt bellek (aktarım başına ~2 GB):
+`KESIF_ES_ZAMANLI_AKTARIM`. Hesap silme `hesap.hesap_sil` — kullanıcı klasöründeki
+her dosya; paylaşımlı veriye dokunulmaz.
+
+Ayrıntı: `docs/karar-gunlugu.md` 2026-09-15 ve 2026-09-28 bölümleri.
 
 ### K21 — Keşfet destesi ölçümün yakıtıdır; kaynaklar arası pay gerçek kararlardan (2026-09-23)
 Kaydırmalı deste (`python/kesif.py`, `/kesfet`) kararı tek harekete indiriyor:
@@ -453,9 +460,13 @@ seçenekler; telefonda alt şerit. Görsel yoksa `web/yer_tutucu.py`
 durum `data-sira`da (rAF'e bağlı sürüm arka plan sekmesinde desteyi
 görünmez bırakıyordu).
 
-## Güncel durum (son güncelleme 2026-09-23)
+## Güncel durum (son güncelleme 2026-09-28)
 
-- **Testler:** `.venv/bin/python -m pytest` — 271 test geçiyor. Test gerçek
+- **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
+  başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
+  paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
+- **Testler:** `.venv/bin/python -m pytest` — 285 test geçiyor. Temiz kurulumda
+  `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.
 - **Sunucu:** `.venv/bin/python -m web.sunucu --port 8800`. Kök `/kesfet`e
@@ -469,11 +480,17 @@ görünmez bırakıyordu).
   `1.sqlite`'a 11 boş gölge tablo kurdu; onarıldı, yedek
   `data/db/kullanici/1.sqlite.golge-oncesi-20260923`. `baglan()` artık
   `kullanici/` klasöründeki dosyaya tam şema kurmuyor.
-- **Yayın:** ERTELENDİ (kullanıcı kararı). Yerelde sürekli çalışması için
-  `scripts/servis.sh` (launchd) hazır ama KURULMADI — kurmak kullanıcının
-  kararı.
+- **Yayın:** kullanıcı 2026-09-28'de istedi; kod ve paket hazır, sunucu henüz
+  açılmadı (hesap kullanıcının işi). Yol: Oracle Always Free ARM + `docker compose`
+  (`docs/yayin.md`). Veri: `scripts/yayin_paketi.sh` (~50 MB, kişisel veri içerir).
+  İmaj derlemesi ve gerçek aktarım bulut oturumunda SINANAMADI (Docker servisi yok,
+  Deezer/HF çıkışı kapalı) — yayından sonra `docs/yayin.md` §6 denetim listesi.
+- **Deneme sunucusu kapatırken:** `pkill -f "web.sunucu"` kendi kabuğunu da
+  öldürüyor (komut satırı eşleşiyor); süreç kimliğiyle kapat.
 
 ### Kullanıcının yapması gereken (Claude YAPAMAZ — hesap/parola/cihaz)
+- Sunucu aç (Oracle Always Free ARM, 80/443 açık) ve `docs/yayin.md` adımlarını
+  izle; Mac'te `scripts/yayin_paketi.sh` ile veriyi taşı.
 - Spotify panelinde Redirect URI: `http://127.0.0.1:8800/giris/spotify/donus`;
   en çok 5 kullanıcıyı e-postayla ekle; «Kütüphanemi aktar»ı uçtan uca dene.
 - Telefonda SW yalnız https ya da localhost'ta kaydolur (`scripts/tunnel.sh`).
@@ -482,6 +499,8 @@ görünmez bırakıyordu).
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
+0. Yayını aç ve §6 denetim listesini gerçek cihazda yürüt. Sonra liste yolunun
+   isabetini ilk kullanıcıların kararlarıyla ölç (ölçülmedi — karar günlüğü 2026-09-28).
 1. Kaydırarak karar biriktir: kaynak payı (K21) ve geri bildirim tavanı
    (ETKI_TAVANI) ancak n büyüyünce ölçülebilir. Hedef: kaynak başına ≥30
    sanatçı kararı, sonra Thompson'ın getirdiği payı gizleme sınamasıyla kıyasla.

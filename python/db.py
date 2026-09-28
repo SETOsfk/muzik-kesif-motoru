@@ -38,8 +38,9 @@ SEMA: tuple[str, ...] = (
         mbid_yok        INTEGER NOT NULL DEFAULT 0,
         -- Albüm kütüphaneye NEREDEN girdi. 'yerel' = diskte taranmış dosya;
         -- 'spotify_kayitli' | 'spotify_son' | 'spotify_en_cok' = Spotify
-        -- aktarımı (`python/aktarim.py`). Spotify albümünün dosyası yok,
-        -- yani stem ölçümü ve librosa özeti ona uygulanamaz.
+        -- aktarımı (`python/aktarim.py`); 'liste' = elle yazılmış sanatçı
+        -- listesi. Bu albümlerin dosyası yok, yani stem ölçümü ve librosa
+        -- özeti onlara uygulanamaz.
         kaynak          TEXT NOT NULL DEFAULT 'yerel'
     )
     """,

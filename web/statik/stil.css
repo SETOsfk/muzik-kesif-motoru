@@ -235,6 +235,7 @@ code, .tek-aralik { font-family: var(--font-etiket); font-size: .86em; }
 .hud-okuma dd { margin: 0; font-family: var(--font-etiket); font-size: .95rem; color: var(--ikincil);
                 font-variant-numeric: tabular-nums; text-shadow: var(--parilti-ikincil); }
 .cikis-bag { color: var(--vurgu); font-size: .86rem; padding: 6px 4px; }
+.menu-govde .surum { font-family: var(--font-etiket); font-size: .66rem; color: var(--metin-3); padding: 0 4px; }
 
 /* Alt seçenekler: sekmenin altındaki bölümler. İnce, eş aralıklı; etkin
  * olanın altında macenta çizgi. Dar ekranda yatay kayar. */
@@ -997,6 +998,18 @@ ul.madde strong { color: var(--metin); }
 }
 .spotify-dugme:hover { filter: brightness(1.08); text-decoration: none; }
 .kapi-ipucu { color: var(--metin-3); font-size: .85em; line-height: 1.5; margin: .7rem 0 0; }
+/* Düz metin sayfası (gizlilik): giriş kartından geniş, okunur satır boyu. */
+.kapi.metin-sayfa { max-width: 40rem; }
+.metin-sayfa h2 { font-size: 1rem; margin: 1.4rem 0 .5rem; }
+.metin-sayfa ul { margin: 0; padding-left: 1.2rem; color: var(--metin-2); line-height: 1.6; }
+.metin-sayfa li + li { margin-top: .4rem; }
+.metin-sayfa p { color: var(--metin-2); line-height: 1.6; }
+.kapi-form label.onay { display: flex; align-items: center; gap: .55rem; color: var(--metin); }
+.kapi-form .onay input { padding: 0; flex: none; }
+button.tehlike { justify-self: start; padding: .6rem 1.2rem; border-radius: var(--r-m); cursor: pointer;
+                 font: inherit; font-weight: 600; background: var(--kirmizi-zemin); color: var(--kirmizi);
+                 border: 1px solid var(--kirmizi); }
+button.tehlike:hover { background: var(--kirmizi); color: var(--zemin); }
 
 .baslangic { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; max-width: 46rem; }
 .adim { background: var(--kart); border: 1px solid var(--kenar); border-radius: var(--r-l);
@@ -1012,7 +1025,17 @@ ul.madde strong { color: var(--metin); }
 .asamalar li.bitti::marker { content: "✓  "; color: var(--yesil); }
 .asamalar li.simdi { color: var(--metin); font-weight: 600; }
 .asamalar .sayac { font-weight: 400; color: var(--metin-3); margin-left: .4rem; font-variant-numeric: tabular-nums; }
+/* Listeyle başlama: satır başına bir sanatçı. */
+.liste-formu { display: grid; gap: .7rem; }
+.liste-formu textarea {
+  font: inherit; font-size: .92rem; line-height: 1.5; resize: vertical; min-height: 11rem;
+  background: var(--kart-2); color: var(--metin);
+  border: 1px solid var(--kenar); border-radius: var(--r-m); padding: .6rem .75rem;
+}
+.liste-formu textarea:focus { outline: 2px solid var(--vurgu); outline-offset: 1px; }
+.liste-formu .birincil { justify-self: start; padding: .6rem 1.4rem; cursor: pointer; }
 .neler-eksik { margin-top: .9rem; font-size: .9em; }
+.adim > .neler-eksik:first-child { margin-top: 0; }
 .neler-eksik summary { cursor: pointer; color: var(--metin-2); }
 .neler-eksik p { margin: .6rem 0 0; }
 

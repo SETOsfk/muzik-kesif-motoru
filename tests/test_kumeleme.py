@@ -251,10 +251,14 @@ def test_temsilci_sayisi_ve_cesitlilik():
 def test_temsilci_ayni_sanatciyi_cezalandirir():
     X, _ = _kumeli_veri(kume_sayisi=2, kume_basina=30)
     sonuc = fcm(X, 2, m=1.4, baslangic=3, tohum=1)
-    # İlk yarı tek sanatçı, ikinci yarı ayrı ayrı sanatçılar.
-    sanatcilar = np.array(["Aynı"] * 30 + [f"S{i}" for i in range(30)])
-    secilenler = temsilci_sec(X, sonuc.uyelik, 0, adet=5, ayni_sanatci_cezasi=sanatcilar)
-    assert len({sanatcilar[i] for i in secilenler}) >= 2
+    # İlk kümenin çoğu tek sanatçı, kalanı ayrı ayrı sanatçılar. Küme numarası
+    # FCM'de keyfi: ilk yarının düştüğü küme ölçülerek seçiliyor (sabit 0
+    # alınırsa numpy sürümüne göre tek sanatçılık kümeye düşüp test anlamsızlaşıyordu).
+    sanatcilar = np.array(["Aynı"] * 20 + [f"S{i}" for i in range(40)])
+    kume = int(np.argmax(sonuc.uyelik[:30].mean(axis=0)))
+    cezasiz = temsilci_sec(X, sonuc.uyelik, kume, adet=5)
+    cezali = temsilci_sec(X, sonuc.uyelik, kume, adet=5, ayni_sanatci_cezasi=sanatcilar)
+    assert len({sanatcilar[i] for i in cezali}) > len({sanatcilar[i] for i in cezasiz})
 
 
 def test_temsilci_kucuk_kumede_cokmez():

@@ -1,0 +1,13 @@
+# İmaja yalnız kod girer; veri compose'da klasör olarak bağlanır.
+data/
+.env
+.venv/
+.git/
+**/__pycache__/
+.pytest_cache/
+tests/
+docs/
+scripts/
+*.sqlite*
+*.parquet
+*.npy

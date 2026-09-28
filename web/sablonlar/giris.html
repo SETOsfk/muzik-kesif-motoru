@@ -12,12 +12,14 @@
                                "No accounts yet. You'll be creating the first one.") }}</div>
   {% endif %}
 
-  {% if hata == 'kilit' %}
+  {% if hata == 'silindi' %}
+    <div class="kapi-not">{{ t("Hesabın ve verin silindi.", "Your account and data have been deleted.") }}</div>
+  {% elif hata == 'kilit' %}
     <div class="kapi-hata">{{ t("Çok fazla başarısız deneme. Birkaç dakika sonra tekrar dene.",
                                 "Too many failed attempts. Try again in a few minutes.") }}</div>
   {% elif hata == 'dolu' %}
-    <div class="kapi-hata">{{ t("Beş kişilik kontenjan dolu, yeni hesap açılamıyor.",
-                                "All five seats are taken, so no new accounts can be created.") }}</div>
+    <div class="kapi-hata">{{ t("Kontenjan dolu, şu an yeni hesap açılamıyor.",
+                                "All seats are taken, so no new accounts can be created right now.") }}</div>
   {% elif hata == 'spotify_iptal' %}
     <div class="kapi-hata">{{ t("Spotify bağlantısını iptal ettin. Sorun değil.",
                                 "You cancelled the Spotify connection. No problem.") }}</div>
@@ -55,7 +57,8 @@
                              "Sign in with Spotify and I'll read your library and work out your taste axes myself. No file uploads needed.") }}</p>
   {% endif %}
 
-  <p class="kapi-alt2">{{ t("Hesabın yok mu?", "No account yet?") }} <a href="/uyelik">{{ t("Üye ol", "Sign up") }}</a></p>
+  <p class="kapi-alt2">{{ t("Hesabın yok mu?", "No account yet?") }} <a href="/uyelik">{{ t("Üye ol", "Sign up") }}</a>
+    · <a href="/gizlilik">{{ t("Gizlilik", "Privacy") }}</a></p>
   {% include "_dil_secici.html" %}
 </div>
 {% endblock %}

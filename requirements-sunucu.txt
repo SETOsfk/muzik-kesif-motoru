@@ -1,0 +1,12 @@
+# Yalnız web sunucusu — dağıtımda sunulan kısım (bkz. docs/yayin.md).
+# Ölçüldü (2026-09-15): torch'suz içe aktarılıyor, tepe bellek ~108 MB.
+starlette>=0.37
+jinja2>=3.1
+uvicorn>=0.27
+python-multipart>=0.0.9
+numpy>=1.26
+pandas>=2.2
+pyarrow>=15.0
+requests>=2.31
+python-dotenv>=1.0
+cryptography>=42

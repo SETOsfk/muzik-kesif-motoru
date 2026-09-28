@@ -168,6 +168,11 @@ geri bildirim kalitesi açısından ciddi fark var.
 
 ## 8. Karar bekleyen şeyler
 
+> **Güncelleme 2026-09-28 (v0.1.0):** 2 ve 3 kapandı. Sunucu: Oracle Always Free ARM
+> + `docker compose` (`docs/yayin.md`). KVKK asgarisi: `/gizlilik` + kullanıcının
+> kendi hesabını silmesi. Aşama 2'nin yerine daha hafif bir kapı açıldı: dışa aktarım
+> dosyası yerine sanatçı listesi — anında, beklemesiz.
+
 1. **99 $/yıl (Apple).** K2'yi değiştirir. Karşılığında: Apple ile üyelik,
    Apple Music kütüphane erişimi, App Store, tam şarkı çalma.
 2. **Sunucu.** Çok kullanıcılık için bir yerde çalışması gerekiyor.

@@ -1,0 +1,54 @@
+{% extends "kabuk.html" %}
+{% block baslik %}{{ t("Gizlilik", "Privacy") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block govde %}
+<div class="kapi hud metin-sayfa">
+  <div class="kapi-marka"><span class="logo">◈</span><b>KEŞİF</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
+  <h1>{{ t("Gizlilik", "Privacy") }}</h1>
+  <p class="kapi-alt">{{ t("Kısa ve eksiksiz: neyi saklıyoruz, kime ne gidiyor, nasıl silinir.",
+                           "Short and complete: what we keep, what goes where, how to delete it.") }}</p>
+
+  <h2>{{ t("Saklananlar", "What we keep") }}</h2>
+  <ul>
+    <li>{{ t("Adın, e-postan ve parolanın özeti (scrypt; parolanın kendisi saklanmaz).",
+             "Your name, your email and a hash of your password (scrypt; the password itself is never stored).") }}</li>
+    <li>{{ t("Yazdığın sanatçı listesi ya da Spotify'dan okunan albümler; kaydırarak verdiğin kararlar, Listem ve eksenlerine verdiğin adlar. Bunların hepsi yalnız sana ait ayrı bir dosyada durur.",
+             "The artist list you typed or the albums read from Spotify; the decisions you swipe, your list and the names you give your axes. All of it lives in a separate file that belongs to you alone.") }}</li>
+    <li>{{ t("Spotify'ı bağlarsan salt-okuma yetkisinin yenileme jetonu, şifrelenmiş olarak.",
+             "If you connect Spotify, the refresh token for read-only access, encrypted.") }}</li>
+  </ul>
+
+  <h2>{{ t("Paylaşılanlar", "What is shared") }}</h2>
+  <p>{{ t("Bir albümün ses gömüsü ve çalma listesi havuzu albümü ve sanatçıyı tarif eder, seni değil; bir kez hesaplanır ve herkesin önerisini iyileştirir. Hesabını silsen de kalır, çünkü kimseye bağlı değildir.",
+          "An album's sound embedding and the playlist pool describe the album and the artist, not you; they're computed once and improve everyone's recommendations. They stay if you delete your account, because they aren't linked to anyone.") }}</p>
+
+  <h2>{{ t("Dışarıya gidenler", "What leaves the server") }}</h2>
+  <ul>
+    <li>{{ t("Deezer'a sanatçı ve albüm adıyla arama yapılır; hesap bilgin gitmez. Önizlemeler ve kapaklar tarayıcına doğrudan Deezer'dan gelir, yani Deezer IP adresini görür.",
+             "Deezer is searched by artist and album name; none of your account details are sent. Previews and cover art load straight from Deezer into your browser, so Deezer sees your IP address.") }}</li>
+    <li>{{ t("Spotify yalnız bağlarsan ve yalnız okumak için kullanılır.",
+             "Spotify is used only if you connect it, and only to read.") }}</li>
+    <li>{{ t("Reklam, analitik ya da izleme yok. İki çerez var: oturum ve dil.",
+             "No ads, analytics or tracking. There are two cookies: your session and your language.") }}</li>
+  </ul>
+
+  <h2>{{ t("Silme", "Deleting") }}</h2>
+  {% if giris_var %}
+  <p>{{ t("Hesabını sildiğinde kütüphanen, kararların, listen ve oturumların hemen ve geri dönüşsüz silinir. Süren bir aktarım varsa durdurulur.",
+          "Deleting your account removes your library, decisions, list and sessions immediately and for good. Any import in progress is stopped.") }}</p>
+  <form method="post" action="/hesap/sil" class="kapi-form">
+    <label class="onay"><input type="checkbox" name="onay" value="evet" required>
+      {{ t("Evet, hesabımı ve verimi sil", "Yes, delete my account and my data") }}</label>
+    <button type="submit" class="tehlike">{{ t("Hesabımı sil", "Delete my account") }}</button>
+  </form>
+  {% else %}
+  <p>{{ t("Giriş yaptıktan sonra bu sayfadan hesabını ve verini tek adımda silebilirsin.",
+          "Once you're signed in, you can delete your account and data from this page in one step.") }}</p>
+  {% endif %}
+
+  {% if iletisim %}
+  <p class="kapi-ipucu">{{ t("Soru ve talepler için:", "Questions and requests:") }} <a href="mailto:{{ iletisim }}">{{ iletisim }}</a></p>
+  {% endif %}
+  <p class="kapi-alt2"><a href="{{ '/kesfet' if giris_var else '/giris' }}">← {{ t("Geri dön", "Go back") }}</a></p>
+  {% include "_dil_secici.html" %}
+</div>
+{% endblock %}

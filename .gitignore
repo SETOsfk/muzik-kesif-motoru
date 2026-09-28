@@ -22,6 +22,8 @@ __pycache__/
 *.parquet
 *.npy
 *.joblib
+# scripts/yayin_paketi.sh çıktısı — kişisel veri içerir
+yayin-verisi.tar.gz
 
 # --- İşletim sistemi / editör ---------------------------------------------
 .DS_Store

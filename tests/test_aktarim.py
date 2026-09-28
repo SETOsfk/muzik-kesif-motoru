@@ -322,3 +322,183 @@ def test_hata_durumu_gosterilir():
         yanit = istemci.get("/basla")
         assert "Aktarım durdu" in yanit.text and "4 tanesi" in yanit.text
         assert "yeniden başlat" in yanit.text
+
+
+# --------------------------------------------------------------------------- #
+# Spotify'sız başlangıç: elle yazılmış liste (2026-09-28)
+# --------------------------------------------------------------------------- #
+
+def test_liste_ayristir_sanatci_ve_albumu_ayirir():
+    from python.aktarim import liste_ayristir
+
+    kayitlar, sanatcilar = liste_ayristir(
+        "1. Tool\n- Casiopea\n\nPlini — Impulse Voices\nJay-Z\n"
+        "AC/DC - Back in Black\ntool\n• Sigur Rós\t( )\n")
+    assert sanatcilar == ["Tool", "Casiopea", "Jay-Z"], sanatcilar
+    assert [(k["sanatci"], k["album"]) for k in kayitlar] == [
+        ("Plini", "Impulse Voices"), ("AC/DC", "Back in Black"), ("Sigur Rós", "( )")]
+    assert {k["kaynak"] for k in kayitlar} == {"liste"}
+
+
+def test_liste_tavani_ve_yeterlilik():
+    from python.aktarim import (
+        ASGARI_ALBUM, LISTE_AZAMI_SATIR, LISTE_SANATCI_ALBUM, liste_ayristir,
+        liste_yeterli_mi,
+    )
+
+    _, sanatcilar = liste_ayristir("\n".join(f"S{i}" for i in range(500)))
+    assert len(sanatcilar) == LISTE_AZAMI_SATIR
+    gerekli = -(-ASGARI_ALBUM // LISTE_SANATCI_ALBUM)
+    assert liste_yeterli_mi([], [f"S{i}" for i in range(gerekli)])
+    assert not liste_yeterli_mi([], [f"S{i}" for i in range(gerekli - 1)])
+
+
+def test_sanatci_albumleri_ayri_albumler_doner():
+    """En popüler parçaların İKİSİ aynı albümdense ikinci albüm aşağıdan gelir."""
+    from python.aktarim import sanatci_albumleri, sanatci_albumu
+
+    class _Sahte:
+        def get_json(self, yol, params=None, *, yenile=False):
+            if yol == "search/artist":
+                return {"data": [{"id": 5, "name": "Tool"}]}
+            if yol == "artist/5/top":
+                return {"data": [
+                    {"id": 1, "title": "Schism", "album": {"title": "Lateralus"}},
+                    {"id": 2, "title": "Parabola", "album": {"title": "Lateralus"}},
+                    {"id": 3, "title": "Sober", "album": {"title": "Undertow"}},
+                    {"id": 4, "title": "Pneuma", "album": {"title": "Fear Inoculum"}},
+                ]}
+            return None
+
+    iki = sanatci_albumleri(_Sahte(), "tool", adet=2, kaynak="liste")
+    assert [a["album"] for a in iki] == ["Lateralus", "Undertow"]
+    assert {a["kaynak"] for a in iki} == {"liste"} and iki[0]["sanatci"] == "Tool"
+    assert sanatci_albumu(_Sahte(), "tool")["kaynak"] == "spotify_en_cok"
+
+
+def test_kisa_liste_sureci_baslatmaz_ve_metni_korur():
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci, kid, D = _istemci(tmp, spotify=False)
+        yanit = istemci.post("/api/aktar/liste", data={"liste": "Tool\nCasiopea"},
+                             follow_redirects=False)
+        assert yanit.status_code == 400
+        assert "Casiopea" in yanit.text and "kısa" in yanit.text
+        assert not (D.KULLANICI_KOK / f"{kid}.liste.json").exists()
+
+
+def test_liste_aktarimi_ayri_surec_baslatir(monkeypatch):
+    import subprocess
+
+    import web.sunucu as W
+
+    cagrilar = []
+
+    class _Surec:
+        pid = 2 ** 22 + 7  # yaşamayan süreç: ikinci istek "zaten çalışıyor"a takılmasın
+
+    def _popen(arg, **kw):
+        cagrilar.append(arg)
+        return _Surec()
+
+    monkeypatch.setattr(subprocess, "Popen", _popen)
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci, kid, D = _istemci(tmp, spotify=False)
+        metin = "\n".join(f"Sanatçı {i}" for i in range(12)) + "\nPlini — Impulse Voices"
+        yanit = istemci.post("/api/aktar/liste", data={"liste": metin},
+                             follow_redirects=False)
+        assert yanit.status_code == 303 and yanit.headers["location"] == "/basla"
+        dosya = D.KULLANICI_KOK / f"{kid}.liste.json"
+        girdi = json.loads(dosya.read_text(encoding="utf-8"))
+        assert {"sanatci": "Plini", "album": "Impulse Voices", "kaynak": "liste"} in girdi
+        assert {"sanatci": "Sanatçı 0"} in girdi
+        assert len(cagrilar) == 1 and "--json" in cagrilar[0]
+        assert cagrilar[0][cagrilar[0].index("--json") + 1] == str(dosya.resolve())
+        # Durum HEMEN yazılıyor: alt süreç kendi dosyasını yazmadan dönülen
+        # /basla formu değil ilerlemeyi göstermeli.
+        from python.aktarim import durum_oku
+        durum = durum_oku(kid)
+        assert durum["pid"] == _Surec.pid and durum["kaynak"] == "liste"
+
+        # Eşzamanlı aktarım tavanı dolunca yeni süreç açılmaz, metin korunur.
+        monkeypatch.setattr(W, "AZAMI_ES_ZAMANLI_AKTARIM", 0)
+        yanit = istemci.post("/api/aktar/liste", data={"liste": metin},
+                             follow_redirects=False)
+        assert yanit.status_code == 503 and "Sanatçı 11" in yanit.text
+        assert len(cagrilar) == 1
+
+
+def test_listeyle_gelen_spotify_asamasini_gormez():
+    from python.aktarim import Ilerleme
+
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci, kid, _ = _istemci(tmp, spotify=False)
+        i = Ilerleme(kid, sessiz=True)
+        i.veri["kaynak"] = "liste"
+        i.asama("eslesme", 12)
+        yanit = istemci.get("/basla")
+        assert "aktarılıyor" in yanit.text and "0/12" in yanit.text
+        assert "Spotify kütüphanen okunuyor" not in yanit.text
+
+
+def test_calistir_listeyle_albumsuz_sanatcilari_cozer(monkeypatch):
+    """Liste yolu: albümsüz sanatçı LISTE_SANATCI_ALBUM albümle kütüphaneye girer."""
+    import python.aktarim as A
+    import python.discover.calma_listesi as C
+
+    monkeypatch.setattr(C, "deezer_listesi", lambda: object())
+    monkeypatch.setattr(A, "sanatci_albumleri", lambda istemci, s, *, adet, kaynak: [
+        {"sanatci": s, "album": f"{s} {i}", "yil": None, "kaynak": kaynak}
+        for i in range(adet)])
+    monkeypatch.setattr(A, "gomule", lambda conn, ilerleme: {})
+    with tempfile.TemporaryDirectory() as tmp:
+        D, _ = _ortam(tmp)
+        with pytest.raises(Exception):
+            # Hasat ağa çıkmaya çalışır; buraya kadar gelmesi yeter.
+            A.calistir(3, kayitlar=[_kayit("Plini", "Impulse Voices", "liste")],
+                       sanatcilar=["Tool", "Casiopea"], sessiz=True)
+        conn = D.baglan_kullanici(3)
+        satirlar = conn.execute("SELECT artist, title, kaynak FROM albums ORDER BY title").fetchall()
+        conn.close()
+        assert [tuple(r) for r in satirlar] == [
+            ("Casiopea", "Casiopea 0", "liste"), ("Casiopea", "Casiopea 1", "liste"),
+            ("Plini", "Impulse Voices", "liste"),
+            ("Tool", "Tool 0", "liste"), ("Tool", "Tool 1", "liste")]
+        assert A.durum_oku(3)["kaynak"] == "liste"
+
+
+def test_deezer_ulasilamazsa_hizla_durur(monkeypatch):
+    """Ağ yoksa her sanatçı ~30 sn deneniyordu; art arda üç hata yeter."""
+    import python.aktarim as A
+    import python.discover.calma_listesi as C
+
+    cagri = []
+
+    def _patlayan(istemci, s, *, adet, kaynak):
+        cagri.append(s)
+        raise ConnectionError("ağ yok")
+
+    monkeypatch.setattr(C, "deezer_listesi", lambda: object())
+    monkeypatch.setattr(A, "sanatci_albumleri", _patlayan)
+    with tempfile.TemporaryDirectory() as tmp:
+        _ortam(tmp)
+        with pytest.raises(A.AktarimHatasi, match="Deezer"):
+            A.calistir(4, kayitlar=[], sanatcilar=[f"S{i}" for i in range(12)], sessiz=True)
+        assert len(cagri) == A.AG_HATA_ESIGI
+        durum = A.durum_oku(4)
+        assert durum["durum"] == "hata" and "Deezer" in durum["hata"]
+
+
+def test_olen_cocuk_surec_zombi_kalmaz_calisiyor_sayilmaz():
+    """Sunucunun başlattığı ve ölen aktarım `<defunct>` kalıp 'çalışıyor' sayılıyordu."""
+    import subprocess
+
+    from python.aktarim import baslangic_yaz, calisiyor_mu
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _ortam(tmp)
+        surec = subprocess.Popen([sys.executable, "-c", "pass"])
+        baslangic_yaz(8, surec.pid, "liste")
+        # Bitmesini BİÇMEDEN bekle (WNOWAIT): çocuk zombi olarak kalır.
+        os.waitid(os.P_PID, surec.pid, os.WEXITED | os.WNOWAIT)
+        assert not calisiyor_mu(8)
+        surec.returncode = 0  # Popen'in kendi wait'i ECHILD'e takılmasın

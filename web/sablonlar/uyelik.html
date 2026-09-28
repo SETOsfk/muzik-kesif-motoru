@@ -8,8 +8,8 @@
                            "One account, and an engine that gets to know your library.") }}</p>
 
   {% if hata == 'dolu' %}
-    <div class="kapi-hata">{{ t("Kontenjan dolu. Bu uygulama en fazla beş hesap taşıyabiliyor; sınır bizim değil, Spotify'ın geliştirici kuralı (Şubat 2026).",
-                                "All seats are taken. This app can hold at most five accounts. The limit isn't ours, it's Spotify's developer rule (February 2026).") }}</div>
+    <div class="kapi-hata">{{ t("Kontenjan dolu, şu an yeni hesap açılamıyor. Sunucu her aktarımda sesi gerçekten dinlediği için hesap sayısı sınırlı tutuluyor.",
+                                "All seats are taken, so no new accounts can be created right now. The server genuinely listens to every imported library, so the number of accounts is kept limited.") }}</div>
   {% elif hata == 'kayitli' %}
     <div class="kapi-hata">{{ t("Bu e-posta zaten kayıtlı.", "That email is already registered.") }} <a href="/giris">{{ t("Giriş yap", "Sign in") }}</a></div>
   {% elif hata == 'eksik' %}
@@ -27,6 +27,7 @@
     <button type="submit" class="birincil">{{ t("Hesabı aç", "Create account") }}</button>
   </form>
 
+  <p class="kapi-ipucu">{{ t("Hesap açmadan önce", "Before you sign up, read the") }} <a href="/gizlilik">{{ t("gizlilik notuna göz at", "privacy note") }}</a>.</p>
   <p class="kapi-alt2">{{ t("Zaten hesabın var mı?", "Already have an account?") }} <a href="/giris">{{ t("Giriş yap", "Sign in") }}</a></p>
   {% include "_dil_secici.html" %}
 </div>

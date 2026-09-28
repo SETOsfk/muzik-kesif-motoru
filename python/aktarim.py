@@ -69,11 +69,22 @@ Gözle de bakıldı: ses önerileri neredeyse aynı kaldı, iki eksende birden
 kapsamı değil, küçük kütüphanede ses benzerliğinin hubness'ı. Gömülen
 parçalar paylaşımlı havuzda duruyor (zararsız).
 
+## Spotify'sız giriş: sanatçı listesi (2026-09-28)
+
+Spotify Development Mode beş hesapla sınırlı; herkese açık bir sürümde asıl
+kapı bu olamaz. Kullanıcı sevdiği sanatçıları (ya da «Sanatçı — Albüm»
+satırlarını) yazar; albümsüz her sanatçı için Deezer'daki en popüler
+parçalarından `LISTE_SANATCI_ALBUM` ayrı albüm alınır (`kaynak='liste'`).
+Hattın geri kalanı aynı. `liste_ayristir` metni kayıt + sanatçıya böler;
+`ASGARI_ALBUM`a yetmeyecek kadar kısa liste aktarım başlamadan reddedilir.
+
 ## Çalıştırma
 
     python -m python.aktarim --kullanici 2              # Spotify'dan
     python -m python.aktarim --kullanici 2 --json a.json  # elle liste
     python -m python.aktarim --kullanici 2 --asama kume   # kaldığı yerden
+
+`--json` girdisi `[{sanatci, album?}]`; albümü olmayan satır sanatçı sayılır.
 
 Web arayüzü bunu ayrı bir SÜREÇ olarak başlatıyor (`web/sunucu.py:aktar`):
 torch ~2 GB bellek ister ve sunucu sürecine yüklenmemeli. İlerleme
@@ -110,6 +121,19 @@ ASGARI_ALBUM = 20
 #: Ana akışın stratejileri (`web/sunucu.py:ANA_STRATEJILER`). Kredi/kalabalık
 #: grafiği stratejileri Spotify albümünde çalışmaz — kredisi yok.
 STRATEJILER = ("liste_birlikteligi", "ses_benzerligi", "melez")
+
+#: Listeyle gelen albümsüz sanatçı başına alınan albüm. Bir albüm sanatçıyı
+#: tek bir döneme bağlıyor; üç ve fazlası kümeleri sanatçı sınırına
+#: kilitliyor ve aktarımı uzatıyor (albüm başına ~2,5 sn).
+LISTE_SANATCI_ALBUM = 2
+
+#: Liste satırı tavanı: aktarım süresi satırla doğrusal büyüyor.
+LISTE_AZAMI_SATIR = 150
+
+#: Art arda bu kadar sanatçı araması hatayla biterse Deezer'a ulaşılamıyor
+#: sayılır. Ölçüldü (2026-09-28, ağ kapalı): her arama 4 deneme × artan
+#: bekleme ≈ 30 sn sürüyor; 12 sanatçılık liste dakikalarca sessizce bekliyordu.
+AG_HATA_ESIGI = 3
 
 ASAMALAR = ("spotify", "eslesme", "gomu", "hasat", "kume", "aday")
 ASAMA_ADI = {
@@ -153,6 +177,17 @@ def calisiyor_mu(kullanici_id: int) -> bool:
     pid = durum.get("pid")
     if not isinstance(pid, int):
         return False
+    # Süreci web sunucusu başlattıysa ölen çocuk BİÇMLENENE kadar zombi kalır
+    # ve `kill(pid, 0)` onu yaşıyor sayar. Ölçüldü (2026-09-28): hesap silmede
+    # durdurulan aktarım `<defunct>` kaldı. Bellek yetmezliğinde ölen bir
+    # aktarım da kullanıcıyı sonsuza dek "çalışıyor"da ve eşzamanlılık
+    # yuvasını dolu tutardı. Bizim çocuğumuz değilse (CLI, sunucu yeniden
+    # başlamış) ChildProcessError — o zaman yalnız kill(0) karar verir.
+    try:
+        if os.waitpid(pid, os.WNOHANG)[0] == pid:
+            return False
+    except ChildProcessError:
+        pass
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -207,6 +242,18 @@ class Ilerleme:
         self.veri.update(durum="hata" if hata else "bitti", bitti=_simdi(),
                          hata=hata, asama=self.veri["asama"] if hata else "bitti")
         self._yaz()
+
+
+def baslangic_yaz(kullanici_id: int, pid: int, kaynak: str) -> None:
+    """Süreci başlatan taraf durumu HEMEN yazar.
+
+    Alt süreç numpy/pandas yükleyip kendi dosyasını yazana kadar ~1 sn geçiyor;
+    o arada `/basla`ya dönen kullanıcı ilerleme yerine formu görüyor, ikinci
+    tıklama da ikinci bir süreç açabiliyordu. Alt süreç aynı pid'le üzerine yazar.
+    """
+    ilerleme = Ilerleme(kullanici_id, sessiz=True)
+    ilerleme.veri.update(pid=pid, kaynak=kaynak)
+    ilerleme._yaz()
 
 
 def _simdi() -> str:
@@ -302,12 +349,14 @@ def deezer_parca_bul(istemci, sanatci: str, album: str) -> dict | None:
     return None
 
 
-def sanatci_albumu(istemci, sanatci: str) -> dict | None:
-    """En çok dinlenen sanatçının Deezer'daki en popüler parçasının albümü.
+def sanatci_albumleri(istemci, sanatci: str, *, adet: int = 1,
+                      kaynak: str = "spotify_en_cok") -> list[dict]:
+    """Sanatçının Deezer'daki en popüler parçalarından en çok `adet` AYRI albüm.
 
-    Spotify "bu sanatçıyı çok dinliyorsun" diyor ama hangi albümü demiyor.
-    En popüler parça sanatçının en tanınan sesi; tek bir parça atipik bir
-    ana denk gelebilir ama bu kaynak zaten tek albümle temsil ediliyor.
+    Spotify "bu sanatçıyı çok dinliyorsun" diyor ama hangi albümü demiyor;
+    listeyle gelen kullanıcı da çoğu zaman yalnız sanatçı adı yazıyor. En
+    popüler parça sanatçının en tanınan sesi; tek bir parça atipik bir ana
+    denk gelebilir ama bu kaynak zaten bir iki albümle temsil ediliyor.
     """
     govde = istemci.get_json("search/artist", {"q": sanatci, "limit": 3})
     from python.discover.onizleme import _uyuyor_mu
@@ -315,16 +364,78 @@ def sanatci_albumu(istemci, sanatci: str) -> dict | None:
     for aday in (govde or {}).get("data", []):
         if not _uyuyor_mu(sanatci, aday.get("name", "")):
             continue
-        ust = istemci.get_json(f"artist/{aday['id']}/top", {"limit": 5})
+        ust = istemci.get_json(f"artist/{aday['id']}/top", {"limit": 5 * adet})
+        bulunan: list[dict] = []
+        gorulen: set[str] = set()
         for parca in (ust or {}).get("data", []):
             albom = parca.get("album") or {}
-            if albom.get("title") and parca.get("id"):
-                return {"sanatci": aday["name"], "album": albom["title"],
-                        "yil": None, "kaynak": "spotify_en_cok",
-                        "parca_id": int(parca["id"]),
-                        "parca": parca.get("title", "")}
-        return None
-    return None
+            anahtar = normalize_esleme(albom.get("title") or "")
+            if not anahtar or not parca.get("id") or anahtar in gorulen:
+                continue
+            gorulen.add(anahtar)
+            bulunan.append({"sanatci": aday["name"], "album": albom["title"],
+                            "yil": None, "kaynak": kaynak,
+                            "parca_id": int(parca["id"]),
+                            "parca": parca.get("title", "")})
+            if len(bulunan) >= adet:
+                break
+        return bulunan
+    return []
+
+
+def sanatci_albumu(istemci, sanatci: str) -> dict | None:
+    """En çok dinlenen sanatçının en popüler parçasının albümü (Spotify yolu)."""
+    bulunan = sanatci_albumleri(istemci, sanatci, adet=1)
+    return bulunan[0] if bulunan else None
+
+
+# --------------------------------------------------------------------------- #
+# Spotify'sız giriş: elle yazılmış liste
+# --------------------------------------------------------------------------- #
+
+#: «Sanatçı — Albüm» ayırıcıları. Kısa çizgi YALNIZ boşluklar arasında:
+#: «Jay-Z», «AC/DC», «Sigur Rós» bölünmemeli.
+_AYIRICILAR = (" — ", " – ", " - ", "\t")
+
+
+def liste_ayristir(metin: str) -> tuple[list[dict], list[str]]:
+    """Serbest metin → (albüm kayıtları, albümsüz sanatçılar).
+
+    Satır başına bir giriş: «Sanatçı» ya da «Sanatçı — Albüm». Madde işareti
+    ve sıra numarası atılır; tekrarlar sanatçı+albüm anahtarıyla elenir.
+    Tavan `LISTE_AZAMI_SATIR`.
+    """
+    import re
+
+    kayitlar: list[dict] = []
+    sanatcilar: list[str] = []
+    gorulen: set[tuple[str, str]] = set()
+    for satir in metin.splitlines():
+        satir = re.sub(r"^\s*(?:[-*•·]|\d+[.)])\s*", "", satir).strip()
+        if not satir:
+            continue
+        sanatci, album = satir, ""
+        for ayirici in _AYIRICILAR:
+            if ayirici in satir:
+                sanatci, album = (p.strip() for p in satir.split(ayirici, 1))
+                break
+        anahtar = (normalize_esleme(sanatci), normalize_esleme(album))
+        if not anahtar[0] or anahtar in gorulen:
+            continue
+        gorulen.add(anahtar)
+        if album:
+            kayitlar.append({"sanatci": sanatci, "album": album, "yil": None,
+                             "kaynak": "liste"})
+        else:
+            sanatcilar.append(sanatci)
+        if len(kayitlar) + len(sanatcilar) >= LISTE_AZAMI_SATIR:
+            break
+    return kayitlar, sanatcilar
+
+
+def liste_yeterli_mi(kayitlar: list[dict], sanatcilar: list[str]) -> bool:
+    """Kümelemeye yetecek kadar albüm çıkabilir mi (en iyi durumda)?"""
+    return len(kayitlar) + LISTE_SANATCI_ALBUM * len(sanatcilar) >= ASGARI_ALBUM
 
 
 # --------------------------------------------------------------------------- #
@@ -498,35 +609,47 @@ class AktarimHatasi(RuntimeError):
 
 def calistir(
     kullanici_id: int, *, kayitlar: list[dict] | None = None,
+    sanatcilar: list[str] | None = None,
     baslangic: str = "spotify", sessiz: bool = False,
 ) -> dict:
     """Hattı `baslangic` aşamasından sona kadar çalıştır.
 
-    `kayitlar` verilirse Spotify'a gidilmez (elle liste / test).
+    `kayitlar` verilirse Spotify'a gidilmez (elle liste / test); o zaman
+    `sanatcilar` listeyle gelen albümsüz sanatçılardır ve her biri
+    `LISTE_SANATCI_ALBUM` albümle temsil edilir.
     """
     ilerleme = Ilerleme(kullanici_id, sessiz=sessiz)
+    # Arayüz listeyle gelen kullanıcıya «Spotify okunuyor» aşamasını göstermesin.
+    ilerleme.veri["kaynak"] = "spotify" if kayitlar is None else "liste"
     ilerleme._yaz()
     atla = ASAMALAR.index(baslangic)
     conn = baglan_kullanici(kullanici_id)
     try:
         if atla <= ASAMALAR.index("eslesme"):
-            sanatcilar: list[str] = []
             if kayitlar is None:
                 ilerleme.asama("spotify")
                 kayitlar, sanatcilar = spotify_kayitlari(erisim_jetonu(kullanici_id))
+                adet, kaynak = 1, "spotify_en_cok"
+            else:
+                sanatcilar = sanatcilar or []
+                adet, kaynak = LISTE_SANATCI_ALBUM, "liste"
             ilerleme.ozet(spotify_albüm=len(kayitlar),
                           albümsüz_sanatçı=len(sanatcilar))
 
             ilerleme.asama("eslesme", len(sanatcilar))
             from python.discover.calma_listesi import deezer_listesi
             istemci = deezer_listesi()
+            art_arda_hata = 0
             for sira, sanatci in enumerate(sanatcilar, 1):
                 try:
-                    bulunan = sanatci_albumu(istemci, sanatci)
-                except Exception:  # noqa: BLE001
-                    bulunan = None
-                if bulunan:
-                    kayitlar.append(bulunan)
+                    kayitlar.extend(sanatci_albumleri(istemci, sanatci, adet=adet,
+                                                      kaynak=kaynak))
+                    art_arda_hata = 0
+                except Exception:  # noqa: BLE001 — tek sanatçı hattı durdurmaz
+                    art_arda_hata += 1
+                    if art_arda_hata >= AG_HATA_ESIGI:
+                        raise AktarimHatasi(
+                            "Deezer'a ulaşılamıyor — birkaç dakika sonra yeniden dene")
                 ilerleme.adim(sira)
             ilerleme.ozet(eklenen_albüm=kutuphaneye_yaz(conn, kayitlar))
 
@@ -578,16 +701,21 @@ def main(argv: list[str] | None = None) -> int:
                    help="bu aşamadan başla (öncekiler yapılmış sayılır)")
     args = a.parse_args(argv)
 
-    kayitlar = None
+    kayitlar = sanatcilar = None
     if args.json:
-        kayitlar = [
-            {"sanatci": k["sanatci"], "album": k["album"],
-             "yil": yil_ayikla(k.get("yil")), "kaynak": k.get("kaynak", "spotify_kayitli")}
-            for k in json.loads(args.json.read_text(encoding="utf-8"))
-        ]
+        kayitlar, sanatcilar = [], []
+        for k in json.loads(args.json.read_text(encoding="utf-8")):
+            if not k.get("album"):
+                sanatcilar.append(k["sanatci"])
+                continue
+            kayitlar.append({
+                "sanatci": k["sanatci"], "album": k["album"],
+                "yil": yil_ayikla(k.get("yil")),
+                "kaynak": k.get("kaynak", "spotify_kayitli")})
     bas = time.monotonic()
     try:
-        sonuc = calistir(args.kullanici, kayitlar=kayitlar, baslangic=args.asama)
+        sonuc = calistir(args.kullanici, kayitlar=kayitlar, sanatcilar=sanatcilar,
+                         baslangic=args.asama)
     except AktarimHatasi as hata:
         print(f"\nDURDU: {hata}", file=sys.stderr)
         return 1

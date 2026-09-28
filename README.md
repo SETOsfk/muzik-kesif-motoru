@@ -11,6 +11,9 @@ co-occurrence, and — unusually for a hobby project — **evaluates every ranki
 leave-one-artist-out harness. Zero running cost, no LLM in the core, no proprietary APIs.
 Code and comments are in Turkish.*</sub>
 
+**Sürüm 0.1.0** — ilk yayın sürümü ([değişiklikler](CHANGELOG.md)). Hesap aç, sevdiğin
+sanatçıları yaz, kaydırarak keşfet. Sunucuya kurmak için: [`docs/yayin.md`](docs/yayin.md).
+
 ![Öneri ekranı](docs/gorseller/oneriler.png)
 
 ---
@@ -28,6 +31,7 @@ olmayan bir şey gelsin."*
 
 | | |
 |---|---|
+| **Dosyasız da başlar** | Satır başına bir sanatçı yaz ya da Spotify'ı bağla; eksenler 30 sn önizlemelerin sesinden çıkar |
 | **Kütüphaneyi okur** | FLAC etiketleri → MusicBrainz → Discogs kredileri (kim çalmış) |
 | **Zevk eksenleri çıkarır** | Bulanık c-ortalamalar (FCM); bir albüm birden çok eksene ait olabilir |
 | **İcra karakterini ölçer** | Demucs ile stem ayrıştırma → davul/bas/gitar/vokal ayrı ayrı ölçülür |
@@ -107,9 +111,10 @@ python/
   gerekce.py         iki dilli, kanıt gücünü söyleyen gerekçe
   dil.py             Türkçe / İngilizce, dile göre sayı
 web/                 Starlette + Jinja2 + elle SVG; Neon tasarım sistemi, deste (kesfet.js)
-tests/               17 dosya, 271 test
-docs/                mimari, veri sözleşmesi, karar günlüğü, ürün yolu
-CLAUDE.md            proje anayasası — K1..K19 mimari kararları
+tests/               22 dosya, 285 test
+docs/                mimari, veri sözleşmesi, karar günlüğü, ürün yolu, yayın rehberi
+CLAUDE.md            proje anayasası — K1..K23 mimari kararları
+Dockerfile, docker-compose.yml, Caddyfile   tek komutla HTTPS'li yayın
 ```
 
 ### Ayırt edici üç seçim
@@ -133,13 +138,25 @@ Masayoshi Takanaka · Casiopea · Plini bir arada, Slash · W.A.S.P. · Opeth bi
 **3. Sıfır maliyet, çekirdekte LLM yok.** MusicBrainz, Discogs (ücretsiz token), Deezer, ListenBrainz,
 FMA meta verisi (CC BY 4.0). Kümeleme ve öneri her koşulda istatistikseldir; sonuç tekrarlanabilir.
 
-## Kurulum
+## Kullanmaya başla
+
+**Sunucuda (önerilen):** `docker compose up -d --build` — Caddy HTTPS sertifikasını kendisi
+alır. Adım adım, 0 TL'lik sunucu seçeneğiyle: [`docs/yayin.md`](docs/yayin.md).
+
+Yeni kullanıcı dosya yüklemez: `/basla`da sevdiği sanatçıları yazar (ya da Spotify'ı bağlar),
+motor her birinin 30 sn önizlemesini dinleyip eksenleri çıkarır ve Keşfet destesini hazırlar.
+Hesabını ve verisini `/gizlilik` sayfasından tek adımda silebilir.
+
+## Kurulum (geliştirme)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt           # tüm hat + test
+pip install -r requirements-aktarim.txt   # sesle aktarım (CLAP, torch CPU)
 cp .env.ornek .env        # DISCOGS_TOKEN ve MUSICBRAINZ_USER_AGENT doldur
 ```
+
+Yalnız web sunucusu: `requirements-sunucu.txt` (torch'suz, ~110 MB bellek).
 
 ## Kullanım
 
@@ -186,7 +203,9 @@ kalıcı olan parça kimliğidir ve taze URL çalma anında alınır.
 
 ## Durum
 
-En çok beş kullanıcılık, çalışır durumda. Açık işler ve gerekçeleri
+v0.1.0: yayına hazır. Hesap tavanı ortam değişkeniyle ayarlanır (`KESIF_AZAMI_KULLANICI`);
+Spotify girişi Spotify'ın kuralı gereği beş davetli hesapla sınırlı, sanatçı listesiyle başlama
+yolu sınırsız. Açık işler ve gerekçeleri
 [`docs/urun-yolu.md`](docs/urun-yolu.md) ve [`docs/karar-gunlugu.md`](docs/karar-gunlugu.md)
 içinde. En yüksek getirili adım daha fazla geri bildirim; Keşfet destesi bunun için var.
 Gerçek kararlar vekil ölçütle çelişiyor (melez gizleme sınamasında en iyi, gerçek

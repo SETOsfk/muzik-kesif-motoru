@@ -92,12 +92,18 @@ AKTIF_KULLANICI: ContextVar[int | None] = ContextVar("aktif_kullanici",
                                                     default=None)
 
 #: Oturum gerektirmeyen yollar. Geri kalan her şey girişe yönlendirilir.
-ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik", "/sw.js", "/dil")
+ACIK_YOLLAR = ("/giris", "/uyelik", "/cikis", "/statik", "/saglik", "/sw.js", "/dil",
+               "/gizlilik")
 
-#: Spotify Development Mode uygulaması en fazla beş yetkili hesap taşıyor
-#: (Şubat 2026). Panele eklenmeyen hesap Spotify tarafında zaten giriş
-#: yapamaz; sınırı burada da uygulamak anlaşılır bir mesaj vermeyi sağlıyor.
-AZAMI_KULLANICI = 5
+#: Hesap tavanı. Varsayılan 5: Spotify Development Mode uygulaması en fazla
+#: beş yetkili hesap taşıyor (Şubat 2026). Listeyle başlama yolu (2026-09-28)
+#: Spotify istemediği için yayında yükseltilebilir (`KESIF_AZAMI_KULLANICI`);
+#: Spotify'ın kendi beş kişilik sınırı o zaman da panelde geçerli kalır.
+AZAMI_KULLANICI = int(os.environ.get("KESIF_AZAMI_KULLANICI", "5"))
+
+#: Aynı anda en çok kaç aktarım süreci. Her süreç CLAP (torch) yüklüyor,
+#: ~2 GB bellek; küçük bir sunucuda iki üç eşzamanlı aktarım belleği bitirir.
+AZAMI_ES_ZAMANLI_AKTARIM = int(os.environ.get("KESIF_ES_ZAMANLI_AKTARIM", "2"))
 
 #: Uygulama https ardında mı sunuluyor? Açıksa oturum çerezi `secure` alır
 #: (yalnız şifreli bağlantıda gönderilir) ve `X-Forwarded-For` okunur.
@@ -1599,6 +1605,41 @@ async def cikis(istek):
     return yanit
 
 
+async def gizlilik(istek):
+    """Ne saklanıyor, ne dışarı gidiyor, nasıl silinir — oturumsuz da açık.
+
+    İletişim adresi `KESIF_ILETISIM` ortam değişkeninden; yayını yapan kişinin
+    adresi koda gömülmez.
+    """
+    return SABLONLAR.TemplateResponse(istek, "gizlilik.html", {
+        "request": istek, "yol": "/gizlilik",
+        "giris_var": AKTIF_KULLANICI.get() is not None,
+        "iletisim": os.environ.get("KESIF_ILETISIM", "").strip(),
+    })
+
+
+async def hesap_sil_istek(istek):
+    """Hesabı ve kişisel veriyi sil (bkz. `hesap.hesap_sil`).
+
+    Onay kutusu şart; çapraz site POST'u `samesite=lax` çerez zaten taşımaz.
+    """
+    from python.hesap import hesap_sil
+
+    veri = await istek.form()
+    if veri.get("onay") != "evet":
+        return RedirectResponse("/gizlilik", status_code=303)
+    kullanici_id = AKTIF_KULLANICI.get()
+    conn = _oturum_baglantisi()
+    try:
+        hesap_sil(conn, kullanici_id)
+    finally:
+        conn.close()
+    _onbellekleri_bosalt()
+    yanit = RedirectResponse("/giris?hata=silindi", status_code=303)
+    yanit.delete_cookie(CEREZ_ADI, path="/")
+    return yanit
+
+
 async def dil_degistir(istek):
     """Dili değiştir ve geldiğin sayfaya dön. Seçim çerezde, bir yıl.
 
@@ -1631,7 +1672,8 @@ async def saglik(istek):
             conn.close()
     except sqlite3.Error as hata:
         return JSONResponse({"durum": "veritabani", "hata": str(hata)}, status_code=503)
-    return JSONResponse({"durum": "ayakta"})
+    from python import __version__
+    return JSONResponse({"durum": "ayakta", "surum": __version__})
 
 
 async def servis_calisani(istek):
@@ -1770,7 +1812,14 @@ async def basla(istek):
     yazıyor ama öneri ancak son aşamada çıkıyor. Albüm sayısına bakılsaydı
     kullanıcı yarım bir hattın boş öneri sayfasına atılırdı.
     """
-    from python.aktarim import ASAMA_ADI, ASAMALAR, calisiyor_mu
+    return _basla_yaniti(istek, hata=istek.query_params.get("hata"))
+
+
+def _basla_yaniti(istek, *, hata: str | None = None, liste_metni: str = "",
+                  durum_kodu: int = 200):
+    from python.aktarim import (
+        ASAMA_ADI, ASAMALAR, ASGARI_ALBUM, LISTE_SANATCI_ALBUM, calisiyor_mu,
+    )
 
     kullanici_id = AKTIF_KULLANICI.get()
     durum = _aktarim_bitti_mi(kullanici_id)
@@ -1785,30 +1834,51 @@ async def basla(istek):
     finally:
         conn.close()
     if aday and not calisiyor:
-        return RedirectResponse("/oneriler", status_code=303)
+        return RedirectResponse("/kesfet", status_code=303)
 
     # Durum dosyası "çalışıyor" diyor ama süreç yok: öldürülmüş ya da çökmüş.
     if durum and durum.get("durum") == "calisiyor" and not calisiyor:
         durum = {**durum, "durum": "hata",
                  "hata": t("aktarım yarıda kesildi (süreç artık çalışmıyor)", "the import was cut short (the process is no longer running)")}
     asama = (durum or {}).get("asama")
+    asamalar = [(a, ASAMA_ADI[a]) for a in ASAMALAR]
+    if durum and durum.get("kaynak") == "liste":
+        # Listeyle gelen kullanıcı Spotify aşamasını hiç görmemeli.
+        asamalar = [(a, ad_) for a, ad_ in asamalar if a != "spotify"]
+    sira = [a for a, _ in asamalar]
     return SABLONLAR.TemplateResponse(istek, "basla.html", {
         "request": istek, "yol": "/basla",
         "ad": kullanici["ad"] if kullanici else "",
         "spotify_bagli": bool(kullanici and kullanici["spotify_id"]),
         "spotify_hazir": _spotify_hazir(),
-        "hata": istek.query_params.get("hata"),
+        "hata": hata,
         "bagli_yeni": istek.query_params.get("spotify") == "bagli",
         "albom": albom,
         "aktarim": durum,
         "calisiyor": calisiyor,
-        "asamalar": [(a, ASAMA_ADI[a]) for a in ASAMALAR],
-        "asama_sira": ASAMALAR.index(asama) if asama in ASAMALAR else -1,
-    })
+        "asamalar": asamalar,
+        "asama_sira": sira.index(asama) if asama in sira else -1,
+        "liste_metni": liste_metni,
+        "asgari_sanatci": -(-ASGARI_ALBUM // LISTE_SANATCI_ALBUM),
+    }, status_code=durum_kodu)
 
 
-async def aktar(istek):
-    """Spotify aktarımını AYRI SÜREÇTE başlat.
+def _calisan_aktarim_sayisi() -> int:
+    """Şu an yaşayan aktarım süreçleri (bütün kullanıcılar)."""
+    import python.db as _db
+    from python.aktarim import calisiyor_mu
+
+    sayi = 0
+    for yol in _db.KULLANICI_KOK.glob("*.aktarim.json"):
+        kimlik = yol.name.split(".", 1)[0]
+        if kimlik.isdigit() and calisiyor_mu(int(kimlik)):
+            sayi += 1
+    return sayi
+
+
+def _aktarim_baslat(kullanici_id: int, ek: list[str] | None = None, *,
+                   kaynak: str = "spotify") -> str | None:
+    """Aktarımı AYRI SÜREÇTE başlat; başlatılamazsa hata kodu döner.
 
     Ayrı süreç çünkü CLAP (torch) ~2 GB bellek istiyor ve sunucuya yüklenirse
     her kullanıcının isteği o süreçle yarışır; ayrıca aktarım dakikalar
@@ -1816,11 +1886,29 @@ async def aktar(istek):
     açmaz — `calisiyor_mu` süreç kimliğini denetliyor.
     """
     import subprocess
-    import sys
 
-    from python.aktarim import calisiyor_mu
-    from python.db import KULLANICI_KOK
+    import python.db as _db
+    from python.aktarim import baslangic_yaz, calisiyor_mu
 
+    if calisiyor_mu(kullanici_id):
+        return None
+    if _calisan_aktarim_sayisi() >= AZAMI_ES_ZAMANLI_AKTARIM:
+        return "mesgul"
+    _db.KULLANICI_KOK.mkdir(parents=True, exist_ok=True)
+    gunluk = open(_db.KULLANICI_KOK / f"{kullanici_id}.aktarim.log", "ab")
+    surec = subprocess.Popen(
+        [sys.executable, "-m", "python.aktarim", "--kullanici", str(kullanici_id),
+         *(ek or [])],
+        cwd=str(KOK.parent), stdout=gunluk, stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL, start_new_session=True,
+    )
+    gunluk.close()
+    baslangic_yaz(kullanici_id, surec.pid, kaynak)
+    return None
+
+
+async def aktar(istek):
+    """Spotify aktarımını başlat (bkz. `_aktarim_baslat`)."""
     kullanici_id = AKTIF_KULLANICI.get()
     conn = _oturum_baglantisi()
     try:
@@ -1829,15 +1917,35 @@ async def aktar(istek):
         conn.close()
     if kayit is None or not kayit["spotify_yenile"]:
         return RedirectResponse("/basla?hata=spotify_yok", status_code=303)
-    if not calisiyor_mu(kullanici_id):
-        KULLANICI_KOK.mkdir(parents=True, exist_ok=True)
-        gunluk = open(KULLANICI_KOK / f"{kullanici_id}.aktarim.log", "ab")
-        subprocess.Popen(
-            [sys.executable, "-m", "python.aktarim", "--kullanici", str(kullanici_id)],
-            cwd=str(KOK.parent), stdout=gunluk, stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL, start_new_session=True,
-        )
-        gunluk.close()
+    hata = _aktarim_baslat(kullanici_id)
+    return RedirectResponse(f"/basla?hata={hata}" if hata else "/basla", status_code=303)
+
+
+async def aktar_liste(istek):
+    """Spotify'sız başlangıç: elle yazılmış sanatçı / albüm listesi.
+
+    Liste kullanıcının dosyasına JSON olarak yazılır ve aynı hat `--json`
+    ile başlar. Kümelemeye yetmeyecek kısa liste süreç açılmadan, metin
+    korunarak geri çevrilir — kullanıcı yazdığını kaybetmesin.
+    """
+    import python.db as _db
+    from python.aktarim import liste_ayristir, liste_yeterli_mi
+
+    kullanici_id = AKTIF_KULLANICI.get()
+    veri = await istek.form()
+    metin = str(veri.get("liste") or "")[:20000]
+    kayitlar, sanatcilar = liste_ayristir(metin)
+    if not liste_yeterli_mi(kayitlar, sanatcilar):
+        return _basla_yaniti(istek, hata="liste_kisa", liste_metni=metin,
+                             durum_kodu=400)
+    _db.KULLANICI_KOK.mkdir(parents=True, exist_ok=True)
+    dosya = _db.KULLANICI_KOK / f"{kullanici_id}.liste.json"
+    dosya.write_text(json.dumps(
+        [{"sanatci": k["sanatci"], "album": k["album"], "kaynak": "liste"} for k in kayitlar]
+        + [{"sanatci": s_} for s_ in sanatcilar], ensure_ascii=False), encoding="utf-8")
+    hata = _aktarim_baslat(kullanici_id, ["--json", str(dosya.resolve())], kaynak="liste")
+    if hata:
+        return _basla_yaniti(istek, hata=hata, liste_metni=metin, durum_kodu=503)
     return RedirectResponse("/basla", status_code=303)
 
 
@@ -2143,6 +2251,7 @@ ROTALAR = [
     Route("/api/ses-kume-adi", ses_kume_adlandir, methods=["POST"]),
     Route("/basla", basla),
     Route("/api/aktar", aktar, methods=["POST"]),
+    Route("/api/aktar/liste", aktar_liste, methods=["POST"]),
     Route("/api/aktar/durum", aktar_durum),
     Route("/giris", giris),
     Route("/giris", giris_gonder, methods=["POST"]),
@@ -2152,6 +2261,8 @@ ROTALAR = [
     Route("/giris/spotify", spotify_baslat),
     Route("/giris/spotify/donus", spotify_donus),
     Route("/saglik", saglik),
+    Route("/gizlilik", gizlilik),
+    Route("/hesap/sil", hesap_sil_istek, methods=["POST"]),
     Route("/dil/{kod}", dil_degistir),
     # Servis çalışanının KAPSAMI bulunduğu dizinle sınırlı. `/statik/sw.js`
     # yalnız `/statik/*` isteklerini görebilirdi; uygulamanın tamamını
@@ -2221,6 +2332,8 @@ def _statik(yol: str) -> str:
     return f"/statik/{yol}?v={damga}"
 
 
+from python import __version__ as _SURUM  # noqa: E402
+SABLONLAR.env.globals["surum"] = _SURUM
 SABLONLAR.env.globals["statik"] = _statik
 SABLONLAR.env.globals["yer_tutucu"] = yer_tutucu_svg
 SABLONLAR.env.globals["t"] = t
