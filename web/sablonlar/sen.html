@@ -20,14 +20,14 @@
   <div class="sen-izgara">
     {% if p.eksenler %}
     <section class="adim">
-      <h2>{{ t("Damarların", "Your veins") }}</h2>
+      <h2>{{ t("Tarzların", "Your styles") }} <a class="sen-duzenle" href="/tarzlar">✎ {{ t("adlandır", "name") }}</a></h2>
       <ol class="sen-liste">
         {% for e in p.eksenler %}
         <li><a href="/kesfet?eksen={{ e.kume }}{% if calisma_id %}&calisma={{ calisma_id }}{% endif %}">{{ eksen_adi(e) }}</a>
             <span>{{ yuzde(e.pay) }}</span></li>
         {% endfor %}
       </ol>
-      <p class="sen-not">{{ t("Birine dokun, o damarda keşfe çık.", "Tap one to discover along that vein.") }}</p>
+      <p class="sen-not">{{ t("Birine dokun, o tarzda keşfe çık.", "Tap one to discover within that style.") }}</p>
     </section>
     {% endif %}
 

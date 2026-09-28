@@ -42,7 +42,10 @@ ozetle(metinler, mod) -> str
 Varsayılan `cikarimsal`. Sistem hiçbir kod yolunda LLM'in varlığını varsaymaz.
 
 **Elenen kullanımlar:**
-- Küme isimlendirme önerisi — gereksiz, isimleri kullanıcı verir.
+- Küme isimlendirme önerisi LLM'le — gereksiz, isimleri kullanıcı verir.
+  (2026-09-28: kullanıcı isteğiyle İSTATİSTİKSEL öneri eklendi —
+  `python/tarz_adi.py`: ayırt eden MusicBrainz etiketi, yoksa merkezdeki
+  sanatçılar. Yalnız boş adlar doldurulur; kullanıcı her adı değiştirebilir.)
 - "Neden bu albüm" gerekçesi — LLM'e gerek yok. Sebep kredi grafiğinde yapısal olarak
   duruyor ve şablonla üretilir; sayısal dayanağı olduğu için modelin yazacağından
   daha güvenilir. Bkz. K7.
@@ -466,7 +469,7 @@ görünmez bırakıyordu).
 - **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 297 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 300 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.

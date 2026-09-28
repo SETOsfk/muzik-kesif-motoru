@@ -34,7 +34,9 @@
     <a class="cip" href="/muzisyenler?rol={{ rol }}">{{ t("Başka müzisyen seç", "Pick another musician") }}</a>
   </div>
   {% else %}
-  <nav class="cipler" aria-label="{{ t('Eksen seçimi', 'Choose an axis') }}">
+  <p class="tarz-soru">{{ t("Hangi tarzını besleyelim?", "Which style shall we grow?") }}
+     <a href="/tarzlar?calisma={{ calisma_id }}">✎ {{ t("adlandır", "name them") }}</a></p>
+  <nav class="cipler" aria-label="{{ t('Tarz seçimi', 'Choose a style') }}">
     <a class="cip {{ 'etkin' if secili_eksen is none }}"
        href="/kesfet?calisma={{ calisma_id }}&kaynak={{ kaynak }}">{{ t("Karışık", "Mixed") }}</a>
     {% for e in eksenler %}

@@ -1296,3 +1296,22 @@ kbd, .kisayol kbd { font-family: var(--font-govde); border: 1.5px solid var(--ke
 .sen-dipnot { margin-top: var(--b5); }
 @media (max-width: 700px) { .sen-bas { padding-right: 0; } .sen-bas .cizim { width: 80px; top: -6px; } }
 .menu-baglantilar.kucuk a { font-size: .98rem; padding: 4px 8px; color: var(--metin-2); }
+
+/* Tarzların — adlandır, sonra besle. */
+.tarz-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+               gap: var(--b4); align-items: start; }
+.tarz { display: grid; gap: var(--b3); }
+.tarz-ad { display: grid; gap: 4px; }
+.tarz-ad input { font-family: var(--font-baslik); font-size: 1.35rem; padding: 6px 10px; width: 100%; min-width: 0; }
+.tarz-ad .durum { color: var(--yesil); min-height: 1em; font-size: .9rem; }
+.tarz-albumler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tarz-albumler li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center;
+                    font-size: .98rem; line-height: 1.25; }
+.tarz-albumler b { font-weight: 600; }
+.tarz-kapak svg { width: 44px; height: 44px; display: block; border: 1.5px solid var(--kenar-parlak);
+                  border-radius: 6px 9px 5px 8px; }
+.tarz .dugme { justify-self: start; }
+.tarz-alt { margin-top: var(--b5); }
+.tarz-soru { margin: 0 0 6px; font-family: var(--font-baslik); font-size: 1.1rem; }
+.tarz-soru a { font-family: var(--font-govde); font-size: .95rem; margin-left: 8px; }
+.sen-duzenle { font-family: var(--font-govde); font-size: .9rem; font-weight: 400; margin-left: 6px; }

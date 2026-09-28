@@ -159,11 +159,11 @@ def ozet_cumlesi(p: dict) -> str:
         ilk = eksenler[0]
         if len(eksenler) > 1:
             parcalar.append(t(
-                f"Müziğin {len(eksenler)} ana damardan oluşuyor; en büyüğü {eksen_adi(ilk)}",
-                f"Your music runs along {len(eksenler)} main veins; the biggest is {eksen_adi(ilk)}"))
+                f"Müziğin {len(eksenler)} tarza ayrılıyor; en büyüğü {eksen_adi(ilk)}",
+                f"Your music splits into {len(eksenler)} styles; the biggest is {eksen_adi(ilk)}"))
         else:
-            parcalar.append(t(f"Müziğin tek bir damarda toplanıyor: {eksen_adi(ilk)}",
-                              f"Your music sits in one vein: {eksen_adi(ilk)}"))
+            parcalar.append(t(f"Müziğin tek bir tarzda toplanıyor: {eksen_adi(ilk)}",
+                              f"Your music sits in one style: {eksen_adi(ilk)}"))
     if p["turler"]:
         ilk_iki = " ve ".join(x["etiket"] for x in p["turler"][:2])
         ilk_iki_en = " and ".join(x["etiket"] for x in p["turler"][:2])

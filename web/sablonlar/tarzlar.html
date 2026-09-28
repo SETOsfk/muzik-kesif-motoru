@@ -1,0 +1,46 @@
+{% extends "taban.html" %}
+{% block baslik %}{{ t("Tarzların", "Your styles") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block govde %}
+{# Sistemin kalbi: kütüphane tarzlara (bulanık kümeler) ayrılır, kullanıcı
+   onlara AD VERİR, sonra hangisini beslemek istediğini seçip kaydırır.
+   Yalnız stabil kümeler gösterilir (K3). Ad yazmayı bırakınca kaydedilir. #}
+<div class="tarzlar">
+  <header class="sayfa-basi">
+    <p class="etiket-ust">{{ t("tarzların", "your styles") }}</p>
+    <h1>{{ t("Kütüphanen " ~ tarzlar|length ~ " tarza ayrıldı", "Your library splits into " ~ tarzlar|length ~ " styles") }}</h1>
+    <p>{{ t("Her birine senin için anlamlı bir ad ver. Sonra hangisini beslemek istediğini seç, o tarzda kaydır.",
+            "Give each one a name that means something to you. Then pick the one you want to grow and swipe within it.") }}</p>
+    {% if ilk %}<div class="kapi-not">{{ t("Adları senin için tarzların içeriğinden önerdik. İstediğini değiştir; yazmayı bırakınca kaydedilir.",
+                                          "We suggested names from what's inside each style. Change any you like; it saves when you stop typing.") }}</div>{% endif %}
+    {% if bos_var %}
+    <form method="post" action="/tarzlar/otomatik">
+      <input type="hidden" name="calisma_id" value="{{ calisma_id }}">
+      <button type="submit" class="dugme">✨ {{ t("Boş olanlara ad öner", "Suggest names for empty ones") }}</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <div class="tarz-izgara">
+    {% for k in tarzlar %}
+    <article class="adim tarz">
+      <label class="tarz-ad">
+        <span class="etiket-ust">{{ t("tarz", "style") }} {{ loop.index }} · {{ k.album }} {{ t("albüm", "albums") }}</span>
+        <input type="text" class="kume-adi" data-kume="{{ k.kume_id }}" data-calisma="{{ calisma_id }}"
+               value="{{ k.ad or '' }}" maxlength="40"
+               placeholder="{{ t('ad ver', 'name it') }}{% if k.oneri %} — {{ t('ör.', 'e.g.') }} {{ k.oneri }}{% endif %}">
+        <small class="durum" aria-live="polite"></small>
+      </label>
+      <ul class="tarz-albumler">
+        {% for a in k.albumler %}
+        <li><span class="tarz-kapak">{{ yer_tutucu(a.artist, a.title) }}</span>
+            <span><b>{{ a.artist }}</b><br>{{ a.title }}</span></li>
+        {% endfor %}
+      </ul>
+      <a class="dugme birincil" href="/kesfet?calisma={{ calisma_id }}&eksen={{ k.kume_id }}">{{ t("Bu tarzı besle →", "Grow this style →") }}</a>
+    </article>
+    {% endfor %}
+  </div>
+
+  <p class="tarz-alt"><a class="dugme" href="/kesfet?calisma={{ calisma_id }}">{{ t("Hepsinden karışık kaydır →", "Swipe a mix of all →") }}</a></p>
+</div>
+{% endblock %}

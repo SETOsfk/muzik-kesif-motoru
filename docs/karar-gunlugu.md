@@ -2491,3 +2491,22 @@ dil, gizlilik, çıkış; «Gelişmiş» katlı: öneriler listesi, ses aileleri
 etiketler, ölçümler, zevk eksenleri, ne öğrendik, veri seti, eşleştirme,
 sözlük, kümeleme çalışması ve sayaçlar. Hiçbir sayfa silinmedi; gelişmiş
 sayfalar ait oldukları sekmeyi işaretlemeye devam ediyor.
+
+## 2026-09-28 (9) — Tarzlar ana akışta: adlandır, sonra besle
+
+Kullanıcı: "Kullanıcı hangi aşamada kümelerine isim verecek? Sistemin en büyük
+olayı bu değil miydi." Haklı: adlandırma `/kumeler`de (teknik sayfa) kalmış,
+son sadeleştirmede «Gelişmiş»e gömülmüştü; yeni kullanıcı aktarımdan doğrudan
+desteye düşüyordu. Ayrıca kullanıcıya dönük üç sözcük vardı (küme, eksen,
+damar) → tek sözcük: **tarz**.
+
+- `/tarzlar` (Sen sekmesi, «Tarzların»): her stabil tarz temsilci albümleriyle
+  bir kart, ad kutusu (yazmayı bırakınca kaydeder), «Bu tarzı besle →».
+- Aktarım bitince hiç ad yoksa önce buraya; Keşfet'te «Hangi tarzını
+  besleyelim?» + «✎ adlandır».
+- Otomatik ad (`python/tarz_adi.py`), kullanıcı isteğiyle, "ama ilgili ad":
+  tarzda sık (≥%30) VE kütüphaneye göre belirgin (kaldıraç ≥1,3) MusicBrainz
+  etiketi — skor pay × kaldıraç, yoksa "Casiopea · Plini tarzı". Sesten tür
+  tahmini yok (2026-08-18). Kullanıcının verdiği ada dokunulmaz. Eşikler
+  ölçülmedi; test kümesinde "rock" yerine "progressive metal"/"turkish rock"
+  seçiyor.

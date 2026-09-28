@@ -1272,6 +1272,61 @@ async def sozluk_sayfasi(istek):
         istek, gruplar=gruplar, sozluk=_kaynak()))
 
 
+def tarzlar_sayfasi(istek):
+    """Tarzlarını adlandır, sonra birini besle — sistemin çekirdek adımı."""
+    calisma_id = _calisma_sec(istek)
+    if not calisma_id:
+        return RedirectResponse("/basla", status_code=303)
+    conn = _baglanti()
+    try:
+        kumeler = conn.execute(
+            "SELECT kume_id, kullanici_adi FROM clusters WHERE calisma_id = ? AND stabil_mi = 1 "
+            "ORDER BY kume_id", (calisma_id,)).fetchall()
+        boyut = dict(conn.execute(
+            """SELECT kume_id, COUNT(*) FROM (
+                 SELECT album_id, kume_id, MAX(uyelik) FROM memberships
+                  WHERE calisma_id = ? GROUP BY album_id) GROUP BY kume_id""",
+            (calisma_id,)).fetchall())
+        tarzlar = []
+        for k in kumeler:
+            albumler = [dict(r) for r in conn.execute(
+                """SELECT a.artist, a.title FROM temsilciler t JOIN albums a USING (album_id)
+                    WHERE t.calisma_id = ? AND t.kume_id = ? ORDER BY t.sira LIMIT 5""",
+                (calisma_id, k["kume_id"]))]
+            # Ad önerisi: temsilcilerin en sık MusicBrainz etiketi. Yalnız ipucu;
+            # ad kullanıcının (sistem küme adı UYDURMAZ, K2).
+            oneri = conn.execute(
+                """SELECT tag FROM tags WHERE album_id IN (
+                     SELECT album_id FROM temsilciler WHERE calisma_id = ? AND kume_id = ?)
+                   GROUP BY tag ORDER BY COUNT(*) DESC LIMIT 1""",
+                (calisma_id, k["kume_id"])).fetchone()
+            tarzlar.append({"kume_id": k["kume_id"], "ad": k["kullanici_adi"],
+                            "album": boyut.get(k["kume_id"], 0), "albumler": albumler,
+                            "oneri": oneri[0] if oneri else ""})
+    finally:
+        conn.close()
+    tarzlar.sort(key=lambda k: -k["album"])
+    return SABLONLAR.TemplateResponse(istek, "tarzlar.html", _ortam(
+        istek, tarzlar=tarzlar, ilk=istek.query_params.get("ilk") == "1",
+        bos_var=any(not k["ad"] for k in tarzlar)))
+
+
+async def tarz_otomatik(istek):
+    """Adı boş tarzlara ilgili ad öner (kullanıcının verdiği adlara dokunmaz)."""
+    from python.tarz_adi import bos_olanlari_adlandir
+
+    veri = await istek.form()
+    calisma_id = _calisma_sec(istek, {"calisma_id": veri.get("calisma_id")})
+    if calisma_id:
+        conn = _baglanti()
+        try:
+            bos_olanlari_adlandir(conn, calisma_id)
+        finally:
+            conn.close()
+        _eksen_adlari.cache_clear()
+    return RedirectResponse(f"/tarzlar?calisma={calisma_id or ''}", status_code=303)
+
+
 def sen_sayfasi(istek):
     """«Sen»: düz dille portre (bkz. python/sen.py)."""
     from python.sen import eksen_adi, onyil_adi, ozet_cumlesi, portre
@@ -1883,7 +1938,26 @@ def _basla_yaniti(istek, *, hata: str | None = None, liste_metni: str = "",
     # Keşfet çalışma (kümeleme) ister; yalnız aday sayısına bakılırsa aday
     # olup çalışması olmayan hesap /basla ↔ /kesfet arasında döngüye giriyordu.
     if aday and not calisiyor and _son_calisma():
-        return RedirectResponse("/kesfet", status_code=303)
+        # Önce tarzlarını adlandırsın: sistemin çekirdek adımı. Hiç ad yoksa
+        # oraya, varsa doğrudan desteye.
+        conn = _baglanti()
+        try:
+            adli = conn.execute(
+                "SELECT COUNT(*) FROM clusters WHERE calisma_id = ? "
+                "AND COALESCE(kullanici_adi, '') != ''", (_son_calisma(),)).fetchone()[0]
+        finally:
+            conn.close()
+        if adli:
+            return RedirectResponse("/kesfet", status_code=303)
+        # Hiç ad yok: ilgili adları öner ve yaz, sonra kullanıcı görsün/düzeltsin.
+        from python.tarz_adi import bos_olanlari_adlandir
+        conn = _baglanti()
+        try:
+            bos_olanlari_adlandir(conn, _son_calisma())
+        finally:
+            conn.close()
+        _eksen_adlari.cache_clear()
+        return RedirectResponse("/tarzlar?ilk=1", status_code=303)
 
     # Durum dosyası "çalışıyor" diyor ama süreç yok: öldürülmüş ya da çökmüş.
     if durum and durum.get("durum") == "calisiyor" and not calisiyor:
@@ -2324,6 +2398,8 @@ ROTALAR = [
     Route("/eslestirme", eslestirme),
     Route("/etiketler", etiketler),
     Route("/sen", sen_sayfasi),
+    Route("/tarzlar", tarzlar_sayfasi),
+    Route("/tarzlar/otomatik", tarz_otomatik, methods=["POST"]),
     Route("/ses-kumeleri", ses_kumeleri),
     Route("/api/onizleme/{parca_id}", taze_onizleme),
     Route("/api/ses-kume-adi", ses_kume_adlandir, methods=["POST"]),
