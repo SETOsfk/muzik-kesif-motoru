@@ -169,13 +169,26 @@
     kart = kart || deste.querySelector(`.deste-kart[data-aday="${k.aday_id}"]:not(.giden)`);
     if (!kart) return;
     const g = kart.querySelector('.dk-gorsel');
-    if (k.kapak && !g.querySelector('img')) {
+    // Ana görsel: albüm kapağı; yoksa sanatçı fotoğrafı. Kapak varken fotoğraf
+    // köşede yuvarlak durur — kart hem albümü hem sanatçıyı gösterir.
+    const ana = k.kapak || k.sanatci_gorsel;
+    if (ana && !g.querySelector('img.dk-ana')) {
       const img = new Image();
       img.alt = ''; img.decoding = 'async'; img.draggable = false;
+      img.className = 'dk-ana';
       img.onload = () => img.classList.add('yuklendi');
       img.onerror = () => img.remove();          // yer tutucu görünür kalır
-      img.src = k.kapak;
+      img.src = ana;
       g.insertBefore(img, g.querySelector('.dk-ust'));
+    }
+    if (k.kapak && k.sanatci_gorsel && !g.querySelector('img.dk-avatar')) {
+      const av = new Image();
+      av.alt = k.artist; av.decoding = 'async'; av.draggable = false;
+      av.className = 'dk-avatar';
+      av.onload = () => av.classList.add('yuklendi');
+      av.onerror = () => av.remove();
+      av.src = k.sanatci_gorsel;
+      g.append(av);
     }
     const eser = kart.querySelector('.dk-eser');
     eser.replaceChildren(el('b', null, k.title));

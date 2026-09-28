@@ -7,8 +7,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#05060c",
-  "theme_color": "#05060c",
+  "background_color": "#faf7f1",
+  "theme_color": "#faf7f1",
   "icons": [
     {
       "src": "/statik/ikon-192.png",

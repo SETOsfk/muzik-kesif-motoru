@@ -172,6 +172,9 @@ yedek() {
   done
   mv "$gecici/$ad" "$klasor/$ad"
   rmdir "$gecici"
+  # Aynı zamanlanmış işte: kartlar açılmadan kapak ve sanatçı fotoğraflarını
+  # çöz (her kullanıcının son çalışması). Ağ yoksa sessizce geçer.
+  (cd "$KOK" && "$KOK/.venv/bin/python" -m python.medya --tum-kullanicilar --limit 300) || true
   # Eskileri sil: en yeni $SAKLA yedek kalsın.
   # (macOS bash 3.2 / BSD araçları: `head -n -N` yok, ters sıralayıp kuyruğu al.)
   ls -1d "$klasor"/20*/ 2>/dev/null | sort -r | tail -n "+$((SAKLA + 1))" | while read -r eski; do rm -rf "$eski"; done

@@ -6,11 +6,11 @@
 <title>{% block baslik %}{{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ statik('stil.css') }}">
 <link rel="manifest" href="{{ statik('manifest.webmanifest') }}">
-<meta name="theme-color" content="#05060c">
+<meta name="theme-color" content="#faf7f1">
 {# iOS ana ekrana eklendiğinde tam ekran açılsın ve durum çubuğu koyu olsun.
    Apple `beforeinstallprompt` desteklemiyor; kurulum elle yapılıyor. #}
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="{{ t('Keşif', 'Keşif') }}">
 <link rel="apple-touch-icon" href="{{ statik('ikon-180.png') }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎧</text></svg>">
@@ -56,32 +56,44 @@
     {% endfor %}
   </nav>
 
+  {# Menü (2026-09-28 sadeleştirme): önce günlük işler — dil, hesap, çıkış.
+     Kümeleme çalışması ve sayaçlar "Ayrıntılar"ın altında; çoğu kullanıcı
+     onlara hiç bakmaz ve menünün yarısını kaplıyorlardı. #}
   <details class="sistem-menu">
-    <summary aria-label="{{ t('Sistem menüsü', 'System menu') }}">
-      <span class="nabiz" aria-hidden="true"></span><span class="sistem-etiket">{{ t("sistem", "system") }}</span>
+    <summary aria-label="{{ t('Menü', 'Menu') }}">
+      <span class="menu-simge" aria-hidden="true">☰</span><span class="sistem-etiket">{{ t("Menü", "Menu") }}</span>
     </summary>
     <div class="menu-govde">
-      {% if calismalar %}
-      <form method="get" action="{{ yol }}" class="menu-bolum">
-        <label class="etiket-ust" for="calisma-sec">{{ t("kümeleme çalışması", "clustering run") }}</label>
-        <select id="calisma-sec" name="calisma" onchange="this.form.submit()">
-          {% for c in calismalar %}
-            <option value="{{ c.calisma_id }}" {{ 'selected' if c.calisma_id == calisma_id }}>
-              {{ c.calisma_id[:13] }} · {{ c.stabil or 0 }}/{{ c.kume }} {{ t('stabil', 'stable') }}</option>
-          {% endfor %}
-        </select>
-      </form>
-      {% endif %}
-      {% if boru %}
-      <dl class="menu-bolum hud-okuma">
-        {% for s in boru %}
-          <div><dt>{{ s.ad }}</dt><dd>{{ '{:,}'.format(s.deger).replace(',', '.') }}</dd></div>
-        {% endfor %}
-      </dl>
-      {% endif %}
       {% include "_dil_secici.html" %}
-      <a href="/gizlilik" class="cikis-bag">{{ t("Gizlilik ve hesap", "Privacy & account") }}</a>
-      <a href="/cikis" class="cikis-bag">{{ t("Çıkış yap", "Sign out") }} ↗</a>
+      <nav class="menu-baglantilar">
+        <a href="/listem">♥ {{ t("Listem", "My list") }}</a>
+        <a href="/profil">◍ {{ t("Profilim", "My profile") }}</a>
+        <a href="/gizlilik">🔒 {{ t("Gizlilik ve hesap", "Privacy & account") }}</a>
+        <a href="/cikis">↩ {{ t("Çıkış yap", "Sign out") }}</a>
+      </nav>
+      {% if calismalar or boru %}
+      <details class="menu-ayrinti">
+        <summary>{{ t("Ayrıntılar", "Details") }}</summary>
+        {% if calismalar %}
+        <form method="get" action="{{ yol }}" class="menu-bolum">
+          <label class="etiket-ust" for="calisma-sec">{{ t("kümeleme çalışması", "clustering run") }}</label>
+          <select id="calisma-sec" name="calisma" onchange="this.form.submit()">
+            {% for c in calismalar %}
+              <option value="{{ c.calisma_id }}" {{ 'selected' if c.calisma_id == calisma_id }}>
+                {{ c.calisma_id[:8] }} · {{ c.stabil or 0 }}/{{ c.kume }} {{ t('stabil', 'stable') }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+        {% if boru %}
+        <dl class="menu-bolum menu-sayilar">
+          {% for s in boru %}
+            <div><dt>{{ s.ad }}</dt><dd>{{ '{:,}'.format(s.deger).replace(',', '.') }}</dd></div>
+          {% endfor %}
+        </dl>
+        {% endif %}
+      </details>
+      {% endif %}
       <small class="surum">v{{ surum }}</small>
     </div>
   </details>

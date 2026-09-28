@@ -87,13 +87,45 @@ class Medya:
 
     @property
     def bulundu(self) -> bool:
-        return bool(self.kapak or self.parca_id)
+        return bool(self.kapak or self.sanatci_gorsel or self.parca_id)
 
 
 def _get(istemci: ApiIstemci, yol: str, params: dict | None = None,
          *, yenile: bool = False):
     with _KILIT:
         return istemci.get_json(yol, params or {}, yenile=yenile)
+
+
+def _gercek_gorsel(url: str | None) -> str | None:
+    """Deezer fotoğrafı olmayan sanatçıya da adres veriyor: kimliksiz, gri
+    bir siluet (`/images/artist//...`). Onu görsel saymıyoruz — yer tutucumuz
+    ondan iyi ve "görsel var" demek yalan olur."""
+    if not url or "/artist//" in url or "/cover//" in url:
+        return None
+    return url
+
+
+def sanatcidan(istemci: ApiIstemci, sanatci: str) -> Medya:
+    """Albüm Deezer'da bulunamadığında: sanatçının fotoğrafı ve en popüler
+    ÇALINABİLİR parçası (`yedek=1`, arayüz "yerine bu çalıyor" der).
+
+    Kapak BİLEREK boş: başka bir albümün kapağı önerilen albümü anlatmaz.
+    """
+    govde = _get(istemci, "search/artist", {"q": sanatci, "limit": 5}) or {}
+    for aday in govde.get("data", []):
+        if not _uyuyor_mu(sanatci, aday.get("name", "")):
+            continue
+        medya = Medya(sanatci_gorsel=_gercek_gorsel(aday.get("picture_xl")
+                                                    or aday.get("picture_big")))
+        enler = (_get(istemci, f"artist/{aday['id']}/top", {"limit": 10},
+                      yenile=True) or {}).get("data", [])
+        calinabilir = [p for p in enler if p.get("preview")]
+        if calinabilir:
+            p = calinabilir[0]
+            medya.parca_id, medya.parca_adi = int(p["id"]), p.get("title")
+            medya.onizleme, medya.yedek = p["preview"], 1
+        return medya
+    return Medya()
 
 
 def parcadan(istemci: ApiIstemci, parca_id: int) -> Medya:
@@ -108,8 +140,8 @@ def parcadan(istemci: ApiIstemci, parca_id: int) -> Medya:
     album = bilgi.get("album") or {}
     sanatci = bilgi.get("artist") or {}
     medya = Medya(
-        kapak=album.get("cover_xl") or album.get("cover_big"),
-        sanatci_gorsel=sanatci.get("picture_xl") or sanatci.get("picture_big"),
+        kapak=_gercek_gorsel(album.get("cover_xl") or album.get("cover_big")),
+        sanatci_gorsel=_gercek_gorsel(sanatci.get("picture_xl") or sanatci.get("picture_big")),
         parca_id=int(parca_id), parca_adi=bilgi.get("title"),
         album_adi=album.get("title"), deezer_album=album.get("id"),
         onizleme=bilgi.get("preview") or None,
@@ -151,11 +183,11 @@ def albumden(istemci: ApiIstemci, sanatci: str, album: str) -> Medya:
         if bulunan:
             break
     if not bulunan:
-        return Medya()
+        return sanatcidan(istemci, sanatci)
 
     medya = Medya(
-        kapak=bulunan.get("cover_xl") or bulunan.get("cover_big"),
-        sanatci_gorsel=(bulunan.get("artist") or {}).get("picture_xl"),
+        kapak=_gercek_gorsel(bulunan.get("cover_xl") or bulunan.get("cover_big")),
+        sanatci_gorsel=_gercek_gorsel((bulunan.get("artist") or {}).get("picture_xl")),
         album_adi=bulunan.get("title"), deezer_album=bulunan.get("id"),
     )
     # En popüler parça: albümün "kancası". İlk parça çoğu zaman bir giriş
@@ -190,6 +222,22 @@ def medya_yaz(conn: sqlite3.Connection, aday_id: str, medya: Medya) -> None:
         )
 
 
+#: "Bulunamadı" kaydı bu kadar gün sonra yeniden denenir: Deezer kataloğu
+#: büyüyor, eşleştirme kuralları da gelişiyor (sanatçı fotoğrafı yedeği
+#: 2026-09-28'de eklendi — eski "yok" kayıtları ondan yararlanmalı).
+YENIDEN_DENE_GUN = 7
+
+
+def _yeniden_denenmeli(kayit: dict) -> bool:
+    if kayit.get("durum") != "yok" and (kayit.get("kapak") or kayit.get("sanatci_gorsel")):
+        return False
+    try:
+        tarih = datetime.fromisoformat(kayit["tarih"])
+    except (KeyError, TypeError, ValueError):
+        return True
+    return (datetime.now(timezone.utc) - tarih).days >= YENIDEN_DENE_GUN
+
+
 def medya_coz(
     conn: sqlite3.Connection, aday: dict, *, istemci: ApiIstemci | None = None,
     taze: bool = True,
@@ -203,6 +251,8 @@ def medya_coz(
     """
     istemci = istemci or deezer_medya()
     kayitli = medya_oku(conn, aday["aday_id"])
+    if kayitli is not None and _yeniden_denenmeli(kayitli):
+        kayitli = None
     try:
         if kayitli is None:
             if aday.get("parca_id"):
@@ -232,10 +282,12 @@ def calismayi_isit(conn: sqlite3.Connection, calisma_id: str,
     sorgu = """
         SELECT a.aday_id, a.artist, a.title, MAX(a.parca_id) parca_id, MAX(a.skor) s
           FROM adaylar a LEFT JOIN medya m ON m.aday_id = a.aday_id
-         WHERE a.calisma_id = ? AND m.aday_id IS NULL
+         WHERE a.calisma_id = ?
+           AND (m.aday_id IS NULL OR (m.kapak IS NULL AND m.sanatci_gorsel IS NULL
+                                      AND m.tarih < datetime('now', ?)))
          GROUP BY a.aday_id ORDER BY s DESC
     """
-    satirlar = conn.execute(sorgu, (calisma_id,)).fetchall()
+    satirlar = conn.execute(sorgu, (calisma_id, f"-{YENIDEN_DENE_GUN} days")).fetchall()
     if limit:
         satirlar = satirlar[:limit]
     sayac = {"bakilan": 0, "bulunan": 0}
@@ -254,7 +306,26 @@ def main(argv: list[str] | None = None) -> int:
     ayristirici.add_argument("--db", type=Path, default=VARSAYILAN_DB)
     ayristirici.add_argument("--calisma", help="calisma_id (varsayılan: en yenisi)")
     ayristirici.add_argument("--limit", type=int)
+    ayristirici.add_argument("--tum-kullanicilar", action="store_true",
+                             help="her kullanıcının son çalışmasını ısıt (gece işi)")
     args = ayristirici.parse_args(argv)
+
+    if args.tum_kullanicilar:
+        import python.db as _db
+        for yol in sorted(_db.KULLANICI_KOK.glob("*.sqlite")):
+            if not yol.stem.isdigit():
+                continue
+            conn = _db.baglan_kullanici(int(yol.stem))
+            try:
+                satir = conn.execute(
+                    "SELECT calisma_id FROM clusters ORDER BY calisma_id DESC LIMIT 1").fetchone()
+                if satir:
+                    sayac = calismayi_isit(conn, satir[0], args.limit)
+                    print(f"kullanıcı {yol.stem}: {sayac['bakilan']} aday, "
+                          f"{sayac['bulunan']} medya bulundu")
+            finally:
+                conn.close()
+        return 0
 
     conn = baglan(args.db)
     try:

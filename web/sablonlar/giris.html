@@ -2,8 +2,9 @@
 {% block baslik %}{{ t("Giriş", "Sign in") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
 {% block govde %}
 <div class="kapi hud">
+  <img class="cizim" src="{{ statik('cizim/plak.svg') }}" alt="" width="140" height="130">
   <div class="kapi-marka"><span class="logo">◈</span><b>{{ t("KEŞİF", "KEŞİF") }}</b><span class="marka-alt">{{ t("motoru", "engine") }}</span></div>
-  <h1>{{ t("Tekrar hoş geldin", "Welcome back") }}</h1>
+  <h1>{{ t("Hoş geldin", "Welcome") }}</h1>
   <p class="kapi-alt">{{ t("Kütüphaneni tanıyan ve sana sende olmayanı öneren motor.",
                            "The engine that knows your library and finds what you don't have yet.") }}</p>
 

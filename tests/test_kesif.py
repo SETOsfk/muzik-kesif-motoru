@@ -492,3 +492,26 @@ def test_api_oturumsuz_401_doner():
     from web.sunucu import uygulama
     y = TestClient(uygulama).get("/api/kesfet/deste", follow_redirects=False)
     assert y.status_code == 401
+
+
+def test_albumu_bulunamayan_aday_sanatci_fotografiyla_gelir():
+    """Albüm Deezer'da yoksa kart gri kalmasın: sanatçı fotoğrafı + çalınabilir
+    parça (yedek). Kapak BOŞ kalır — başka albümün kapağı yanlış olurdu.
+    Deezer'ın fotoğrafsız sanatçı silueti görsel sayılmaz."""
+    from python import medya as M
+
+    class _Sahte:
+        def get_json(self, yol, params=None, *, yenile=False):
+            if yol == "search/album":
+                return {"data": []}
+            if yol == "search/artist":
+                return {"data": [{"id": 9, "name": "Car Bomb",
+                                  "picture_xl": "https://e-cdns-images.dzcdn.net/images/artist/abc/1000x1000.jpg"}]}
+            if yol == "artist/9/top":
+                return {"data": [{"id": 5, "title": "Lights Out", "preview": "https://x/p.mp3"}]}
+            return None
+
+    m = M.albumden(_Sahte(), "Car Bomb", "Olmayan Albüm")
+    assert m.kapak is None and m.sanatci_gorsel.endswith("1000x1000.jpg")
+    assert m.parca_id == 5 and m.yedek == 1 and m.bulundu
+    assert M._gercek_gorsel("https://e-cdns-images.dzcdn.net/images/artist//1000x1000.jpg") is None

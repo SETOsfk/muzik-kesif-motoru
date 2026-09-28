@@ -219,7 +219,7 @@ stabilite yordamı yerine kendi kodumuz. Karşılığında algoritmalar görün�
 | Davul ayrıştırma | Python (demucs htdemucs, MPS) | K12 — davulcu karakteri yalnız stem'den ölçülebiliyor |
 | Kümeleme | Python (numpy — FCM, Xie-Beni, PE, bootstrap Jaccard elde yazılı) | K8 — tek çalışma zamanı |
 | Boyut indirgeme | Python (numpy SVD/PCA; `umap-learn` opsiyonel) | Aynı |
-| Arayüz | Starlette + Jinja2 + elle SVG + vanilla JS (deste) | K15, K23 — Neon tek tema, üç sekme; iki dil (K22) |
+| Arayüz | Starlette + Jinja2 + elle SVG + vanilla JS (deste) | K15, K23 — Çizim teması, üç sekme; iki dil (K22) |
 | Dağıtım | Docker (tek imaj, torch CPU) + Caddy (otomatik HTTPS) | Kalıcı disk şart (her karar SQLite'a yazılır) — `docs/yayin.md` |
 | Kalıcılık | SQLite | Tek dosya, taşınabilir |
 | Özetleme | Çıkarımsal (varsayılan) / Ollama / Anthropic API | K2 — takılıp çıkarılabilir, varsayılan 0 TL |
@@ -450,10 +450,11 @@ Sayı dile göre (`sayi`, `yuzde`). **Önbelleğe dile bağlı metin girmez** �
 yalnız sayı ve ham ad (K20 hatasının dil hâli). Veritabanındaki Türkçe
 etiket/ad bir KİMLİK; İngilizcesi gösterimde (`ceviri.py`, `sozluk_en.py`).
 
-### K23 — Tasarım: Neon, tek tema, üç sekme (2026-09-23)
-Altı preset gösterildi, kullanıcı Neon'u seçti ve "kullanıcı preset seçmesin"
-dedi. Tek tema; `stil.css` token disiplini: bileşende sabit renk yok, macenta
-eylem / camgöbeği ölçüm anlamı korunur. SVG paleti (`web/grafik.py:PALET`)
+### K23 — Tasarım: ÇİZİM (2026-09-28; önce Neon), tek tema, üç sekme
+2026-09-28: kullanıcı Neon'dan elle çizim tarzına geçti (krem kâğıt, mürekkep,
+tek turuncu vurgu, Kalam + Patrick Hand kendi sunucumuzdan). Önce: altı preset
+gösterilmiş, Neon seçilmiş ve "kullanıcı preset seçmesin" denmişti. Tek tema; `stil.css` token disiplini: bileşende sabit renk yok, turuncu
+eylem / mürekkep mavisi ölçüm anlamı korunur. SVG paleti (`web/grafik.py:PALET`)
 tokenlarla aynı tutulur. Gezinti: Keşfet · Listem · Kütüphane, altında
 seçenekler; telefonda alt şerit. Görsel yoksa `web/yer_tutucu.py`
 (sanatçıdan türeyen kapak). Animasyon DURUMU taşımaz: kart girişi CSS,
@@ -465,7 +466,7 @@ görünmez bırakıyordu).
 - **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 288 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 289 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.

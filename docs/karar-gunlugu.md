@@ -2395,3 +2395,33 @@ depolama Drive'da, 0 TL.
 
 `python/hf_yedek.py` ve iş akışı duruyor (PRO alınırsa hazır); `HF_SPACE`
 tanımlı olmadıkça iş akışı çalışmaz.
+
+## 2026-09-28 (4) — Tasarım: Neon → ÇİZİM; görseller; menü
+
+Kullanıcının isteği: "cyberpunk vari tasarımdan ziyade daha basit, çizim tarzı,
+sıcak bir tema; her şey elle çizilmiş gibi". Referans olarak siyah-beyaz mürekkep
+çizimli, tek turuncu vurgu renkli sayfalar gösterdi. K23'ün "Neon, tek tema" kararı
+bununla değişti; "tek tema, token disiplini" kısmı aynen duruyor.
+
+- Tokenlar: krem kâğıt, mürekkep siyahı, TEK vurgu turuncu (#e2572b); ölçüm rengi
+  soluk mürekkep mavisi. Parıltı → kaymış mürekkep gölgesi; titrek köşe
+  (`--cizim-kose`); HUD köşeleri ve tarama çizgileri kapatıldı.
+- Yazı: Kalam (başlık) + Patrick Hand (gövde), OFL, KENDİ sunucumuzdan — dış yazı
+  servisi gizlilik notuyla çelişirdi.
+- `web/statik/cizim/plak.svg`: tohumlu, elle çizilmiş görünen plak çizimi.
+- SVG paleti (`web/grafik.py`) tokenlarla eşitlendi.
+
+Ekran görüntüsünden bulunan iki kusur: eğitimdeki yukarı ok `ust` sınıfını
+taşıyordu ve üst çubuğun stilini alıp elipse dönüşüyordu (→ `yukari`); arkadaki
+kartlar 28 px taşıp karar düğmelerinin altına giriyordu (→ destede pay, arka
+kartların yazısı gizli). Ölçüldü: düğme üstü kart altının 10 px (masa) / 6 px
+(telefon) altında.
+
+Görseller: kapak yoksa sanatçı fotoğrafı ana görsel; kapak varken fotoğraf köşede
+yuvarlak. Albüm Deezer'da bulunamazsa `sanatcidan`: fotoğraf + çalınabilir parça
+(kapak BİLEREK boş). Deezer'ın fotoğrafsız siluetleri görsel sayılmıyor.
+"Bulunamadı" kayıtları 7 günde bir yeniden deneniyor. 6 saatlik zamanlanmış iş
+her kullanıcının son çalışmasının görsellerini önceden çözüyor.
+
+Menü: dil, Listem, Profil, Gizlilik, Çıkış; kümeleme çalışması ve sayaçlar
+"Ayrıntılar"da katlı.
