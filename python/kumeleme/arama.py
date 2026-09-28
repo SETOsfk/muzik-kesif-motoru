@@ -232,7 +232,7 @@ def ara(
                     jaccard_min=float(st.jaccard.min()), en_kucuk=int(boyutlar.min()),
                     yontem=yontem)
         aday.gecerli = aday.stabil_oran >= 1.0 and aday.en_kucuk >= esik_boyut
-        if aday.gecerli and album_sanatci is not None and ciftler:
+        if album_sanatci is not None and ciftler:     # geçersizler için de: kıyas tam olsun
             aday.kalabalik = kalabalik_uyumu(atama, album_sanatci, ciftler)
         adaylar.append(aday)
         return atama
@@ -351,9 +351,15 @@ def rapor(adaylar: list[Aday], secilen: Aday | None, n: int, *, simdiki: Aday | 
                  "iyimserdir (gömme tüm veriden kuruluyor)."]
     if simdiki:
         kal = f"{simdiki.kalabalik:.2f}" if simdiki.kalabalik is not None else "—"
+        neden = []
+        if simdiki.stabil_oran < 1.0:
+            neden.append(f"tarzların %{round((1 - simdiki.stabil_oran) * 100)}'i bootstrap'ta "
+                         f"oynak (en zayıf Jaccard {simdiki.jaccard_min:.2f})")
+        if simdiki.en_kucuk < asgari_boyut(n):
+            neden.append(f"en küçük tarz {simdiki.en_kucuk} albüm (< {asgari_boyut(n)})")
         satirlar += ["", f"Şimdiki ayar ({_ayar_metni(simdiki)}): siluet "
                      f"{simdiki.siluet:.3f}, kalabalık {kal}, "
-                     f"{'geçerli' if simdiki.gecerli else 'GEÇERSİZ'}."]
+                     f"{'geçerli' if simdiki.gecerli else 'GEÇERSİZ — ' + '; '.join(neden)}."]
     if secilen:
         satirlar += ["", f"Seçilen: {_ayar_metni(secilen)}.",
                      "Sonraki adım: `python -m python.degerlendirme` ile eski ve yeni "
