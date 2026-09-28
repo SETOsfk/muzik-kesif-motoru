@@ -2689,3 +2689,25 @@ açıkça üstün değil. Kalabalık verisi olmadan eşitlik bozucu «en büyük
 9 grupluk senaryoda bir fazla (c=10) seçti — gerçek veride kalabalık uyumu
 bu kararı veriyor. Yapay veri gerçek kütüphanenin yerini tutmaz: asıl karar
 Mac'teki rapor + K19 değerlendirmesiyle.
+
+## 2026-09-28 (16) — Gerçek veride arama: spektral kazandı, eski çalışma geçersizdi
+
+Mac'te, Seto'nun kütüphanesinde (302 albüm × 1319 öznitelik, 935 kalabalık çifti):
+
+| yöntem | en iyi geçerli | bulanık siluet | kalabalık uyumu | geçerli aday |
+|---|---|---:|---:|---:|
+| PCA | 10 boyut, m 1,3, c 10 | 0,136 | 1,72 | 79/220 |
+| spektral | 12 boyut, m 1,4, c 12 | **0,142** | **2,05** | 129/220 |
+| konsensüs | m 1,5, c 11 | 0,107 | 1,77 | 40/44 |
+
+- **Etkin çalışma (PCA 8, m 1,4, c 12) GEÇERSİZDİ:** tarzların %33'ü bootstrap'ta
+  oynak, en zayıf Jaccard 0,37 (siluet 0,135, kalabalık 1,84). Kullanıcının
+  «bazı önerilerden emin değilim» gözleminin muhtemel kaynağı.
+- Seçilen yazıldı: `20260928T190536-c12-m1.4-spektral12`, 50 bootstrap'ta
+  12/12 tarz stabil. `tasi`: 4 ad taşındı, 4 ad taşınamadı (Jaccard < 0,5),
+  100 karar taşındı.
+- Eski çalışmanın K19 ölçümü (`--eksen` kapsamı): melez @50 0,08, yüzdelik
+  0,118; liste @50 0,07; ses @50 0,05. YENİ çalışmanın ölçümü henüz yok —
+  ilk deneme yer tutucu kimlikle koşuldu ve boş eksen haritasıyla rastgeleye
+  yakın sonuç verdi (eksen kapsamı 0/147). `degerlendirme` artık bilinmeyen
+  kimlikte duruyor.

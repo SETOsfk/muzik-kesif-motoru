@@ -478,7 +478,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.1.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 319 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 320 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.
@@ -487,8 +487,10 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   arka planda ısıtılır.
 - **Performans (ölçüldü):** `/oneriler` 1,7–3,4 sn → ~0,2 sn (sıcak); deste
   partisi 0,14 sn; açılıştan sonraki ilk deste 0,17 sn.
-- **Seto'nun etkin çalışması `20260923T103819-c12-m1.4-pca`.** Yeniden
-  kümelemede HER ZAMAN `python -m python.kumeleme.tasi` çalıştırılır.
+- **Seto'nun etkin çalışması `20260928T190536-c12-m1.4-spektral12`** (arama
+  seçti; önceki `20260923T103819-c12-m1.4-pca` geçersizdi — karar günlüğü (16)).
+  Yeniden kümelemede HER ZAMAN adlar taşınır (`arama --yaz` bunu kendi yapar;
+  elle: `python -m python.kumeleme.tasi`).
 - **2026-09-23 olayı:** kum havuzunda koşan bir değerlendirme gerçek
   `1.sqlite`'a 11 boş gölge tablo kurdu; onarıldı, yedek
   `data/db/kullanici/1.sqlite.golge-oncesi-20260923`. `baglan()` artık
@@ -512,10 +514,9 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
--1. Mac'te `python -m python.kumeleme.arama` (rapor; üç yöntem: pca, spektral,
-   konsensüs — karar günlüğü (15)) → beğenilirse `--yaz`;
-   sonra `python -m python.degerlendirme` ile eski/yeni kıyası (K19). Arama
-   gerçek veride HİÇ çalışmadı (karar günlüğü 2026-09-28 (13)).
+-1. Yeni spektral çalışmanın K19 ölçümü: `python -m python.degerlendirme
+   --calisma 20260928T190536-c12-m1.4-spektral12`; eski çalışmanın sayıları
+   karar günlüğü (16)'da. Kötüyse spektral c=11 (en zayıf Jaccard 0,84) denenir.
 0. Yayını aç ve §6 denetim listesini gerçek cihazda yürüt. Sonra liste yolunun
    isabetini ilk kullanıcıların kararlarıyla ölç (ölçülmedi — karar günlüğü 2026-09-28).
 1. Kaydırarak karar biriktir: kaynak payı (K21) ve geri bildirim tavanı

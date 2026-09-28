@@ -776,6 +776,17 @@ def main(argv: list[str] | None = None) -> int:
 
     SesErisimi.kural = args.ses_kural
     conn = baglan(args.db)
+    # Bilinmeyen çalışma kimliği SESSİZCE boş eksen haritası veriyordu ve
+    # sonuçlar rastgeleye yakın çıkıyordu (2026-09-28: yer tutucu kimlikle
+    # koşuldu, «eksen kapsamı 0/147»). Ölçmeden önce dur.
+    if args.calisma and not conn.execute(
+            "SELECT 1 FROM memberships WHERE calisma_id = ? LIMIT 1", (args.calisma,)).fetchone():
+        mevcut = [r[0] for r in conn.execute(
+            "SELECT DISTINCT calisma_id FROM clusters ORDER BY calisma_id DESC LIMIT 5")]
+        conn.close()
+        print(f"HATA: '{args.calisma}' diye bir kümeleme çalışması yok. Son çalışmalar:",
+              *mevcut, sep="\n  ")
+        return 2
     try:
         sonuc = calistir(conn, limit=args.limit, ayrinti=args.ayrinti,
                          kapsam=args.kapsam, olcut=args.olcut,

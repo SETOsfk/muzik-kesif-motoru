@@ -246,3 +246,15 @@ if __name__ == "__main__":
         print(f"{len(_kalan)} test kaldı")
         raise SystemExit(1)
     print("tüm testler geçti")
+
+
+def test_bilinmeyen_calisma_kimligi_durdurur(tmp_path, monkeypatch, capsys):
+    """Yer tutucu kimlikle koşulan ölçüm sessizce rastgele sonuç veriyordu."""
+    import python.db as D
+    from python import degerlendirme
+
+    monkeypatch.setattr(D, "KULLANICI_KOK", tmp_path / "kullanici")
+    monkeypatch.setattr(D, "VARSAYILAN_ORTAK", tmp_path / "ortak.sqlite")
+    D.baglan_kullanici(1).close()
+    kod = degerlendirme.main(["--db", str(D.kullanici_db(1)), "--calisma", "YENI_KIMLIK"])
+    assert kod == 2 and "YENI_KIMLIK" in capsys.readouterr().out
