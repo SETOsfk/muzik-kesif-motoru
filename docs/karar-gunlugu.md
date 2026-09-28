@@ -2374,3 +2374,24 @@ aynı jetonla çalışıyor ve veri ~50 MB. Drive gerekirse elle ek yedek olarak
 Yayın: `.github/workflows/hf-space.yml`, main'e her gönderimde Space'i günceller
 (`HF_SPACE` değişkeni tanımlı değilse çalışmaz). Space `KESIF_HTTPS=1`i
 imajdan alır.
+
+## 2026-09-28 (3) — Yayın yeri: Mac + Tailscale Funnel, depolama Drive
+
+Hugging Face ücretsiz Docker barındırmayı kapattı (402: "Docker Spaces on free
+cpu-basic requires a PRO subscription"). Kullanıcının kararı: iş Mac'te,
+depolama Drive'da, 0 TL.
+
+- `scripts/servis.sh yayinla`: launchd + `caffeinate -s` (şarjda uyumaz),
+  Tailscale Funnel ile sabit HTTPS bağlantı, 6 saatte bir Drive'a yedek.
+- **Canlı SQLite Drive'a konmaz**: Drive yazılan dosyayı eşitlerse bozabilir.
+  Sunum verisi ~50 MB Mac'te; anlık kopyalar Drive'da (en yeni 28).
+- `drivea-tasi`: sunumda okunmayan arşivler (stemler 1,1 GB, FMA 1,5 GB, eski
+  yedekler) Drive'a taşınır, yerine kısayol konur.
+- Bulunan hata: Türkçe Drive klasörü «Drive'ım»daki kesme işareti sqlite3
+  `.backup '…'` tırnağını bozuyordu → kopya önce geçici klasörde alınıyor.
+- Tünel ardında her istek 127.0.0.1'den gelebildiği için giriş hız sınırında
+  döngü adresi IP sayacına girmiyor (herkesi tek kişi sayıp kilitlerdi);
+  hesap sayacı yerinde.
+
+`python/hf_yedek.py` ve iş akışı duruyor (PRO alınırsa hazır); `HF_SPACE`
+tanımlı olmadıkça iş akışı çalışmaz.

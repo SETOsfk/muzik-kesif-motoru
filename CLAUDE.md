@@ -480,7 +480,7 @@ görünmez bırakıyordu).
   `1.sqlite`'a 11 boş gölge tablo kurdu; onarıldı, yedek
   `data/db/kullanici/1.sqlite.golge-oncesi-20260923`. `baglan()` artık
   `kullanici/` klasöründeki dosyaya tam şema kurmuyor.
-- **Yayın (güncel):** Hugging Face Spaces + özel veri deposu yedeği (`python/hf_yedek.py`, `.github/workflows/hf-space.yml`). Eski not: kod ve paket hazır, sunucu henüz
+- **Yayın (güncel, 2026-09-28):** Mac + Tailscale Funnel, yedek Drive (`scripts/servis.sh yayinla`). HF Spaces PRO istediği için bırakıldı; yedek kodu (`python/hf_yedek.py`, `.github/workflows/hf-space.yml`). Eski not: kod ve paket hazır, sunucu henüz
   açılmadı (hesap kullanıcının işi). Yol: Oracle Always Free ARM + `docker compose`
   (`docs/yayin.md`). Veri: `scripts/yayin_paketi.sh` (~50 MB, kişisel veri içerir).
   İmaj derlemesi ve gerçek aktarım bulut oturumunda SINANAMADI (Docker servisi yok,

@@ -1534,7 +1534,12 @@ async def giris_gonder(istek):
     # yalnız hesap sayılırsa saldırgan hesapları sırayla deneyip her birinde
     # sınırın altında kalır.
     ip = _istemci_ip(istek)
-    for anahtar in (f"ip:{ip}", f"hesap:{eposta}"):
+    # Yerel tünel (Tailscale Funnel) ardında her istek 127.0.0.1'den gelir ve
+    # iletilen adres başlığı gelmeyebilir: IP sayacı o zaman BÜTÜN kullanıcıları
+    # tek kişi sayıp herkesi kilitlerdi. Döngü adresinde yalnız hesap sayılır.
+    yerel = ip in ("127.0.0.1", "::1", "localhost")
+    anahtarlar = ([] if yerel else [f"ip:{ip}"]) + [f"hesap:{eposta}"]
+    for anahtar in anahtarlar:
         kalan = kilitli_mi(anahtar)
         if kalan:
             return RedirectResponse(f"/giris?hata=kilit&sn={kalan}",
@@ -1544,13 +1549,13 @@ async def giris_gonder(istek):
     try:
         kullanici_id = giris_dogrula(conn, eposta, parola)
         if kullanici_id is None:
-            deneme_kaydet(f"ip:{ip}")
-            deneme_kaydet(f"hesap:{eposta}")
+            for anahtar in anahtarlar:
+                deneme_kaydet(anahtar)
             # Tek mesaj: "kullanıcı yok" ile "parola yanlış" ayrımı hangi
             # e-postaların kayıtlı olduğunu ele verir.
             return RedirectResponse("/giris?hata=1", status_code=303)
-        denemeleri_sifirla(f"ip:{ip}")
-        denemeleri_sifirla(f"hesap:{eposta}")
+        for anahtar in anahtarlar:
+            denemeleri_sifirla(anahtar)
         jeton = oturum_ac(conn, kullanici_id)
     finally:
         conn.close()
