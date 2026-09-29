@@ -350,7 +350,8 @@ def test_spotify_yalniz_okuma_kapsami_istiyor():
         assert "modify" not in kapsam and "write" not in kapsam, kapsam
     assert set(KAPSAMLAR) == {
         "user-read-email", "user-library-read", "user-top-read",
-        "user-read-recently-played"}, KAPSAMLAR
+        "user-read-recently-played", "playlist-read-private",
+        "playlist-read-collaborative"}, KAPSAMLAR
 
 
 def test_spotify_durumu_tek_kullanimlik():

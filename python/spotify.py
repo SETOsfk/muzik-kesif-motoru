@@ -31,6 +31,11 @@ albümlerini, en çok dinlediğin sanatçıları ve son çaldıklarını okurum"
 - `user-top-read`            → en çok dinlenen sanatçılar
 - `user-read-recently-played`→ son çalınanlar
 - `user-read-email`          → hesap eşleme anahtarı (aşağıya bakınız)
+- `playlist-read-private`,
+  `playlist-read-collaborative` → kullanıcının KENDİ çalma listeleri; her
+  parçanın eklenme tarihi «ne kadar geriye gidelim?» sürgüsünü besliyor
+  (2026-09-28). Takip edilen editör listeleri alınmıyor: oradaki tarih
+  küratörün eklediği an, kullanıcının zevki değil.
 
 E-posta şunun için: kullanıcı önce e-postayla hesap açtıysa ve sonra Spotify
 ile bağlanırsa, iki hesabı ayırmak yerine aynı hesaba bağlamak gerekiyor.
@@ -60,6 +65,8 @@ KAPSAMLAR = (
     "user-library-read",
     "user-top-read",
     "user-read-recently-played",
+    "playlist-read-private",
+    "playlist-read-collaborative",
 )
 
 #: Spotify panelindeki "Redirect URI" ile HARFİ HARFİNE aynı olmalı.
@@ -280,4 +287,53 @@ def son_calinanlar(erisim: str, *, azami: int = 50) -> list[dict[str, Any]]:
             "album": (parca.get("album") or {}).get("name"),
             "calma_zamani": oge.get("played_at"),
         })
+    return cikti
+
+
+def calma_listelerim(erisim: str, spotify_id: str | None, *,
+                     azami: int = 40) -> list[dict[str, Any]]:
+    """Kullanıcının sahibi olduğu ya da ortak düzenlediği çalma listeleri."""
+    cikti = []
+    for l in _sayfalar(erisim, "me/playlists", {}, 200):
+        sahip = (l.get("owner") or {}).get("id")
+        if sahip != spotify_id and not l.get("collaborative"):
+            continue
+        toplam = ((l.get("tracks") or l.get("items") or {}).get("total")) or 0
+        if not (l.get("id") and toplam):
+            continue
+        cikti.append({"liste_id": l["id"], "ad": l.get("name") or "—", "toplam": toplam})
+        if len(cikti) >= azami:
+            break
+    return cikti
+
+
+def liste_parcalari(erisim: str, liste_id: str, *, toplam: int,
+                    azami: int = 300) -> list[dict[str, Any]]:
+    """Listenin EN SON eklenen `azami` parçası, eklenme tarihiyle.
+
+    Spotify listeyi eklenme sırasıyla veriyor; baştan okumak en eski
+    parçaları getirirdi. Sondan `azami` kadarı okunur.
+    """
+    cikti = []
+    ofset = max(0, toplam - azami)
+    while ofset < toplam:
+        veri = _get(erisim, f"playlists/{liste_id}/tracks",
+                    {"limit": 50, "offset": ofset})
+        ogeler = veri.get("items") or []
+        if not ogeler:
+            break
+        for oge in ogeler:
+            parca = oge.get("track") or oge.get("item") or {}
+            if parca.get("type", "track") != "track":
+                continue
+            sanatcilar = [s.get("name") for s in parca.get("artists") or [] if s.get("name")]
+            albom = parca.get("album") or {}
+            if not (sanatcilar and albom.get("name")):
+                continue
+            cikti.append({
+                "sanatci": sanatcilar[0], "album": albom["name"],
+                "yil": (albom.get("release_date") or "")[:4] or None,
+                "eklenme": oge.get("added_at"),
+            })
+        ofset += len(ogeler)
     return cikti

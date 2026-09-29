@@ -51,6 +51,76 @@
     <p class="kapi-ipucu">{{ t("En uzun adım ses gömüleri: her albüm için 30 saniyelik bir önizleme indirilip dinleniyor (~2,5 sn). Ölçtük: 52 albüm 3,5 dakika sürdü; 300 albüm için 15–20 dakika bekle.",
                                "The longest step is the sound embeddings: a 30-second preview is downloaded and analysed for each album (~2.5 s). Measured: 52 albums took 3.5 minutes, so expect 15–20 minutes for 300.") }}</p>
   </article>
+  {% elif zaman %}
+  {# Zaman penceresi (2026-09-28): Spotify okundu, hat kullanıcının seçimini
+     bekliyor. Sürgü çekildikçe pencere dışındaki sanatçılar söner, listeler
+     kaybolur. Hesap uygulama.js'te; sayılar sunucudaki `zamana_gore` ile
+     aynı kuralı izler (tarihi bilinmeyen yalnız «hepsi»nde girer). #}
+  {% set etiketler = {
+    1: t("Son 1 ay", "Last month"), 3: t("Son 3 ay", "Last 3 months"),
+    6: t("Son 6 ay", "Last 6 months"), 12: t("Son 1 yıl", "Last year"),
+    24: t("Son 2 yıl", "Last 2 years"), 36: t("Son 3 yıl", "Last 3 years"),
+    60: t("Son 5 yıl", "Last 5 years"), 0: t("Hepsi", "Everything"),
+  } %}
+  {% macro once(gun) -%}
+    {%- if gun is none -%}{{ t("tarih yok", "no date") }}
+    {%- elif gun < 31 -%}{{ t("bu ay", "this month") }}
+    {%- elif gun < 365 -%}{{ t((gun // 30) ~ " ay önce", (gun // 30) ~ " months ago") }}
+    {%- else -%}{{ t((gun // 365) ~ " yıl önce", (gun // 365) ~ (" year ago" if gun // 365 == 1 else " years ago")) }}
+    {%- endif -%}
+  {%- endmacro %}
+  <article class="adim zaman" id="zaman">
+    <h2>{{ t("Ne kadar geriye gidelim?", "How far back should we go?") }}</h2>
+    <p>{{ t("Spotify'daki bazı kayıtları belki yıllardır dinlemiyorsun. Sürgüyü çek: pencerenin dışında kalan sanatçılar söner, listeler kaybolur ve zevkine sayılmaz.",
+            "Some of what's in your Spotify you may not have played in years. Drag the slider: artists outside the window fade out, playlists drop away, and neither counts towards your taste.") }}</p>
+    <form method="post" action="/api/aktar/zaman" class="zaman-form">
+      <div class="zaman-baslik">
+        <b id="zaman-etiket">{{ etiketler[0] }}</b>
+        <span id="zaman-sayilar" aria-live="polite"></span>
+      </div>
+      <input type="range" id="zaman-surgu" min="0" max="{{ duraklar|length - 1 }}" step="1"
+             value="{{ duraklar|length - 1 }}" aria-label="{{ t('Zaman penceresi', 'Time window') }}">
+      <div class="zaman-olcek" aria-hidden="true">
+        {% for ay in duraklar %}<span>{{ (ay ~ t(" ay", " mo")) if ay and ay < 12 else ((ay // 12) ~ t(" yıl", " yr")) if ay else "∞" }}</span>{% endfor %}
+      </div>
+      <input type="hidden" name="ay" id="zaman-ay" value="0">
+
+      <h3 class="etiket-ust">{{ t("Sanatçıların", "Your artists") }}</h3>
+      <ul class="zaman-sanatcilar">
+        {% for s_ in zaman.sanatcilar[:150] %}<li data-gun="{{ s_.gun if s_.gun is not none else '' }}">{{ s_.ad }}</li>{% endfor %}
+        {% if zaman.sanatcilar|length > 150 %}<li class="zaman-fazla">+{{ zaman.sanatcilar|length - 150 }}</li>{% endif %}
+      </ul>
+
+      {% if zaman.listeler %}
+      <h3 class="etiket-ust">{{ t("Çalma listelerin", "Your playlists") }}</h3>
+      <ul class="zaman-listeler">
+        {% for l in zaman.listeler %}
+        <li data-gun="{{ l.gun if l.gun is not none else '' }}"><b>{{ l.ad }}</b>
+          <small>{{ l.toplam }} {{ t("parça", "tracks") }} · {{ t("son ekleme", "last added") }} {{ once(l.gun) }}</small></li>
+        {% endfor %}
+      </ul>
+      {% elif zaman.listeler_okunamadi %}
+      <p class="kapi-ipucu">{{ t("Çalma listelerini okuyamadım: Spotify bağlantın bu izin eklenmeden önce verilmiş.",
+                                 "I couldn't read your playlists: your Spotify connection predates that permission.") }}
+        <a href="/giris/spotify">{{ t("Yeniden bağlan", "Reconnect") }}</a></p>
+      {% endif %}
+
+      <p class="kapi-hata" id="zaman-uyari" hidden>{{ t("Bu pencerede çok az şey kalıyor; tarzlarını çıkarabilmem için en az " ~ asgari_album ~ " albüm gerekiyor. Pencereyi genişlet.",
+                                                        "Too little is left in this window; I need at least " ~ asgari_album ~ " albums to work out your styles. Widen the window.") }}</p>
+      <button class="birincil" type="submit" id="zaman-dugme">{{ t("Bu pencereyle aktar", "Import with this window") }}</button>
+      <p class="kapi-ipucu">{{ t("«En çok dinlediklerin» için Spotify gün vermiyor; kısa, orta ve uzun dönem yaklaşık 1 ay, 6 ay ve 1 yıl sayılıyor.",
+                                 "Spotify gives no dates for your top artists; its short, medium and long terms are treated as roughly 1 month, 6 months and 1 year.") }}</p>
+    </form>
+    <script type="application/json" id="zaman-veri">{{ {
+      "duraklar": duraklar,
+      "adlar": etiketler,
+      "albumler": zaman.albumler,
+      "sanatcilar": zaman.sanatcilar|map(attribute="gun")|list,
+      "listeler": zaman.listeler|map(attribute="gun")|list,
+      "asgari": asgari_album,
+      "birim": [t("sanatçı", "artists"), t("albüm", "albums"), t("liste", "playlists")],
+    }|tojson }}</script>
+  </article>
   {% else %}
 
   {% if aktarim and aktarim.durum == 'hata' %}

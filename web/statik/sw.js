@@ -13,7 +13,7 @@
 // v3 (2026-09-23): tema sistemi, Keşfet destesi (`kesfet.js`) kabuğa girdi.
 // v4 (2026-09-28): İKİ AY teması; eski yazı dosyaları önbellekten silinsin.
 // v5 (2026-09-28): çevrimdışı sayfası açıklayıcı ve kendiliğinden yeniden deniyor.
-const SURUM = "kesif-v6";
+const SURUM = "kesif-v7";
 const KABUK = [
   "/statik/stil.css",
   "/statik/uygulama.js",

@@ -238,6 +238,11 @@ class Ilerleme:
         self.veri["ozet"].update(alanlar)
         self._yaz()
 
+    def secim_bekle(self) -> None:
+        """Önizleme hazır; hat kullanıcının zaman penceresini bekliyor."""
+        self.veri.update(durum="secim", asama="secim", bitti=_simdi())
+        self._yaz()
+
     def bitir(self, *, hata: str | None = None) -> None:
         self.veri.update(durum="hata" if hata else "bitti", bitti=_simdi(),
                          hata=hata, asama=self.veri["asama"] if hata else "bitti")
@@ -321,6 +326,196 @@ def spotify_kayitlari(erisim: str) -> tuple[list[dict], list[str]]:
                 kapsanan.add(anahtar)
                 sanatcilar.append(s["sanatci"])
     return kayitlar, sanatcilar
+
+
+# --------------------------------------------------------------------------- #
+# 1b. Zaman penceresi: «ne kadar geriye gidelim?» (2026-09-28)
+# --------------------------------------------------------------------------- #
+#
+# Kullanıcı geri bildirimi: «bazı şarkıları en son 2 yıl önce dinledim.»
+# Kaydedilmiş ama artık dinlenmeyen albüm bugünkü zevki temsil etmiyor.
+# Aktarım iki adıma bölündü: önce Spotify okunur ve ÖNİZLEME yazılır
+# (her sinyalin kaç gün önce olduğu), kullanıcı sürgüyle pencereyi seçer,
+# sonra hat yalnız pencere içindekilerle çalışır.
+#
+# Tarih kaynakları: kayıtlı albüm → kaydetme tarihi; son çalınan → çalma
+# anı; kendi çalma listesi → parçanın eklenme tarihi; en çok dinlenenler →
+# Spotify'ın kendi aralıkları (kısa ≈ 4 hafta, orta ≈ 6 ay, uzun ≈ 1 yıl).
+# «Uzun» için tarih yok; bir yıl diye yaklaşıklanıyor ve arayüzde yazılı.
+
+#: Spotify'ın «en çok dinlenenler» aralıklarının gün karşılığı (yaklaşık).
+EN_COK_GUN = {"short_term": 28, "medium_term": 182, "long_term": 365}
+#: Okunacak en çok kendi liste sayısı ve liste başına en son parça sayısı.
+LISTE_AZAMI = 40
+LISTE_PARCA_AZAMI = 300
+#: Listelerden gelen albüm tavanı (her biri gömü ister, ~2,5 sn).
+LISTE_ALBUM_AZAMI = 250
+#: Sürgünün durakları, ay. 0 = hepsi.
+ZAMAN_DURAKLARI = (1, 3, 6, 12, 24, 36, 60, 0)
+
+
+def onizleme_yolu(kullanici_id: int) -> Path:
+    return _db.KULLANICI_KOK / f"{kullanici_id}.spotify.json"
+
+
+def _gun_once(tarih: str | None, simdi: datetime) -> int | None:
+    if not tarih:
+        return None
+    try:
+        an = datetime.fromisoformat(tarih.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if an.tzinfo is None:
+        an = an.replace(tzinfo=timezone.utc)
+    return max(0, (simdi - an).days)
+
+
+def spotify_onizleme(erisim: str, *, simdi: datetime | None = None) -> dict:
+    """Spotify'dan her sinyali «kaç gün önce» bilgisiyle oku. Hat çalışmaz."""
+    from python.spotify import (
+        SpotifyHatasi, ben, calma_listelerim, en_cok_sanatcilar,
+        kayitli_albumler, liste_parcalari, son_calinanlar,
+    )
+
+    simdi = simdi or datetime.now(timezone.utc)
+    albumler = [
+        {"sanatci": a["sanatci"], "album": a["album"], "yil": yil_ayikla(a.get("yil")),
+         "gun": _gun_once(a.get("eklenme"), simdi), "kaynak": "spotify_kayitli"}
+        for a in kayitli_albumler(erisim)
+    ]
+    for p in son_calinanlar(erisim):
+        if p.get("album"):
+            albumler.append({"sanatci": p["sanatci"], "album": p["album"], "yil": None,
+                             "gun": _gun_once(p.get("calma_zamani"), simdi),
+                             "kaynak": "spotify_son"})
+    en_cok = [
+        {"sanatci": s["sanatci"], "gun": gun}
+        for aralik, gun in EN_COK_GUN.items()
+        for s in en_cok_sanatcilar(erisim, aralik=aralik)
+    ]
+    listeler, okunamadi = [], False
+    try:
+        kimlik = ben(erisim)["spotify_id"]
+        for l in calma_listelerim(erisim, kimlik, azami=LISTE_AZAMI):
+            parcalar = [
+                {"sanatci": p["sanatci"], "album": p["album"], "yil": yil_ayikla(p.get("yil")),
+                 "gun": _gun_once(p.get("eklenme"), simdi)}
+                for p in liste_parcalari(erisim, l["liste_id"], toplam=l["toplam"],
+                                         azami=LISTE_PARCA_AZAMI)
+            ]
+            listeler.append({"ad": l["ad"], "toplam": l["toplam"], "parcalar": parcalar})
+    except SpotifyHatasi:
+        # Eski bağlantının yetkisinde liste kapsamı yok (403). Hat listesiz
+        # sürer; arayüz yeniden bağlanmayı önerir.
+        okunamadi = True
+    return {"okundu": simdi.isoformat(timespec="seconds"), "albumler": albumler,
+            "en_cok": en_cok, "listeler": listeler, "listeler_okunamadi": okunamadi}
+
+
+def _pencerede(gun: int | None, sinir: int | None) -> bool:
+    """`sinir` None = hepsi. Tarihi bilinmeyen sinyal yalnız «hepsi»nde girer."""
+    return sinir is None or (gun is not None and gun <= sinir)
+
+
+def ay_gun(ay: int) -> int | None:
+    """Sürgü durağı (ay) → gün sınırı; 0 → None (hepsi)."""
+    return None if not ay else round(ay * 30.44)
+
+
+def zamana_gore(onizleme: dict, sinir: int | None) -> tuple[list[dict], list[str]]:
+    """Önizlemeden pencere içindeki (albüm kayıtları, albümsüz sanatçılar).
+
+    Listeden gelen parçalar sanatçı başına TEK albüme iner (o listede en çok
+    parçası olan): 300 parçalık bir liste 200 albüm getirip her birine gömü
+    istemesin.
+    """
+    kayitlar = [
+        {k: a[k] for k in ("sanatci", "album", "yil", "kaynak")}
+        for a in onizleme.get("albumler", []) if _pencerede(a.get("gun"), sinir)
+    ]
+    kapsanan = {normalize_esleme(k["sanatci"]) for k in kayitlar}
+
+    sayac: dict[tuple[str, str], list] = {}
+    for l in onizleme.get("listeler", []):
+        for p in l.get("parcalar", []):
+            if not _pencerede(p.get("gun"), sinir):
+                continue
+            anahtar = (normalize_esleme(p["sanatci"]), normalize_esleme(p["album"]))
+            if anahtar in sayac:
+                sayac[anahtar][0] += 1
+            else:
+                sayac[anahtar] = [1, p]
+    en_iyi: dict[str, list] = {}
+    for (sanatci, _), (adet, p) in sayac.items():
+        if sanatci in kapsanan:
+            continue
+        if sanatci not in en_iyi or adet > en_iyi[sanatci][0]:
+            en_iyi[sanatci] = [adet, p]
+    for adet, p in sorted(en_iyi.values(), key=lambda x: -x[0])[:LISTE_ALBUM_AZAMI]:
+        kayitlar.append({"sanatci": p["sanatci"], "album": p["album"],
+                         "yil": p.get("yil"), "kaynak": "spotify_liste"})
+        kapsanan.add(normalize_esleme(p["sanatci"]))
+
+    sanatcilar = []
+    for s in onizleme.get("en_cok", []):
+        anahtar = normalize_esleme(s["sanatci"])
+        if _pencerede(s.get("gun"), sinir) and anahtar not in kapsanan:
+            kapsanan.add(anahtar)
+            sanatcilar.append(s["sanatci"])
+    return kayitlar, sanatcilar
+
+
+def onizleme_ozeti(onizleme: dict) -> dict:
+    """Sürgü sayfası için küçük özet: sanatçı başına en yakın gün, liste
+    başına son eklenme günü, albüm günleri. Adlar ham (K22: dile bağlı
+    metin yok)."""
+    sanatci: dict[str, list] = {}
+
+    def isle(ad: str, gun: int | None):
+        anahtar = normalize_esleme(ad)
+        if not anahtar:
+            return
+        g = 10 ** 6 if gun is None else gun
+        if anahtar not in sanatci:
+            sanatci[anahtar] = [ad, g, 0]
+        sanatci[anahtar][1] = min(sanatci[anahtar][1], g)
+        sanatci[anahtar][2] += 1
+
+    for a in onizleme.get("albumler", []):
+        isle(a["sanatci"], a.get("gun"))
+    for s in onizleme.get("en_cok", []):
+        isle(s["sanatci"], s.get("gun"))
+    listeler = []
+    for l in onizleme.get("listeler", []):
+        gunler = [p["gun"] for p in l.get("parcalar", []) if p.get("gun") is not None]
+        for p in l.get("parcalar", []):
+            isle(p["sanatci"], p.get("gun"))
+        listeler.append({"ad": l["ad"], "toplam": l.get("toplam", 0),
+                         "gun": min(gunler) if gunler else None})
+    sirali = sorted(sanatci.values(), key=lambda s: (s[1], -s[2]))
+    return {
+        "sanatcilar": [{"ad": ad, "gun": None if g >= 10 ** 6 else g, "sayi": n}
+                       for ad, g, n in sirali],
+        "listeler": sorted(listeler, key=lambda l: (l["gun"] is None, l["gun"] or 0)),
+        "albumler": [a.get("gun") for a in onizleme.get("albumler", [])
+                     if a["kaynak"] == "spotify_kayitli"],
+        "listeler_okunamadi": onizleme.get("listeler_okunamadi", False),
+    }
+
+
+def pencere_disini_sil(conn: sqlite3.Connection, kayitlar: list[dict]) -> int:
+    """Daha dar bir pencereyle yeniden aktarımda, pencere dışına düşen
+    SPOTIFY kaynaklı albümleri kütüphaneden çıkar. Elle liste ya da yerel
+    taramayla gelenlere dokunulmaz."""
+    icerde = {(normalize_esleme(k["sanatci"]), normalize_esleme(k["album"])) for k in kayitlar}
+    sil = [
+        r[0] for r in conn.execute(
+            "SELECT album_id, artist, title FROM albums WHERE kaynak LIKE 'spotify%'")
+        if (normalize_esleme(r[1]), normalize_esleme(r[2])) not in icerde
+    ]
+    with conn:
+        conn.executemany("DELETE FROM albums WHERE album_id = ?", [(a,) for a in sil])
+    return len(sil)
 
 
 # --------------------------------------------------------------------------- #
@@ -611,6 +806,7 @@ def calistir(
     kullanici_id: int, *, kayitlar: list[dict] | None = None,
     sanatcilar: list[str] | None = None,
     baslangic: str = "spotify", sessiz: bool = False,
+    spotify_penceresi: bool = False,
 ) -> dict:
     """Hattı `baslangic` aşamasından sona kadar çalıştır.
 
@@ -620,7 +816,8 @@ def calistir(
     """
     ilerleme = Ilerleme(kullanici_id, sessiz=sessiz)
     # Arayüz listeyle gelen kullanıcıya «Spotify okunuyor» aşamasını göstermesin.
-    ilerleme.veri["kaynak"] = "spotify" if kayitlar is None else "liste"
+    ilerleme.veri["kaynak"] = ("spotify" if kayitlar is None or spotify_penceresi
+                               else "liste")
     ilerleme._yaz()
     atla = ASAMALAR.index(baslangic)
     conn = baglan_kullanici(kullanici_id)
@@ -629,6 +826,10 @@ def calistir(
             if kayitlar is None:
                 ilerleme.asama("spotify")
                 kayitlar, sanatcilar = spotify_kayitlari(erisim_jetonu(kullanici_id))
+                adet, kaynak = 1, "spotify_en_cok"
+            elif spotify_penceresi:
+                # Önizlemeden, kullanıcının seçtiği pencereyle.
+                sanatcilar = sanatcilar or []
                 adet, kaynak = 1, "spotify_en_cok"
             else:
                 sanatcilar = sanatcilar or []
@@ -651,6 +852,8 @@ def calistir(
                         raise AktarimHatasi(
                             "Deezer'a ulaşılamıyor — birkaç dakika sonra yeniden dene")
                 ilerleme.adim(sira)
+            if spotify_penceresi:
+                ilerleme.ozet(pencere_disi=pencere_disini_sil(conn, kayitlar))
             ilerleme.ozet(eklenen_albüm=kutuphaneye_yaz(conn, kayitlar))
 
         if atla <= ASAMALAR.index("gomu"):
@@ -699,7 +902,39 @@ def main(argv: list[str] | None = None) -> int:
                    help="Spotify yerine liste: [{sanatci, album, yil?}]")
     a.add_argument("--asama", choices=ASAMALAR, default="spotify",
                    help="bu aşamadan başla (öncekiler yapılmış sayılır)")
+    a.add_argument("--onizle", action="store_true",
+                   help="yalnız Spotify'ı oku ve zaman penceresi seçimini bekle")
+    a.add_argument("--ay", type=int,
+                   help="önizlemeden, son N ayla aktar (0 = hepsi)")
     args = a.parse_args(argv)
+
+    if args.onizle:
+        ilerleme = Ilerleme(args.kullanici)
+        ilerleme.veri["kaynak"] = "spotify"
+        ilerleme.asama("spotify")
+        try:
+            veri = spotify_onizleme(erisim_jetonu(args.kullanici))
+        except Exception as hata:  # noqa: BLE001
+            ilerleme.bitir(hata=f"Spotify okunamadı: {type(hata).__name__}")
+            raise
+        yol = onizleme_yolu(args.kullanici)
+        gecici = yol.with_suffix(".tmp")
+        gecici.write_text(json.dumps(veri, ensure_ascii=False), encoding="utf-8")
+        gecici.replace(yol)
+        ilerleme.secim_bekle()
+        return 0
+
+    if args.ay is not None:
+        onizleme = json.loads(onizleme_yolu(args.kullanici).read_text(encoding="utf-8"))
+        kayitlar, sanatcilar = zamana_gore(onizleme, ay_gun(args.ay))
+        try:
+            sonuc = calistir(args.kullanici, kayitlar=kayitlar, sanatcilar=sanatcilar,
+                             spotify_penceresi=True)
+        except AktarimHatasi as hata:
+            print(f"\nDURDU: {hata}", file=sys.stderr)
+            return 1
+        print(json.dumps(sonuc["ozet"], ensure_ascii=False, indent=2))
+        return 0
 
     kayitlar = sanatcilar = None
     if args.json:

@@ -2772,3 +2772,25 @@ Spektral çalışmada (K19), aynı havuzla, yalnız ses kuralı değişerek:
 Liste yolu değişmedi (0.096) — kıyas temiz. Yeni kural gizlenen sanatçıyı
 ortalamada iki kat yukarı taşıyor; ilk 10'da fark yok (n küçük). Karar: kalır.
 Komut satırı çıktısı artık arayüzle aynı cümleyi (`gerekce.py`) basıyor.
+
+### 2026-09-29 (20) — Spotify aktarımında zaman penceresi
+
+**Geri bildirim:** «Buradaki bazı şarkıları en son 2 yıl önce dinledim.»
+Kaydedilmiş ama artık dinlenmeyen albüm bugünkü zevki temsil etmiyor (K17'nin
+sınırı: sahiplik tercihtir, ama tarihi vardır).
+
+- Aktarım ikiye bölündü: `--onizle` Spotify'ı okuyup her sinyali «kaç gün
+  önce» ile `{id}.spotify.json`a yazar ve `secim` durumunda durur; kullanıcı
+  `/basla`da sürgüyle pencereyi seçer (1, 3, 6 ay; 1, 2, 3, 5 yıl; hepsi);
+  `--ay N` hattı yalnız pencere içiyle sürdürür (`zamana_gore`).
+- Tarihler: kayıtlı albüm → kaydetme; son çalınan → çalma anı; KENDİ çalma
+  listesi → parçanın eklenme tarihi (yeni kapsam `playlist-read-private`,
+  `-collaborative`; takip edilen editör listeleri alınmaz — tarih küratörün).
+  En çok dinlenenler için Spotify tarih vermiyor: kısa/orta/uzun ≈ 28/182/365
+  gün (yaklaşık, arayüzde yazılı). Tarihsiz sinyal yalnız «hepsi»nde girer.
+- Liste parçaları sanatçı başına TEK albüme iner (en çok parçası olan),
+  tavan 250 albüm: her albüm gömü ister.
+- Daha dar pencereyle yeniden aktarımda pencere dışına düşen `spotify*`
+  kaynaklı albümler kütüphaneden çıkar; elle liste ve yerel taramaya dokunulmaz.
+- Eski bağlantının yetkisinde liste kapsamı yok: listeler atlanır, sayfa
+  yeniden bağlanmayı önerir. Etkisi ÖLÇÜLMEDİ (Spotify'lı kullanıcı verisi yok).

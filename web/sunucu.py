@@ -1945,7 +1945,7 @@ def _spotify_aktarimini_baslat(kullanici_id: int) -> None:
     finally:
         conn.close()
     if not aday:
-        _aktarim_baslat(kullanici_id)
+        _aktarim_baslat(kullanici_id, ["--onizle"])
 
 
 async def spotify_donus(istek):
@@ -2058,13 +2058,15 @@ async def basla(istek):
     yazıyor ama öneri ancak son aşamada çıkıyor. Albüm sayısına bakılsaydı
     kullanıcı yarım bir hattın boş öneri sayfasına atılırdı.
     """
-    return _basla_yaniti(istek, hata=istek.query_params.get("hata"))
+    return _basla_yaniti(istek, hata=istek.query_params.get("hata"),
+                         yeniden=istek.query_params.get("yeniden") == "1")
 
 
 def _basla_yaniti(istek, *, hata: str | None = None, liste_metni: str = "",
-                  durum_kodu: int = 200):
+                  durum_kodu: int = 200, yeniden: bool = False):
     from python.aktarim import (
-        ASAMA_ADI, ASAMALAR, ASGARI_ALBUM, LISTE_SANATCI_ALBUM, calisiyor_mu,
+        ASAMA_ADI, ASAMALAR, ASGARI_ALBUM, LISTE_SANATCI_ALBUM, ZAMAN_DURAKLARI,
+        calisiyor_mu, onizleme_ozeti, onizleme_yolu,
     )
 
     kullanici_id = AKTIF_KULLANICI.get()
@@ -2081,7 +2083,15 @@ def _basla_yaniti(istek, *, hata: str | None = None, liste_metni: str = "",
         conn.close()
     # Keşfet çalışma (kümeleme) ister; yalnız aday sayısına bakılırsa aday
     # olup çalışması olmayan hesap /basla ↔ /kesfet arasında döngüye giriyordu.
-    if aday and not calisiyor and _son_calisma():
+    # Zaman penceresi seçimi bekleniyor: önizleme hazır, hat durmuş.
+    zaman = None
+    if durum and durum.get("durum") == "secim" and not calisiyor:
+        try:
+            zaman = onizleme_ozeti(json.loads(
+                onizleme_yolu(kullanici_id).read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            zaman = None
+    if aday and not calisiyor and _son_calisma() and zaman is None and not yeniden:
         # Önce tarzlarını adlandırsın: sistemin çekirdek adımı. Hiç ad yoksa
         # oraya, varsa doğrudan desteye.
         conn = _baglanti()
@@ -2127,6 +2137,9 @@ def _basla_yaniti(istek, *, hata: str | None = None, liste_metni: str = "",
         "asama_sira": sira.index(asama) if asama in sira else -1,
         "liste_metni": liste_metni,
         "asgari_sanatci": -(-ASGARI_ALBUM // LISTE_SANATCI_ALBUM),
+        "zaman": zaman,
+        "duraklar": ZAMAN_DURAKLARI,
+        "asgari_album": ASGARI_ALBUM,
     }, status_code=durum_kodu)
 
 
@@ -2184,7 +2197,23 @@ async def aktar(istek):
         conn.close()
     if kayit is None or not kayit["spotify_yenile"]:
         return RedirectResponse("/basla?hata=spotify_yok", status_code=303)
-    hata = _aktarim_baslat(kullanici_id)
+    hata = _aktarim_baslat(kullanici_id, ["--onizle"])
+    return RedirectResponse(f"/basla?hata={hata}" if hata else "/basla", status_code=303)
+
+
+async def aktar_zaman(istek):
+    """Zaman penceresi seçildi: önizlemeden, son N ayla aktarımı sürdür."""
+    from python.aktarim import ZAMAN_DURAKLARI, onizleme_yolu
+
+    kullanici_id = AKTIF_KULLANICI.get()
+    veri = await istek.form()
+    try:
+        ay = int(veri.get("ay", ""))
+    except ValueError:
+        ay = -1
+    if ay not in ZAMAN_DURAKLARI or not onizleme_yolu(kullanici_id).exists():
+        return RedirectResponse("/basla", status_code=303)
+    hata = _aktarim_baslat(kullanici_id, ["--ay", str(ay)])
     return RedirectResponse(f"/basla?hata={hata}" if hata else "/basla", status_code=303)
 
 
@@ -2559,6 +2588,7 @@ ROTALAR = [
     Route("/basla", basla),
     Route("/api/aktar", aktar, methods=["POST"]),
     Route("/api/aktar/liste", aktar_liste, methods=["POST"]),
+    Route("/api/aktar/zaman", aktar_zaman, methods=["POST"]),
     Route("/api/aktar/durum", aktar_durum),
     Route("/giris", giris),
     Route("/giris", giris_gonder, methods=["POST"]),

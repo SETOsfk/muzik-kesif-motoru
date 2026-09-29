@@ -415,3 +415,40 @@ document.addEventListener('click', async (olay) => {
   serit.addEventListener('scroll', kenar, { passive: true });
   window.addEventListener('resize', kenar);
 })();
+
+/* Zaman penceresi (/basla): «ne kadar geriye gidelim?» sürgüsü. Pencere
+ * dışındaki sanatçılar söner, listeler kaybolur; sayılar canlı güncellenir.
+ * Kural sunucudaki `zamana_gore` ile aynı: tarihi bilinmeyen yalnız «hepsi». */
+(() => {
+  const kaynak = document.getElementById('zaman-veri');
+  const surgu = document.getElementById('zaman-surgu');
+  if (!kaynak || !surgu) return;
+  const v = JSON.parse(kaynak.textContent);
+  const gunSiniri = (ay) => (ay ? Math.round(ay * 30.44) : null);
+  const icinde = (g, s) => s === null || (g !== null && g !== '' && Number(g) <= s);
+  const sanatcilar = [...document.querySelectorAll('.zaman-sanatcilar li[data-gun]')];
+  const listeler = [...document.querySelectorAll('.zaman-listeler li')];
+  const sayi = (n) => n.toLocaleString(document.documentElement.lang || 'tr');
+
+  function guncelle() {
+    const ay = v.duraklar[Number(surgu.value)];
+    const s = gunSiniri(ay);
+    document.getElementById('zaman-ay').value = ay;
+    document.getElementById('zaman-etiket').textContent = v.adlar[String(ay)];
+    sanatcilar.forEach((li) => li.classList.toggle('sonuk', !icinde(li.dataset.gun, s)));
+    listeler.forEach((li) => li.classList.toggle('gitti', !icinde(li.dataset.gun, s)));
+    const nS = v.sanatcilar.filter((g) => icinde(g, s)).length;
+    const nA = v.albumler.filter((g) => icinde(g, s)).length;
+    const nL = v.listeler.filter((g) => icinde(g, s)).length;
+    const parcalar = [`${sayi(nS)} ${v.birim[0]}`, `${sayi(nA)} ${v.birim[1]}`];
+    if (v.listeler.length) parcalar.push(`${sayi(nL)} ${v.birim[2]}`);
+    document.getElementById('zaman-sayilar').textContent = parcalar.join(' · ');
+    // Her sanatçı en az bir albümle temsil ediliyor; tahmin ikisinin büyüğü.
+    const az = Math.max(nS, nA) < v.asgari;
+    document.getElementById('zaman-uyari').hidden = !az;
+    document.getElementById('zaman-dugme').disabled = az;
+    surgu.style.setProperty('--dolu', `${(Number(surgu.value) / Number(surgu.max)) * 100}%`);
+  }
+  surgu.addEventListener('input', guncelle);
+  guncelle();
+})();

@@ -294,7 +294,7 @@ listesinde geri plana iniyor.
 | RateYourMusic | **KULLANILMAZ** | API yok, scraping ToS'a aykırı |
 | Apple Music API | **KULLANILMAZ** | Ücretli geliştirici hesabı ($99/yıl) — K2'ye aykırı. iTunes Search zaten anahtarsız |
 | Tidal | Beklemede | Kayıt/onay gerektiriyor (401 döndü) |
-| Spotify | **Yalnız giriş + kütüphane okuma** (`python/spotify.py`) | `preview_url` 2024 sonunda kapatıldı — önizleme için KULLANILMAZ. OAuth (Authorization Code, salt-okuma kapsamı) ile kimlik ve kayıtlı albümler okunur. Geliştirme modunda en çok 5 kullanıcı, panelde e-postayla eklenmeli. Kütüphane `python/aktarim.py` ile öneriye dönüşür. `onbellek.ApiIstemci` KULLANILMAZ: önbellek anahtarı Authorization başlığını içermiyor, kullanıcılar birbirinin verisini görür |
+| Spotify | **Yalnız giriş + kütüphane okuma** (`python/spotify.py`) | `preview_url` 2024 sonunda kapatıldı — önizleme için KULLANILMAZ. OAuth (Authorization Code, salt-okuma kapsamı) ile kimlik, kayıtlı albümler ve KENDİ çalma listeleri (parça eklenme tarihiyle) okunur; aktarım önce «ne kadar geriye gidelim?» sürgüsünü sorar (`aktarim.zamana_gore`). Geliştirme modunda en çok 5 kullanıcı, panelde e-postayla eklenmeli. Kütüphane `python/aktarim.py` ile öneriye dönüşür. `onbellek.ApiIstemci` KULLANILMAZ: önbellek anahtarı Authorization başlığını içermiyor, kullanıcılar birbirinin verisini görür |
 | CritiqueBrainz | CC lisanslı kullanıcı yorumları | Anahtarsız. Kapsama İNCE — 6 albümde 2 yorum (ölçüldü). Yardımcı sinyal, ana sinyal değil |
 
 ### K14 — Dış kaynak iddiası, kendi verimizde karşılığı yoksa yazılmaz
@@ -478,7 +478,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 323 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 329 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.

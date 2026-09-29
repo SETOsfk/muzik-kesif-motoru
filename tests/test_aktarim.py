@@ -527,3 +527,146 @@ def test_spotify_baglaninca_aktarim_kendiliginden_baslar(monkeypatch):
         # Bağlı kullanıcının /basla sayfasında liste formu katlı (ana yol değil).
         yanit = istemci.get("/basla")
         assert 'class="adim elle-liste"' in yanit.text
+
+
+# --------------------------------------------------------------------------- #
+# Zaman penceresi: «ne kadar geriye gidelim?» (2026-09-28)
+# --------------------------------------------------------------------------- #
+
+def _onizleme():
+    return {
+        "okundu": "2026-09-28T00:00:00+00:00",
+        "albumler": [
+            {"sanatci": "Tool", "album": "Lateralus", "yil": 2001, "gun": 20, "kaynak": "spotify_kayitli"},
+            {"sanatci": "Rush", "album": "Moving Pictures", "yil": 1981, "gun": 800, "kaynak": "spotify_kayitli"},
+            {"sanatci": "Eski", "album": "Tarihsiz", "yil": None, "gun": None, "kaynak": "spotify_kayitli"},
+        ],
+        "en_cok": [{"sanatci": "Casiopea", "gun": 28}, {"sanatci": "Tool", "gun": 28},
+                   {"sanatci": "Duman", "gun": 365}],
+        "listeler": [
+            {"ad": "Yeni", "toplam": 3, "parcalar": [
+                {"sanatci": "Plini", "album": "Impulse Voices", "yil": 2020, "gun": 10},
+                {"sanatci": "Plini", "album": "Impulse Voices", "yil": 2020, "gun": 11},
+                {"sanatci": "Plini", "album": "Handmade Cities", "yil": 2016, "gun": 12}]},
+            {"ad": "Lise", "toplam": 1, "parcalar": [
+                {"sanatci": "Linkin Park", "album": "Meteora", "yil": 2003, "gun": 2000}]},
+        ],
+        "listeler_okunamadi": False,
+    }
+
+
+def test_zamana_gore_pencere_disini_birakir():
+    from python.aktarim import ay_gun, zamana_gore
+
+    kayitlar, sanatcilar = zamana_gore(_onizleme(), ay_gun(6))
+    albumler = {(k["sanatci"], k["album"]) for k in kayitlar}
+    assert ("Tool", "Lateralus") in albumler
+    assert ("Rush", "Moving Pictures") not in albumler
+    assert ("Eski", "Tarihsiz") not in albumler, "tarihsiz yalnız «hepsi»nde girer"
+    # Listeden sanatçı başına TEK albüm: en çok parçası olan.
+    assert ("Plini", "Impulse Voices") in albumler
+    assert ("Plini", "Handmade Cities") not in albumler
+    assert ("Linkin Park", "Meteora") not in albumler
+    # En çok dinlenenler: albümü olan Tool tekrar gelmez, uzun dönem Duman dışarıda.
+    assert sanatcilar == ["Casiopea"]
+
+    kayitlar, sanatcilar = zamana_gore(_onizleme(), None)
+    albumler = {(k["sanatci"], k["album"]) for k in kayitlar}
+    assert {("Rush", "Moving Pictures"), ("Eski", "Tarihsiz"), ("Linkin Park", "Meteora")} <= albumler
+    assert "Duman" in sanatcilar
+
+
+def test_onizleme_ozeti_sanatciyi_en_yakin_sinyalle_tarihler():
+    from python.aktarim import onizleme_ozeti
+
+    oz = onizleme_ozeti(_onizleme())
+    gun = {s["ad"]: s["gun"] for s in oz["sanatcilar"]}
+    assert gun["Tool"] == 20 and gun["Rush"] == 800 and gun["Eski"] is None
+    assert [l["ad"] for l in oz["listeler"]] == ["Yeni", "Lise"]
+    assert oz["listeler"][0]["gun"] == 10
+
+
+def test_spotify_onizleme_liste_izni_yoksa_listesiz_surer(monkeypatch):
+    from datetime import datetime, timezone
+
+    import python.spotify as S
+    from python.aktarim import spotify_onizleme
+
+    monkeypatch.setattr(S, "kayitli_albumler", lambda e: [
+        {"sanatci": "Tool", "album": "Lateralus", "yil": "2001", "eklenme": "2026-09-01T00:00:00Z"}])
+    monkeypatch.setattr(S, "son_calinanlar", lambda e: [])
+    monkeypatch.setattr(S, "en_cok_sanatcilar", lambda e, aralik: [{"sanatci": "Rush"}])
+
+    def yasak(e):
+        raise S.SpotifyHatasi("403 me")
+    monkeypatch.setattr(S, "ben", yasak)
+    simdi = datetime(2026, 9, 28, tzinfo=timezone.utc)
+    v = spotify_onizleme("jeton", simdi=simdi)
+    assert v["albumler"][0]["gun"] == 27
+    assert v["listeler"] == [] and v["listeler_okunamadi"]
+    assert sorted(s["gun"] for s in v["en_cok"]) == [28, 182, 365]
+
+
+def test_pencere_disini_sil_yalniz_spotify_albumune_dokunur():
+    from python.aktarim import pencere_disini_sil
+
+    with tempfile.TemporaryDirectory() as tmp:
+        D, _ = _ortam(tmp)
+        conn = D.baglan_kullanici(5)
+        with conn:
+            for aid, sanatci, album, kaynak in [
+                ("a", "Tool", "Lateralus", "spotify_kayitli"),
+                ("b", "Rush", "Moving Pictures", "spotify_kayitli"),
+                ("c", "Duman", "Belki Alışman Lazım", "liste")]:
+                conn.execute("INSERT INTO albums (album_id, artist, title, kaynak) VALUES (?,?,?,?)",
+                             (aid, sanatci, album, kaynak))
+        assert pencere_disini_sil(conn, [_kayit("Tool", "Lateralus")]) == 1
+        kalan = {r[0] for r in conn.execute("SELECT album_id FROM albums")}
+        conn.close()
+        assert kalan == {"a", "c"}
+
+
+def test_secim_bekleyen_kullanici_surguyu_gorur_ve_pencereyle_baslatir(monkeypatch):
+    import web.sunucu as W
+    from python.aktarim import Ilerleme, onizleme_yolu
+
+    baslatilan = []
+    monkeypatch.setattr(W, "_aktarim_baslat",
+                        lambda kid, ek=None, **k: baslatilan.append((kid, ek)))
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci, kid, D = _istemci(tmp)
+        # Önerisi olan kullanıcı bile seçim beklerken /basla'da kalmalı.
+        conn = D.baglan_kullanici(kid)
+        with conn:
+            conn.execute("INSERT INTO adaylar (aday_id, calisma_id, eksen, strateji, artist, "
+                         "title, skor, gerekce) VALUES ('x', 'c', 0, 'melez', 'A', 'B', 1, '')")
+        conn.close()
+        onizleme_yolu(kid).parent.mkdir(parents=True, exist_ok=True)
+        onizleme_yolu(kid).write_text(json.dumps(_onizleme()), encoding="utf-8")
+        Ilerleme(kid, sessiz=True).secim_bekle()
+
+        yanit = istemci.get("/basla", follow_redirects=False)
+        assert yanit.status_code == 200
+        assert 'id="zaman-surgu"' in yanit.text and "Linkin Park" in yanit.text
+        assert "Lise" in yanit.text
+
+        yanit = istemci.post("/api/aktar/zaman", data={"ay": "12"}, follow_redirects=False)
+        assert yanit.headers["location"] == "/basla"
+        assert baslatilan == [(kid, ["--ay", "12"])]
+
+        # Sürgü dışı değer süreç başlatmaz.
+        istemci.post("/api/aktar/zaman", data={"ay": "7"}, follow_redirects=False)
+        assert len(baslatilan) == 1
+
+
+def test_spotify_aktarimi_once_onizleme_ister(monkeypatch):
+    import web.sunucu as W
+
+    baslatilan = []
+    monkeypatch.setattr(W, "_aktarim_baslat",
+                        lambda kid, ek=None, **k: baslatilan.append(ek))
+    with tempfile.TemporaryDirectory() as tmp:
+        istemci, kid, _ = _istemci(tmp)
+        istemci.post("/api/aktar", follow_redirects=False)
+        W._spotify_aktarimini_baslat(kid)
+        assert baslatilan == [["--onizle"], ["--onizle"]]
