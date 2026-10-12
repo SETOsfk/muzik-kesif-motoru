@@ -495,7 +495,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   `1.sqlite`'a 11 boş gölge tablo kurdu; onarıldı, yedek
   `data/db/kullanici/1.sqlite.golge-oncesi-20260923`. `baglan()` artık
   `kullanici/` klasöründeki dosyaya tam şema kurmuyor.
-- **Yayın seçeneği (2026-10-12, kullanıcı notu):** https://github.com/morluto/rea reposu üzerinden proje yayınlanabilir. Henüz incelenmedi; kullanıcı "şu an iş yok, kaydet" dedi.
+- **Yararlanılabilecek kaynak (2026-10-12, kullanıcı notu):** https://github.com/morluto/rea reposundan projemiz için yararlanabiliriz (yayın değil, yararlanma). Henüz incelenmedi; kullanıcı "şu an iş yok, kaydet" dedi.
 - **Yayın (güncel, 2026-09-28):** Mac + Tailscale Funnel, yedek Drive (`scripts/servis.sh yayinla`). HF Spaces PRO istediği için bırakıldı; yedek kodu (`python/hf_yedek.py`, `.github/workflows/hf-space.yml`). Eski not: kod ve paket hazır, sunucu henüz
   açılmadı (hesap kullanıcının işi). Yol: Oracle Always Free ARM + `docker compose`
   (`docs/yayin.md`). Veri: `scripts/yayin_paketi.sh` (~50 MB, kişisel veri içerir).
