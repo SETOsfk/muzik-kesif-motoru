@@ -440,6 +440,8 @@ kaynaklar ARASINDA Thompson örneklemesi, Beta(1+beğendim, 1+tutmadı), sanatç
 düzeyinde, gerçek kararlardan. Sebep ölçüldü: vekil ölçütün "en iyisi" melez,
 gerçek tercihte %25 [10–49]; ses %67 [25–92] (n küçük). Tohum çalışma + karar
 sayısı: aynı durum aynı deste (K2). Deste derinliği tavanı 50 (ölçülmüş ufuk).
+Uzlaşma (2026-10-20): birden çok bağımsız kanıt ailesinin gösterdiği sanatçı
+strateji içinde öne alınır (en çok 1 σ); ÖLÇÜLMEDİ, `kesif.uzlasma_isabeti` ölçer.
 
 **Listem** (`liste` tablosu) feedback'ten ayrıdır: biri ölçüm, öteki iş listesi.
 Listeden otomatik indirme YAPILMAZ (belgelenmemiş uçlar, K10); dışa aktarım +
@@ -478,7 +480,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 329 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 330 test geçiyor. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.

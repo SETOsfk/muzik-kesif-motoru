@@ -409,6 +409,9 @@ def yakinlik_etkisi(
 
     if not ham:
         return {}
-    # [-1, +1]'e ölçekle: en büyük mutlak fark 1 olsun.
-    en_buyuk = max(abs(f) for f, _ in ham.values()) or 1.0
-    return {a: (f / en_buyuk, g) for a, (f, g) in ham.items()}
+    # [-1, +1]'e ölçekle. Ölçek en büyük değil 90. yüzdelik |fark|: tek bir
+    # aykırı aday (ör. beğenilenin neredeyse kopyası) eskiden tüm etkileri
+    # sıfıra eziyordu ve yeni bir kararla bütün kaymalar sıçrıyordu.
+    farklar = sorted(abs(f) for f, _ in ham.values())
+    olcek = farklar[int(0.9 * (len(farklar) - 1))] or farklar[-1] or 1.0
+    return {a: (max(-1.0, min(1.0, f / olcek)), g) for a, (f, g) in ham.items()}

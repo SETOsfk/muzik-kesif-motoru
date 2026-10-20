@@ -1490,6 +1490,18 @@ def istatistik_sayfasi(istek):
                                          "not": t(f"{x['begendim']}/{x['n']} beğendin",
                                                   f"liked {x['begendim']}/{x['n']}")}
                                         for x in k["kaynaklar"]]}
+        # Uzlaşma ödülünün ölçümü (kesif.UZLASMA_AGIRLIGI): tek yol ↔ birden çok yol.
+        uz_ad = {"tek": t("tek kanıt yolu", "one evidence path"),
+                 "cok": t("birden çok kanıt yolu", "several evidence paths")}
+        uz = [{"ad": uz_ad[x["grup"]], "renk": grafik.PALET["vurgu"],
+               "orta": round(x["isabet"] * 100), "alt": round(x["alt"] * 100),
+               "ust": round(x["ust"] * 100),
+               "not": t(f"{x['begendim']}/{x['begendim'] + x['tutmadi']} beğendin",
+                        f"liked {x['begendim']}/{x['begendim'] + x['tutmadi']}")}
+              for x in k.get("uzlasma", [])]
+        if uz:
+            g.setdefault("kaynak", {"tur": "aralik", "birim": "%", "yuzde": True,
+                                    "alan": [0, 100], "satirlar": []})["satirlar"] += uz
     tepe_onyil = max(s["zaman"]["onyillar"], key=lambda o: o[1])[0] if s["zaman"] else None
     return SABLONLAR.TemplateResponse(istek, "istatistik.html", _ortam(
         istek, s=s, g=g, paneller=paneller, tarz_adi=tarz_adi, saglik_adi=saglik_adi,

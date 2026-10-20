@@ -174,6 +174,28 @@ STRATEJI_ADI = {
 }
 
 
+#: Kanıt ailesi adları (`kesif.KANIT_AILESI`), cümle içinde.
+AILE_ADI = {
+    "liste": ("çalma listeleri", "playlists"),
+    "ses": ("ses benzerliği", "sound similarity"),
+    "kredi": ("ortak müzisyenler", "shared musicians"),
+    "sahne": ("kalabalık komşuluğu", "listener neighbourhood"),
+    "uzaklik": ("iki adımlı kalabalık yolu", "two-step listener path"),
+}
+
+
+def uzlasma_cumlesi(aileler) -> str:
+    """Başka bağımsız yollar da aynı sanatçıyı gösteriyorsa onu söyler."""
+    if not aileler:
+        return ""
+    adlar = [t(*AILE_ADI[a]) for a in sorted(aileler) if a in AILE_ADI]
+    if not adlar:
+        return ""
+    liste = ", ".join(adlar)
+    return t(f"Ayrıca bağımsız olarak {liste} de bu sanatçıyı gösteriyor.",
+             f"Independently, {liste} also point to this artist.")
+
+
 def strateji_adi(strateji: str) -> str:
     tr, en = STRATEJI_ADI.get(strateji, (strateji, strateji))
     return t(tr, en)

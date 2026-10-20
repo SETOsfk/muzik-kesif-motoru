@@ -109,6 +109,37 @@ def test_deste_haric_ve_karar_verilenleri_atlar(kum):
     assert "Gojira" not in sanatcilar, "istemci kuyruğundaki sanatçı tekrar gelmemeli"
 
 
+def test_uzlasma_birden_cok_yolu_one_alir(kum):
+    """Liste yolunda iki aday eşit; ses yolu da Gojira'yı gösteriyorsa o önde
+    ve kart gerekçesi bunu söyler. Melezin kendi kaynakları ödül sayılmaz."""
+    with kum:
+        kum.execute(
+            """INSERT INTO adaylar (aday_id, calisma_id, eksen, strateji, artist,
+               title, skor, gerekce, dayanak) VALUES ('a0000007', ?, 0, 'liste_birlikteligi',
+               'Vildhjarta', 'Dagger', 0.7, '', '{}')""", (CALISMA,))
+        kum.execute(
+            """INSERT INTO adaylar (aday_id, calisma_id, eksen, strateji, artist,
+               title, skor, gerekce, dayanak) VALUES ('a0000008', ?, 1, 'ses_benzerligi',
+               'Gojira', 'Flying Whales', 0.1, '', '{}')""", (CALISMA,))
+    aileler = kesif.sanatci_aileleri(kum, CALISMA)
+    assert aileler["gojira"] == {"liste", "ses"}
+    satirlar = [kesif._Satir(a, 0, "liste_birlikteligi", ad, "x", None, "parca",
+                             None, None, "", 0.7, "{}")
+                for a, ad in (("a0000007", "Vildhjarta"), ("a0000003", "Gojira"))]
+    sira = kesif._strateji_sirasi(satirlar, {}, 0.5, aileler)
+    assert sira[0].artist == "Gojira"
+    melez = kesif._Satir("a0000001", 0, "melez", "Car Bomb", "x", None, "parca", None,
+                         None, "", 0.9, json.dumps({"kaynaklar": ["liste_birlikteligi",
+                                                                  "ses_benzerligi"]}))
+    assert kesif._ek_aileler(melez, {"car bomb": {"liste", "ses"}}) == set()
+    kart = next(k for k in kesif.deste(kum, CALISMA, adet=20)["kartlar"]
+                if k["artist"] == "Gojira")
+    assert kart["uzlasma"] and "bağımsız" in kart["gerekce"]
+    kesif.karar_kaydet(kum, CALISMA, "a0000003", "begendim")
+    grup = {u["grup"]: u for u in kesif.uzlasma_isabeti(kum)}
+    assert grup["cok"]["begendim"] == 1 and grup["tek"]["begendim"] == 0
+
+
 def test_thompson_tutan_kaynagi_one_alir(kum):
     """Gerçek kararlarda bir kaynak açıkça tutuyorsa destede öne çıkar.
 

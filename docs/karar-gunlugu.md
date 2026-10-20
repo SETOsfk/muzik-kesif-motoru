@@ -2794,3 +2794,22 @@ sınırı: sahiplik tercihtir, ama tarihi vardır).
   kaynaklı albümler kütüphaneden çıkar; elle liste ve yerel taramaya dokunulmaz.
 - Eski bağlantının yetkisinde liste kapsamı yok: listeler atlanır, sayfa
   yeniden bağlanmayı önerir. Etkisi ÖLÇÜLMEDİ (Spotify'lı kullanıcı verisi yok).
+
+### 2026-10-20 (21) — Destede kaynak uzlaşması; geri bildirim ölçeği aykırı değere dayanıklı
+
+**İstek:** «Öneriler çok tutarlı ve güçlü olsun; daha stabil, daha iyi seçim.»
+
+- **Uzlaşma ödülü** (`kesif.UZLASMA_AGIRLIGI`, `sanatci_aileleri`): bir sanatçıya
+  birbirinden habersiz kanıt aileleri (liste, ses, kredi, sahne, uzaklık) varıyorsa
+  strateji içi sırada her ek aile için +0,5 σ, en çok 2 aile (tavan 1 σ). Satırın
+  KENDİ ailesi sayılmaz: melez zaten liste+sesi kaynaştırıyor, iki kez ödüllenmez.
+  σ = 0 iken uzlaşma eşitlik bozucu. Kart gerekçesi ek aileleri söylüyor
+  (`gerekce.uzlasma_cumlesi`).
+- **ÖLÇÜLMEDİ** — kullanıcının açık isteğiyle varsayılan (2026-09-28 (18) ile aynı
+  istisna). Ölçümü gerçek kararlardan: `kesif.uzlasma_isabeti` «tek yol» ↔
+  «birden çok yol» zevk isabeti, Wilson aralığıyla; Sayılarla sayfasında yollar
+  grafiğine ekleniyor (grup başına ≥ 4 karar). Birden çok yolun isabeti tek
+  yolunkinden yüksek değilse ödül kaldırılır.
+- **Geri bildirim ölçeği** (`geri_bildirim.yakinlik_etkisi`): [-1, +1] ölçeği en büyük
+  |fark| yerine 90. yüzdelikten, kırpılarak. Tek aykırı aday eskiden tüm kaymaları
+  sıfıra eziyordu; her yeni kararla sıra sıçrıyordu.
