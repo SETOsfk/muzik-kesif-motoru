@@ -2813,3 +2813,48 @@ sınırı: sahiplik tercihtir, ama tarihi vardır).
 - **Geri bildirim ölçeği** (`geri_bildirim.yakinlik_etkisi`): [-1, +1] ölçeği en büyük
   |fark| yerine 90. yüzdelikten, kırpılarak. Tek aykırı aday eskiden tüm kaymaları
   sıfıra eziyordu; her yeni kararla sıra sıçrıyordu.
+
+### 2026-10-20 (22) — Araştırma, sınama sızıntısı, motor
+
+**İstek:** «Bütün öneri sistemleri makalelerini oku, forumları oku, güçlü bir
+motor inşa et, o motor üzerinden ilerleyelim.» Altı araştırma ajanı
+(`docs/arastirma/`), ~210 arama. Tam metin okunamadı (WebFetch DNS, ağ
+politikası); bulgular özet düzeyinde ve raporlarda işaretli.
+
+- **Sınama SIZINTISI (iki ajan bağımsız buldu, kodda doğrulandı).** Listeler
+  kütüphane sanatçılarının adıyla aranarak toplandı; gizlenen sanatçının
+  aramasıyla bulunmuş listeler katmanda kalıyordu. `sizinti_listeleri`:
+  liste ancak gizlenen DIŞINDA bir sanatçının araması da bulduysa kalır
+  (önbellekteki arama yanıtlarından; yoksa `tohum_sanatci`). Ses havuzunda
+  yalnız o listelerden gelen parçalar da düşer. **Varsayılan açık.** Bu tarihten
+  önceki bütün K19 sayıları eski protokolle; kıyas için `--eski-protokol`.
+- **Motor** (`python/motor.py`).
+  - Erişim yolları: RP3β (α liste boyutu cezası, β popülerlik cezası) ve EASE
+    (Woodbury formu, 482×482 ters alma). Dil ve ruh hâli listelerinin ağırlığı
+    kısılıyor; başlıkta tarz sözcüğü varsa liste bağlam sayılmaz.
+  - Füzyon: koşullu logit. Öznitelikler dört yolun sıra puanı, ortak liste
+    sayısı, bağlı tohum payı ve popülerlik.
+  - Öncül şimdiki melez (liste 1 : ses 2) ve λ iç CV'yle seçiliyor. λ → ∞
+    iken motor melezle aynı.
+  - Popülerlik öznitelik değil. PDA (eğitimde kullan, puanlamada kapat) yapılı
+    yapay veride motoru çökertti (MRR 0,031 → 0,003): ortak liste sayısı
+    popülerlikle ilişkili, biri kapatılınca öteki popüler sanatçıyı öne itti.
+    Popülerlik cezası RP3β'nın β'sında.
+  - Bütün ayarlar (α, β, bağlam ağırlığı, λ, θ) 10 katlı dış CV'nin her katında
+    yalnız eğitim sorgularında seçiliyor; rapor edilen sayılar dışarıdaki sorgularda.
+  - Kıyas eşli: işaret çevirmeli permütasyon ve eşli bootstrap.
+- **ÖLÇÜLMEDİ** (bulutta veri yok). Destede `motor` kaynağı eklendi; payını
+  Thompson gerçek kararlardan belirliyor. Mac'te sırayla:
+  1. `python -m python.degerlendirme --motor --olcut npmi --buzulme 1 --melez-agirlik 1,2`
+  2. `python -m python.motor --egit` (ayar `data/cache/motor.json`'a yazılır)
+  3. `python -m python.discover.adaylar --tum-eksenler --strateji motor`
+- **CLAP tekrarlanabilir değildi.** HF `ClapFeatureExtractor` 10 sn'den uzun
+  girdiyi tohumsuz `np.random` ile kesiyor (kaynak kodda doğrulandı). Artık sabit
+  10 sn pencereler alınıp ortalanıyor. Kütüphane ve havuz BİRLİKTE yeniden
+  gömülmeli (`--gomu --yeniden`, `--parca-gomu --yeniden`). Ardından ses yolu
+  yeniden ölçülmeli.
+- **Kaynak notları (doğrulanmadı, `docs/arastirma/5-*`):**
+  - Discogs API koşulları saklama süresini sınırlıyor olabilir; K5 bununla çelişebilir.
+    CC0 aylık dökümler bu soruyu ortadan kaldırıyor.
+  - ListenBrainz popülerlik ve radyo uçlarının bir kısmı artık jeton istiyor.
+  - AcousticBrainz API'si «şimdilik» açık; döküm yedeklenmeli.

@@ -284,11 +284,11 @@ listesinde geri plana iniyor.
 | Kaynak | Kullanım | Sınır |
 |---|---|---|
 | MusicBrainz | Kanonik ID, temel krediler | Rate limit: 1 istek/sn, user-agent zorunlu |
-| Discogs | Detaylı krediler, label, ülke | Token gerekli; metal/prog/jazz'da zengin, elektronikte zayıf |
+| Discogs | Detaylı krediler, label, ülke | Token gerekli; metal/prog/jazz'da zengin, elektronikte zayıf. **API koşulu (2026-10-20 okundu): 6 saatten eski içerik gösterilmez, gerekenden uzun saklanmaz, «Data provided by Discogs» atfı ister — K5 ile çelişiyor.** Aylık dökümler CC0 |
 | iTunes Search | 30 sn önizleme + katalog | Anahtarsız, ücretsiz — TEST EDİLDİ |
-| Deezer | 30 sn önizleme (yedek) | Anahtarsız, ücretsiz — TEST EDİLDİ |
+| Deezer | 30 sn önizleme (yedek) | Anahtarsız, ücretsiz — TEST EDİLDİ. Koşul: ses verisinin yerel saklanması yasak, aile içi özel kullanım (2026-10-20 okundu) |
 | AcousticBrainz | Sende OLMAYAN parçanın ses profili | Anahtarsız. Kayıt MBID'siyle. Yeni veri almıyor (2022'de donduruldu) ama arşiv okunabiliyor — örneklemde %92 kapsama |
-| ListenBrainz | "Bunu dinleyen şunu da dinliyor" | Anahtarsız (labs uç noktası). Kalabalık sinyali |
+| ListenBrainz | "Bunu dinleyen şunu da dinliyor" | Anahtarsız (labs uç noktası). Kalabalık sinyali. Koşul: saniyede EN ÇOK 1 istek, iletişimli UA (2026-10-20 okundu; `onbellek.ajan()`). Popülerlik/radyo uçlarının bir kısmı jeton istiyor |
 | Deezer çalma listeleri | Ortak filtreleme vekili — 482 liste, 45.899 parça, 10.360 sanatçı | Anahtarsız, belgelenmiş uçlar (`search/playlist`, `playlist/{id}`). Sinyal müzikal benzerlik kadar BAĞLAM da taşıyor; PMI ile popülerlik sönümleniyor |
 | Reddit | **ŞİMDİLİK KULLANILAMIYOR** | API başvurusu REDDEDİLDİ (2026-08-11). Onaysız uç nokta kullanılmaz — RateYourMusic ile aynı gerekçe |
 | RateYourMusic | **KULLANILMAZ** | API yok, scraping ToS'a aykırı |
@@ -447,6 +447,23 @@ strateji içinde öne alınır (en çok 1 σ); ÖLÇÜLMEDİ, `kesif.uzlasma_isa
 Listeden otomatik indirme YAPILMAZ (belgelenmemiş uçlar, K10); dışa aktarım +
 satın alma bağlantıları (Bandcamp, Qobuz önce).
 
+### K24 — Motor: RP3β + EASE + öğrenilmiş füzyon; sınama sızıntısız (2026-10-20)
+Literatür taraması (`docs/arastirma/`) üç şey söyledi: iyi ayarlanmış basit
+doğrusal yöntemler (RP3β, EASE) sinir ağlarını geçiyor (Dacrema 2019);
+elle süpürdüğümüz düğmeler RP3β ailesinin noktaları; füzyon ağırlığı aynı
+sorgularda seçilmişti. `python/motor.py` dört yolu (RP3β, EASE, npmi, ses)
+koşullu logitle birleştiriyor.
+- Öncül bugünkü melez; λ iç CV'yle seçiliyor, λ → ∞ iken motor melezle aynı.
+- Popülerlik öznitelik değil (PDA yapay veride motoru çökertti); ceza RP3β'nın β'sında.
+- Dil ve ruh hâli listelerinin ağırlığı kısılıyor.
+- Ayarlar iç içe CV'de yalnız eğitim sorgularında seçiliyor.
+
+**Sınama sızıntısı düzeltildi:** gizlenen sanatçının ADIYLA bulunmuş listeler o
+katmanda çıkarılıyor (`degerlendirme.sizinti_listeleri`, varsayılan). Bu tarihten
+önceki K19 sayıları şişik; `--eski-protokol` eskiyi üretir.
+**CLAP** artık sabit 10 sn pencerelerle gömülüyor: HF işlemcisi rastgele
+kesiyordu (K2). Gömüler `--yeniden` ile tazelenmeli.
+
 ### K22 — İki dil: satır içi `t("tr", "en")` (2026-09-23)
 Etkin dil `AKTIF_DIL` bağlam değişkeninde (çerez, yoksa Accept-Language).
 Her kullanıcı metni iki dilde, ikisi de DOĞAL yazılır — çeviri değil
@@ -475,12 +492,13 @@ Sen; teknik sayfalar menüde «Gelişmiş»; telefonda alt şerit. Görsel yoksa
 Animasyon DURUMU taşımaz: kart girişi CSS, durum `data-sira`da (rAF'e bağlı
 sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 
-## Güncel durum (son güncelleme 2026-09-28)
+## Güncel durum (son güncelleme 2026-10-20)
 
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 330 test geçiyor. Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 339 test geçiyor (bulutta `sklearn`
+  olmadığı için 2 ses kümesi testi düşer). Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.
@@ -512,10 +530,18 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   en çok 5 kullanıcıyı e-postayla ekle; «Kütüphanemi aktar»ı uçtan uca dene.
 - Telefonda SW yalnız https ya da localhost'ta kaydolur (`scripts/tunnel.sh`).
 - 13 albümün MBID'si `/eslestirme`'de karar bekliyor.
+- **Koşul çelişkileri (karar senin, `docs/arastirma/README.md`):** Discogs API kalıcı
+  önbelleği (öneri: CC0 döküme geç), Deezer önizlemesinden üretilen stem'lerin diskte
+  tutulması (ses saklama yasağı), Last.fm eklenmeden önce yazılı onay.
 - `~/.qobuz_gui_config.json` parolayı DÜZ METİN tutuyor (başka bir araç);
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
+-2. **Motoru gerçek veride ölç ve ayarla** (K24, karar günlüğü (22)):
+   `degerlendirme --motor --olcut npmi --buzulme 1 --melez-agirlik 1,2`, sonra
+   `python -m python.motor --egit` ve `adaylar --tum-eksenler --strateji motor`.
+   Önce CLAP gömülerini `--yeniden` ile tazele. Araştırmanın sıradaki adımları:
+   `docs/arastirma/README.md` (Mutual Proximity, çok klip, vokalsiz CLAP).
 -1. Spektral çalışma ölçüldü ve etkin (karar günlüğü (17)): liste yolu belirgin
    iyi, ses yolu kötü, melez karışık. Açık soru: ses yolunun kaybı eksen
    tanımından mı (tarzlar artık kalabalığa yakın) — gerekirse melez ağırlığını

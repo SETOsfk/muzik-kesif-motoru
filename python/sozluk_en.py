@@ -189,6 +189,13 @@ SOZLUK_EN: dict[str, dict[str, str]] = {
         "capalar": "playlists 0.092 (5.4× better than random) · sound 0.347 (1.4× better).",
         "uyari": "ACROSS DIFFERENT POOL SIZES, THIS IS THE ONLY NUMBER YOU CAN COMPARE. Measured: when the pool grew from 2,163 to 4,183 embeddings, recall@50 dropped from 0.08 to 0.03, because the number of competitors doubled too. In the same run the percentile improved from 0.349 to 0.311.",
     },
+    "motor": {
+        "ad": "engine",
+        "kisa": "Four routes (two playlist-graph methods, RP3β and EASE, plus link strength and sound similarity) blended with weights LEARNED from the hide-an-artist test.",
+        "nasil": "For each pick, the route ranks and evidence counts (shared playlists, share of linked library artists) feed a conditional logit whose weights are chosen by nested cross-validation. The popularity penalty lives in RP3β's β. Language and mood playlists are down-weighted.",
+        "capalar": "With infinite regularisation the engine equals the hybrid ranking; it only departs from it when the measurement says so.",
+        "uyari": "The weights are learned from finding artists you own again, which measures reach, not liking. Your real decisions decide its share of the deck.",
+    },
     "melez": {
         "ad": "hybrid ranking",
         "kisa": "Merging the RANKS of two signals: playlist neighbourhood and sound similarity.",

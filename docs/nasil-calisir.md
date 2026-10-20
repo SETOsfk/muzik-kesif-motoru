@@ -59,6 +59,20 @@ eksen-özgüllüğü) — ünlü olduğu için değil, sana yakın olduğu için
 Kararlar: sağ = listeme (beğendim), sol = geç (tutmadı), yukarı = zaten
 biliyorum. «Zaten biliyorum» zevk isabetine girmez, yalnız keşif oranına.
 
+## 4b. Motor (2026-10-20)
+
+Yeni ana kaynak `motor` (`python/motor.py`). Dört yolu birleştirir:
+
+- RP3β ve EASE: liste grafiğinde yürüyüş ve kapalı formlu otokodlayıcı.
+- npmi bağ gücü.
+- Ses benzerliği.
+
+Ağırlıklar gizleme sınamasından öğrenilir: koşullu logit, iç içe çapraz
+doğrulama. Dil ve ruh hâli listelerinin ağırlığı kısılır. Sınamadaki sızıntı
+(gizlenenin adıyla bulunmuş listeler) düzeltildi. Gerekçe, en çok katkı veren
+kütüphane sanatçılarını ortak liste sayılarıyla söyler. Literatür ve
+gerekçeler: `docs/arastirma/README.md`.
+
 ## 5. Gerekçe
 
 Gerekçe şablondan, kaydedilmiş sayılardan kurulur (`python/gerekce.py`), iki

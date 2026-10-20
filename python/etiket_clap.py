@@ -139,17 +139,41 @@ def _yukle():
     return _MODEL, _ISLEMCI
 
 
+#: CLAP'ın girdi penceresi (sn). Model 10 sn görüyor.
+PENCERE_SN = 10
+
+
+def pencereler(y: np.ndarray, sr: int = CLAP_ORNEKLEME) -> list[np.ndarray]:
+    """Sabit, örtüşmeyen PENCERE_SN pencereler (30 sn → 0–10, 10–20, 20–30).
+
+    NEDEN (2026-10-20, ses araştırması bulup kaynak kodda doğrulandı):
+    `ClapFeatureExtractor` 10 sn'den uzun girdiyi TOHUMSUZ `np.random` ile
+    rastgele bir yerden kesiyor (`rand_trunc` / `fusion`). Aynı klip her
+    gömmede farklı vektör alıyordu (K2 ihlali) ve 30 sn'nin yalnız 10'u
+    görülüyordu. Tam 10 sn'lik pencere kesilmez; ortalama üçünü de görür.
+    """
+    n = PENCERE_SN * sr
+    if len(y) < n:
+        return [y]
+    return [y[i:i + n] for i in range(0, len(y) - n + 1, n)]
+
+
 def klip_gomusu(y: np.ndarray) -> np.ndarray:
-    """48 kHz tek kanal sesten birim uzunluklu 512 boyutlu CLAP gömüsü.
+    """48 kHz tek kanal sesten birim uzunluklu 512 boyutlu CLAP gömüsü:
+    sabit pencerelerin birim gömülerinin ortalaması, yeniden birimlenmiş.
 
     `get_audio_features(...).pooler_output` ZATEN yansıtılmış 512 boyutlu
     gömü — üstüne `audio_projection` uygulamak (768→512) boyut hatası veriyor.
     """
     model, islemci = _yukle()
-    girdi = islemci(audio=y, sampling_rate=CLAP_ORNEKLEME, return_tensors="pt")
-    e = model.get_audio_features(**girdi).pooler_output
-    e = (e / e.norm(dim=-1, keepdim=True)).squeeze(0)
-    return e.cpu().numpy().astype("float32")
+    toplam = None
+    for parca in pencereler(y):
+        girdi = islemci(audio=parca, sampling_rate=CLAP_ORNEKLEME, return_tensors="pt")
+        e = model.get_audio_features(**girdi).pooler_output
+        e = (e / e.norm(dim=-1, keepdim=True)).squeeze(0)
+        toplam = e if toplam is None else toplam + e
+    toplam = toplam / toplam.norm()
+    return toplam.cpu().numpy().astype("float32")
 
 
 def onizleme_gomusu(url: str) -> np.ndarray | None:
@@ -211,15 +235,15 @@ def klip_miksi(onizleme_url: str) -> np.ndarray | None:
     return librosa.resample(miks / tepe, orig_sr=22050, target_sr=CLAP_ORNEKLEME)
 
 
-def gomu_cikar(conn: sqlite3.Connection, *, limit: int | None = None) -> int:
+def gomu_cikar(conn: sqlite3.Connection, *, limit: int | None = None,
+               yeniden: bool = False) -> int:
     """Ses gömülerini hesapla ve diske al.
 
     Pahalı adım bu; sözlük değiştikçe TEKRARLANMAMASI için saklanıyor.
+    `yeniden`: var olanların üstüne yaz (pencere düzeltmesinden sonra bir kez;
+    kütüphane ve havuz BİRLİKTE yenilenmeli, yoksa iki yöntem karışır).
     """
-    import torch
-
     GOMU_KLASOR.mkdir(parents=True, exist_ok=True)
-    model, islemci = _yukle()
 
     hedefler = conn.execute(
         """SELECT DISTINCT album_id, tur, onizleme_url FROM stem_profili
@@ -231,20 +255,12 @@ def gomu_cikar(conn: sqlite3.Connection, *, limit: int | None = None) -> int:
     sayac = 0
     for sira, (album_id, tur, url) in enumerate(hedefler, 1):
         dosya = GOMU_KLASOR / f"{album_id}.npy"
-        if dosya.exists():
+        if dosya.exists() and not yeniden:
             continue
         ses = klip_miksi(url)
         if ses is None:
             continue
-        girdi = islemci(audio=ses, sampling_rate=CLAP_ORNEKLEME,
-                        return_tensors="pt")
-        # `get_audio_features(...).pooler_output` ZATEN yansıtılmış 512
-        # boyutlu gömü — üstüne `audio_projection` uygulamak (768→512)
-        # boyut hatası veriyor.
-        cikti = model.get_audio_features(**girdi)
-        gomu = cikti.pooler_output
-        gomu = (gomu / gomu.norm(dim=-1, keepdim=True)).squeeze(0)
-        np.save(dosya, gomu.cpu().numpy().astype("float32"))
+        np.save(dosya, klip_gomusu(ses))
         sayac += 1
         if sira % 25 == 0:
             print(f"  {sira}/{len(hedefler)} · {sayac} yeni", file=sys.stderr)
@@ -316,18 +332,20 @@ def main(argv: list[str] | None = None) -> int:
     #: ihtiyaç duymaz, tek listede geçen sanatçıyı da bulabilir — ve
     #: "hiç duymadığım sanatçı" hedefi tam orada yaşıyor.
     ayristirici.add_argument("--asgari-liste", type=int, default=3)
+    ayristirici.add_argument("--yeniden", action="store_true",
+                             help="var olan gömülerin üstüne yaz (pencere düzeltmesi)")
     args = ayristirici.parse_args(argv)
 
     conn = baglan(args.db)
     try:
         if args.parca_gomu:
             s = parca_gomule(conn, limit=args.limit,
-                             asgari_liste=args.asgari_liste)
+                             asgari_liste=args.asgari_liste, yeniden=args.yeniden)
             print(f"denenen {s['denenen']} · gömülen {s['gomulen']} · "
                   f"atlanan {s['atlanan']}")
             return 0
         if args.gomu:
-            print(f"{gomu_cikar(conn, limit=args.limit)} yeni gömü")
+            print(f"{gomu_cikar(conn, limit=args.limit, yeniden=args.yeniden)} yeni gömü")
         if args.etiketle or not args.gomu:
             satirlar = etiketle(conn)
             print(f"{yaz(conn, satirlar)} CLAP etiketi, "
@@ -445,7 +463,7 @@ PARCA_GOMU = Path("data/cache/clap_parca")
 
 def parca_gomule(
     conn: sqlite3.Connection, *, asgari_liste: int = 3, kisi_basi: int = 2,
-    limit: int | None = None,
+    limit: int | None = None, yeniden: bool = False,
 ) -> dict[str, int]:
     """Çalma listesi parçalarını göm — sanatçı başına birkaç parça.
 
@@ -483,7 +501,7 @@ def parca_gomule(
     sayac = {"denenen": 0, "gomulen": 0, "atlanan": 0}
     for sira, (parca_id, sanatci, parca) in enumerate(secilen, 1):
         dosya = PARCA_GOMU / f"{parca_id}.npy"
-        if dosya.exists():
+        if dosya.exists() and not yeniden:
             continue
         sayac["denenen"] += 1
         try:

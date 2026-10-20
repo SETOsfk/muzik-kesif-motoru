@@ -993,6 +993,55 @@ def melez(
 
 
 # --------------------------------------------------------------------------- #
+# Strateji 7: motor (RP3β + EASE + liste + ses, öğrenilmiş füzyon)
+# --------------------------------------------------------------------------- #
+
+def motor(
+    conn: sqlite3.Connection, calisma_id: str, eksen: int, *, adet: int = 12
+) -> list[Aday]:
+    """`python/motor.py`'nin sırası; ayar `python -m python.motor --egit` ile
+    öğrenilir (yoksa üretim füzyonuna eşit öncül). Gerekçe dayanaktan
+    kurulur: en çok katkı veren kütüphane sanatçıları ve ortak liste sayıları."""
+    from python import motor as M
+
+    ayar = M.ayar_oku()
+    sira = M.eksen_sirasi(conn, calisma_id, eksen, adet=adet, ayar=ayar)
+    kume_adi = _eksen_adi(conn, calisma_id, eksen)
+    adaylar: list[Aday] = []
+    for basamak, k in enumerate(sira, 1):
+        ses = k["ses"] or {}
+        parca = conn.execute(
+            """SELECT sanatci, parca, parca_id, COUNT(*) gecis FROM liste_parca
+                WHERE sanatci_anahtar = ? AND parca_id IS NOT NULL
+                GROUP BY parca ORDER BY gecis DESC, sira LIMIT 1""",
+            (k["anahtar"],)).fetchone()
+        if ses.get("parca_id"):
+            baslik, parca_id = ses.get("ad") or "—", ses["parca_id"]
+        elif parca:
+            baslik, parca_id = parca["parca"], parca["parca_id"]
+        else:
+            continue
+        ad = (parca["sanatci"] if parca else None) or ses.get("sanatci") or k["ad"]
+        dayanak = {
+            "tohumlar": k["tohumlar"], "ortak_liste": k["ortak_liste"],
+            "liste_sayisi": k["liste_sayisi"], "kaynaklar": k["kaynaklar"],
+            "motor_skor": round(k["skor"], 4), "motor_basamak": basamak,
+            "ogrenildi": bool(ayar.get("ogrenildi")),
+            "birim": "parca", "parca_id": parca_id,
+        }
+        if ses:
+            dayanak.update({"benzedigi": ses.get("benzedigi"),
+                            "benzedikleri": ses.get("benzedikleri"),
+                            "parca_sayisi": ses.get("parca_sayisi")})
+        adaylar.append(Aday(
+            artist=ad, title=baslik, year=None, strateji="motor", eksen=eksen,
+            skor=round(1.0 / basamak, 4),
+            gerekce=f"«{kume_adi}» ekseni için motor sırası {basamak}.",
+            dayanak=dayanak))
+    return adaylar
+
+
+# --------------------------------------------------------------------------- #
 # Yürütme
 # --------------------------------------------------------------------------- #
 
@@ -1178,6 +1227,8 @@ def eksen_uret(
         adaylar += ses_benzerligi(conn, calisma_id, eksen, adet=adet)
     if ister("melez"):
         adaylar += melez(conn, calisma_id, eksen, adet=adet)
+    if ister("motor"):
+        adaylar += motor(conn, calisma_id, eksen, adet=adet)
     return adaylar
 
 

@@ -433,7 +433,7 @@ async def anasayfa(istek):
 
 
 #: Ana akıştaki yollar — leave-one-artist-out ile ölçüldü ve tuttular.
-ANA_STRATEJILER = ("melez", "liste_birlikteligi", "ses_benzerligi")
+ANA_STRATEJILER = ("motor", "melez", "liste_birlikteligi", "ses_benzerligi")
 
 #: Niş yollar: kredi/kalabalık grafiği. Ölçümde erişimleri çok dar çıktı
 #: (147 gizlemenin tamamında 55–81 tekil sanatçı, 1 isabet) ama ölçüt onların

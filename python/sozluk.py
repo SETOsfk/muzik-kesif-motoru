@@ -290,6 +290,19 @@ SOZLUK: dict[str, dict[str, str]] = {
                  "0,08'den 0,03'e düştü — çünkü rakip sayısı da iki katına "
                  "çıktı. Aynı ölçümde yüzdelik 0,349'dan 0,311'e iyileşti.",
     },
+    "motor": {
+        "ad": "motor",
+        "kisa": "Dört yolun —iki liste grafiği yöntemi (RP3β, EASE), bağ gücü ve "
+                "ses benzerliği— gizleme sınamasından ÖĞRENİLMİŞ ağırlıklarla birleşimi.",
+        "nasil": "Her aday için yol sıraları ve kanıt sayıları (ortak liste, bağlı "
+                 "kütüphane sanatçısı payı) bir koşullu logite girer; ağırlıklar "
+                 "iç içe çapraz doğrulamayla seçilir. Popülerlik cezası RP3β'nın "
+                 "β'sında. Dil ve ruh hâli listelerinin ağırlığı kısılır.",
+        "capalar": "Düzenlileştirme sonsuza giderse motor melez sıralamanın aynısıdır; "
+                   "ancak ölçüm gösterirse ondan ayrılır.",
+        "uyari": "Ağırlıklar sahip olduğun sanatçıları geri bulmaya göre öğrenilir; "
+                 "beğeniyi değil erişimi ölçer. Destedeki payını gerçek kararların belirler.",
+    },
     "melez": {
         "ad": "melez sıralama",
         "kisa": "İki sinyalin —çalma listesi komşuluğu ve kulağa benzerlik— "

@@ -66,8 +66,10 @@ from python.dil import t
 from python.gerekce import gerekce as gerekce_yaz, strateji_adi, uzlasma_cumlesi
 from python.metin import normalize_esleme
 
-#: Ölçülmüş sıra (README, leave-one-artist-out @50). Değişirse önce ölçülür.
-ANA_SIRA = ("melez", "liste_birlikteligi", "ses_benzerligi")
+#: Ana kaynaklar. Aralarındaki pay Thompson örneklemesiyle gerçek kararlardan
+#: (K21); sıra yalnız eşitlik bozar. `motor` 2026-10-20: `python -m python.motor
+#: --egit` ile ayarlanır, iç içe CV ile ölçülür (`degerlendirme --motor`).
+ANA_SIRA = ("motor", "melez", "liste_birlikteligi", "ses_benzerligi")
 
 #: Kadro grafiği yolları. Ölçütü tam onların işini ölçmüyor (bkz.
 #: `web/sunucu.py:NIS_STRATEJILER`); destede yalnız istenirse ("cesur" kaynak).
@@ -89,6 +91,8 @@ BUYUTME_ADIMI = 20
 #: ve sesin kaynaşması; kendi ailesi `dayanak.kaynaklar`'dan okunur).
 KANIT_AILESI = {
     "liste_birlikteligi": "liste", "ses_benzerligi": "ses",
+    # Motorun yolları (`dayanak.kaynaklar`): üç liste yolu aynı veriden.
+    "rp3": "liste", "ease": "liste", "liste": "liste", "ses": "ses",
     "kredi_sicramasi": "kredi", "sahne_komsulugu": "sahne",
     "bilincli_uzaklik": "uzaklik",
 }
@@ -172,7 +176,7 @@ class _Satir:
 
 def _aileler(strateji: str, dayanak) -> set[str]:
     """Satırın kanıt aileleri. Melez kendi kaynaklarını taşır."""
-    if strateji == "melez":
+    if strateji in ("melez", "motor"):
         try:
             d = json.loads(dayanak) if isinstance(dayanak, str) else (dayanak or {})
         except ValueError:

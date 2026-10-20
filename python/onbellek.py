@@ -197,14 +197,22 @@ class ApiIstemci:
 # Hazır istemciler
 # --------------------------------------------------------------------------- #
 
+def ajan() -> str:
+    """İletişim bilgili User-Agent. MetaBrainz ve Wikimedia iletişimsiz ajanı
+    uyarısız engelleyebiliyor (koşullar okundu, 2026-10-20). `.env`'deki
+    MUSICBRAINZ_USER_AGENT önce; yoksa projenin adresi — yer tutucu e-posta değil."""
+    return (_env("MUSICBRAINZ_USER_AGENT")
+            or "muzik-kesif-motoru/0.2 ( https://github.com/SETOsfk/muzik-kesif-motoru )")
+
+
 def musicbrainz(**kwargs) -> ApiIstemci:
     """MusicBrainz: saniyede 1 istek, user-agent zorunlu."""
-    ajan = _env("MUSICBRAINZ_USER_AGENT") or "muzik-kesif-motoru/0.1 (ornek@ornek.com)"
+    ajan_ = ajan()
     return ApiIstemci(
         servis="musicbrainz",
         temel_url="https://musicbrainz.org/ws/2",
         istek_araligi=1.05,
-        basliklar={"User-Agent": ajan, "Accept": "application/json"},
+        basliklar={"User-Agent": ajan_, "Accept": "application/json"},
         **kwargs,
     )
 

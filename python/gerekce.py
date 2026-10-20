@@ -121,6 +121,8 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
         return _ses_cumlesi(benzedigi, d) + " " + t(
             "Her şeye benzeyen kayıtlar öne çıkmasın diye skor düzeltildi.",
             "The score is corrected so that tracks resembling everything don't float up.")
+    if strateji == "motor" and "tohumlar" in d:
+        return _motor_cumlesi(d, eksen, benzedigi)
     if strateji == "melez":
         parcalar = []
         if "pmi" in d:
@@ -133,6 +135,31 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
     if dil() == "tr" and saklanan:
         return saklanan
     return _genel(strateji, d, eksen, saklanan)
+
+
+def _motor_cumlesi(d: dict, eksen: str, benzedigi: str | None) -> str:
+    """Motor kartı: en çok katkı veren kütüphane sanatçıları, ortak liste
+    sayıları ve varsa ses kanıtı. Sayılar `motor.eksen_sirasi`'ndan."""
+    parcalar = []
+    tohumlar = [(ad, int(n)) for ad, n in (d.get("tohumlar") or []) if n][:3]
+    if tohumlar:
+        liste = ", ".join(f"{ad} ({n})" for ad, n in tohumlar)
+        parcalar.append(t(
+            f"Çalma listelerinde «{eksen}» ekseninden şu sanatçılarla yan yana: "
+            f"{liste} — parantezde ortak liste sayısı.",
+            f"In playlists it sits next to these «{eksen}» artists: {liste} "
+            f"(shared playlists in brackets)."))
+        if sum(n for _, n in tohumlar) <= ZAYIF_LISTE:
+            parcalar.append(t("Zayıf kanıt: az sayıda listeye dayanıyor.",
+                              "Weak evidence: it rests on only a few playlists."))
+    if benzedigi:
+        parcalar.append(_ses_cumlesi(benzedigi, d))
+    n = d.get("liste_sayisi")
+    if n:
+        parcalar.append(t(
+            f"Toplam {sayi(n)} listede geçiyor; sıralamada popülerlik cezalandırıldı.",
+            f"Appears in {sayi(n)} playlists overall; popularity is penalised in the ranking."))
+    return " ".join(parcalar)
 
 
 def _genel(strateji: str, d: dict, eksen: str, saklanan: str) -> str:
@@ -165,6 +192,7 @@ def geri_bildirim_cumlesi(yon: str, sanatci: str) -> str:
 
 
 STRATEJI_ADI = {
+    "motor": ("motor", "engine"),
     "melez": ("liste + ses", "playlists + sound"),
     "liste_birlikteligi": ("çalma listelerinden", "from playlists"),
     "ses_benzerligi": ("sesi benziyor", "similar sound"),

@@ -82,6 +82,45 @@ def kutuphane(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------- #
+# Sızıntı — gizlenenin ADIYLA bulunmuş listeler
+# --------------------------------------------------------------------------- #
+
+def sizinti_listeleri(conn: sqlite3.Connection) -> dict[str, set[int]]:
+    """{sanatçı anahtarı: yalnız O sanatçının aramasıyla bulunmuş listeler}.
+
+    SIZINTI (2026-10-20, iki ayrı literatür ajanı bağımsız buldu). Listeler
+    kütüphanedeki her sanatçının ADIYLA Deezer'da aranarak toplandı
+    (`calma_listesi.hasat`). Bir sanatçı gizlendiğinde onun adıyla bulunmuş
+    listeler veride kalırsa, motor gizleneni tam da onu aramış olmamız
+    sayesinde bulur — üretimde hiç duymadığın bir sanatçının adı aranmaz.
+    Tavan, sıralar ve popülerlik şişer; en çok liste yolu kazanır.
+
+    Kural: liste p, a'nın katmanında ancak a DIŞINDA bir sanatçının araması
+    da p'yi bulduysa kalır. Bulucular önbellekteki arama yanıtlarından kurulur
+    (ağ yok); yanıt önbellekte yoksa `tohum_sanatci` (ilk bulan) kullanılır.
+    """
+    from python.discover.calma_listesi import deezer_listesi, liste_ara
+
+    tohumlar = {r[0] for r in conn.execute(
+        "SELECT DISTINCT tohum_sanatci FROM calma_listesi WHERE tohum_sanatci != ''")}
+    tohumlar |= {r[0] for r in conn.execute("SELECT DISTINCT artist FROM albums") if r[0]}
+    istemci = deezer_listesi(cevrimdisi=True)
+    bulucu: dict[int, set[str]] = defaultdict(set)
+    for ad in tohumlar:
+        for liste in liste_ara(istemci, ad):
+            if liste.get("id"):
+                bulucu[int(liste["id"])].add(normalize_esleme(ad))
+    for liste_id, ad in conn.execute(
+            "SELECT liste_id, tohum_sanatci FROM calma_listesi WHERE tohum_sanatci != ''"):
+        bulucu[int(liste_id)].add(normalize_esleme(ad))
+    sonuc: dict[str, set[int]] = defaultdict(set)
+    for liste_id, bulanlar in bulucu.items():
+        if len(bulanlar) == 1:
+            sonuc[next(iter(bulanlar))].add(liste_id)
+    return dict(sonuc)
+
+
+# --------------------------------------------------------------------------- #
 # Kapsam — sorgu tüm kütüphane mi, gizlenenin ekseni mi?
 # --------------------------------------------------------------------------- #
 
@@ -144,6 +183,7 @@ def eksen_haritasi(
 def pmi_tablosu(
     conn: sqlite3.Connection, tohumlar: set[str], *, olcut: str = "pmi",
     buzulme: float = 0.0, agirlik: str = "esit",
+    haric_listeler: set[int] | frozenset[int] = frozenset(),
 ) -> dict[str, dict[str, float]]:
     """{tohum: {aday: pmi}} — kütüphane kısıtı OLMADAN.
 
@@ -160,7 +200,8 @@ def pmi_tablosu(
         "SELECT liste_id, sanatci_anahtar FROM liste_parca "
         "WHERE sanatci_anahtar != ''"
     ):
-        listeler[liste_id].add(anahtar)
+        if liste_id not in haric_listeler:
+            listeler[liste_id].add(anahtar)
 
     if len(listeler) < 5:
         return {}
@@ -262,13 +303,17 @@ def gomu_haritalari(
     ):
         parca_ad[int(parca_id)] = sanatci
     havuz: dict[str, list[np.ndarray]] = defaultdict(list)
-    for dosya in PARCA_GOMU.glob("*.npy"):
+    havuz_parca: dict[str, list[int]] = defaultdict(list)
+    for dosya in sorted(PARCA_GOMU.glob("*.npy")):
         try:
             ad = parca_ad.get(int(dosya.stem))
         except ValueError:
             continue
         if ad:
             havuz[normalize_esleme(ad)].append(np.load(dosya))
+            havuz_parca[normalize_esleme(ad)].append(int(dosya.stem))
+    # Sızıntı düzeltmesi parçanın HANGİ listelerden geldiğini bilmeli.
+    gomu_haritalari.parcalar = dict(havuz_parca)
 
     yigin = lambda d: {a: np.stack(v) for a, v in d.items() if v}  # noqa: E731
     return yigin(kutup), yigin(havuz)
@@ -288,14 +333,18 @@ class SesErisimi:
     bulunmasını kolaylaştırır, bu da sızıntı olurdu.
     """
 
-    def __init__(self, kutup: dict[str, np.ndarray], havuz: dict[str, np.ndarray]):
+    def __init__(self, kutup: dict[str, np.ndarray], havuz: dict[str, np.ndarray],
+                 parcalar: dict[str, list[int]] | None = None):
         self.havuz_anahtar = sorted(havuz)
         self.havuz_sahip: list[str] = []
+        self.havuz_parca: list[int | None] = []
         havuz_satir = []
         for a in self.havuz_anahtar:
-            for v in havuz[a]:
+            kimlik = (parcalar or {}).get(a, [])
+            for k, v in enumerate(havuz[a]):
                 havuz_satir.append(v)
                 self.havuz_sahip.append(a)
+                self.havuz_parca.append(kimlik[k] if k < len(kimlik) else None)
         self.P = np.stack(havuz_satir) if havuz_satir else np.zeros((0, 512), "float32")
 
         self.kutup_sahip: list[str] = []
@@ -319,6 +368,7 @@ class SesErisimi:
 
     def sirala(
         self, gizlenen: str, sahip: set[str], sorgu: set[str] | None = None,
+        haric_satir: np.ndarray | None = None,
     ) -> list[str]:
         """`sorgu` sanatçılarına en yakın havuz sanatçıları, sıralı.
 
@@ -346,6 +396,8 @@ class SesErisimi:
 
         # Satır (parça) skoru = sorguya en yakın olduğu nokta.
         satir = duzeltilmis.max(axis=1)
+        # Sızan listelerden gelen parça bu katmanda havuzda yok.
+        dusen = haric_satir if haric_satir is not None else np.zeros(len(satir), bool)
 
         if self.kural == "cok_sesli" and sorgu is not None:
             from python.etiket_clap import komsu_cogunlugu, sanatci_sirala
@@ -353,6 +405,7 @@ class SesErisimi:
                    - self.LL[np.ix_(kalan, kalan)].mean(axis=1)[None, :])
             eksende = np.isin(self._sahip_dizi[kalan], list(sorgu))
             sayi, ort = komsu_cogunlugu(tum, eksende)
+            ort = np.where(dusen, np.nan, ort)
             sk = sanatci_sirala(ort, sayi, self.havuz_sahip)
             sk = {a: d for a, d in sk.items() if not (a in sahip and a != gizlenen)}
             return [a for a, _ in sorted(sk.items(), key=lambda x: -x[1])]
@@ -365,8 +418,8 @@ class SesErisimi:
             satir = np.where(eksende[tum.argmax(axis=1)], satir, -np.inf)
 
         skor: dict[str, float] = {}
-        for deger, anahtar in zip(satir, self.havuz_sahip):
-            if anahtar in sahip and anahtar != gizlenen:
+        for deger, anahtar, d in zip(satir, self.havuz_sahip, dusen):
+            if d or (anahtar in sahip and anahtar != gizlenen):
                 continue
             if deger == -np.inf:
                 continue
@@ -530,7 +583,7 @@ def calistir(
     liste_agirlik: str = "esit",
     calisma: str | None = None,
     melez_agirlik: tuple[float, float] = (1.0, 1.0), ag: bool = False,
-    ag_genis: bool = False,
+    ag_genis: bool = False, sizinti: bool = True, motor: bool = False,
 ) -> dict[str, dict]:
     """Her kütüphane sanatçısını sırayla gizle, her erişimin sırasını topla.
 
@@ -608,7 +661,19 @@ def calistir(
 
     print("CLAP gömüleri okunuyor…", file=sys.stderr)
     kutup_gomu, havuz_gomu = gomu_haritalari(conn)
-    ses = SesErisimi(kutup_gomu, havuz_gomu)
+    ses = SesErisimi(kutup_gomu, havuz_gomu, getattr(gomu_haritalari, "parcalar", None))
+
+    # Sızıntı düzeltmesi (bkz. `sizinti_listeleri`). `sizinti=False` eski
+    # protokol: eski sayıları yeniden üretmek ve farkı göstermek için.
+    haric_harita = sizinti_listeleri(conn) if sizinti else {}
+    parca_liste: dict[int, set[int]] = defaultdict(set)
+    if haric_harita:
+        for pid, lid in conn.execute(
+                "SELECT parca_id, liste_id FROM liste_parca WHERE parca_id IS NOT NULL"):
+            parca_liste[int(pid)].add(int(lid))
+        print(f"sızıntı düzeltmesi: {sum(len(v) for v in haric_harita.values())} liste "
+              f"yalnız gizlenenin adıyla bulunmuş, o katmanda çıkarılıyor", file=sys.stderr)
+    motor_kayit: list[dict] = []
     print(f"  kütüphane {ses.L.shape[0]} gömü · havuz {ses.P.shape[0]} gömü "
           f"({len(ses.havuz_anahtar)} sanatçı)", file=sys.stderr)
 
@@ -648,13 +713,25 @@ def calistir(
             ilk = [gorunurluk.get(x, 0) for x in liste[:10]]
             return float(np.median(ilk)) if ilk else float("nan")
 
-        s_pmi = sira_bul(pmi_sirala(tablo, tohumlar, kalan_sahip), gizli)
+        haric = haric_harita.get(gizli, set())
+        if haric:
+            tablo_k = pmi_tablosu(conn, sahip_tam, olcut=olcut, buzulme=buzulme,
+                                  agirlik=liste_agirlik, haric_listeler=haric)
+            pmi_havuz_k = {b for a in tablo_k for b in tablo_k[a]}
+            dusen = np.array([bool(parca_liste.get(pid)) and parca_liste[pid] <= haric
+                              for pid in ses.havuz_parca], dtype=bool)
+            ses_var = any(a == gizli and not d for a, d in zip(ses.havuz_sahip, dusen))
+        else:
+            tablo_k, pmi_havuz_k, dusen = tablo, pmi_havuz, None
+            ses_var = gizli in ses_havuz
+
+        pmi_liste = pmi_sirala(tablo_k, tohumlar, kalan_sahip)
+        s_pmi = sira_bul(pmi_liste, gizli)
         sonuc["liste_birlikteligi"]["siralar"].append(s_pmi)
-        sonuc["liste_birlikteligi"]["erisilebilir"] += gizli in pmi_havuz
+        sonuc["liste_birlikteligi"]["erisilebilir"] += gizli in pmi_havuz_k
         sonuc["liste_birlikteligi"]["ayrinti"].append((kut[gizli], s_pmi))
 
-        pmi_liste = pmi_sirala(tablo, tohumlar, kalan_sahip)
-        ses_liste = ses.sirala(gizli, kalan_sahip, sorgu)
+        ses_liste = ses.sirala(gizli, kalan_sahip, sorgu, haric_satir=dusen)
         sonuc["liste_birlikteligi"].setdefault("belirsizlik", []).append(
             _belirsizlik(pmi_liste))
         sonuc["ses_benzerligi"].setdefault("belirsizlik", []).append(
@@ -662,7 +739,7 @@ def calistir(
 
         s_ses = sira_bul(ses_liste, gizli)
         sonuc["ses_benzerligi"]["siralar"].append(s_ses)
-        sonuc["ses_benzerligi"]["erisilebilir"] += gizli in ses_havuz
+        sonuc["ses_benzerligi"]["erisilebilir"] += ses_var
         sonuc["ses_benzerligi"]["ayrinti"].append((kut[gizli], s_ses))
 
         melez_liste = melez_sirala(
@@ -671,7 +748,11 @@ def calistir(
             _belirsizlik(melez_liste))
         s_melez = sira_bul(melez_liste, gizli)
         sonuc["melez"]["siralar"].append(s_melez)
-        sonuc["melez"]["erisilebilir"] += gizli in (pmi_havuz | ses_havuz)
+        sonuc["melez"]["erisilebilir"] += (gizli in pmi_havuz_k) or ses_var
+        if motor:
+            motor_kayit.append({"gizli": gizli, "tohumlar": tohumlar,
+                                "sahip": kalan_sahip, "haric": haric,
+                                "liste": pmi_liste, "ses": ses_liste})
         sonuc["melez"]["ayrinti"].append((kut[gizli], s_melez))
 
         if ag:
@@ -701,7 +782,12 @@ def calistir(
         elif sira % 25 == 0:
             print(f"  {sira}/{len(anahtarlar)}", file=sys.stderr)
 
-    for veri in sonuc.values():
+    if motor and motor_kayit:
+        motor_olc(conn, sonuc, motor_kayit, kut, gorunurluk)
+
+    for ad, veri in sonuc.items():
+        if ad.startswith("_"):
+            continue
         if "gorulen" in veri:
             veri["havuz"] = len(veri["gorulen"])
         veri["ozet"] = ozet(veri["siralar"], veri["erisilebilir"],
@@ -710,6 +796,172 @@ def calistir(
         bel = [x for x in veri.get("belirsizlik", []) if x == x]
         veri["ozet"]["gorunurluk"] = float(np.median(bel)) if bel else float("nan")
     return sonuc
+
+
+# --------------------------------------------------------------------------- #
+# Motor — RP3β, EASE ve öğrenilmiş füzyon, İÇ İÇE ayarlanarak
+# --------------------------------------------------------------------------- #
+
+#: Izgaralar. α liste boyutu cezası, β aday popülerlik cezası, bağlam ağırlığı
+#: dil/ruh hâli listelerinin payı (1 = kapalı), λ EASE düzenlileştirmesi.
+#: α 2'ye kadar: Cooper 2014'ün en iyisi 1,9; Dacrema'nın aralığı 0–2 (tam
+#: metinle doğrulandı, `docs/arastirma/7-*`). Dacrema kodu varsayılanı α=1, β=0,6.
+RP3_IZGARASI = [(a, b, w) for a in (0.0, 0.5, 1.0, 1.5, 2.0)
+                for b in (0.0, 0.25, 0.5, 0.75, 1.0) for w in (1.0, 0.5, 0.2)]
+EASE_IZGARASI = [(lam, w) for lam in (1.0, 10.0, 100.0, 1000.0) for w in (1.0, 0.5)]
+DIS_KAT = 10
+
+
+def _rr_listesi(siralar: list[int | None]) -> list[float]:
+    return [1.0 / s if s else 0.0 for s in siralar]
+
+
+def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
+              kut: dict[str, str], gorunurluk: dict[str, int] | None = None) -> None:
+    """RP3β ve EASE ızgarası + koşullu logit füzyonu, iç içe CV ile.
+
+    Dış katta (10 kat, sorgu = gizlenen sanatçı) ızgara noktası ve füzyon
+    ağırlıkları YALNIZ eğitim sorgularında seçilir, dışarıdaki sorgular
+    sıralanır. Raporlanan her motor sayısı bu yüzden seçilmediği sorgularda
+    ölçülmüştür (Varma & Simon 2006; Dacrema 2019'un ana eleştirisi).
+    Üretim ayarı (`_motor_ayar`) ayrıca TÜM sorgularda seçilir.
+    """
+    from python import motor as M
+
+    print("Motor: grafik ve ızgara…", file=sys.stderr)
+    G = M.grafik_kur(conn, baglam_agirligi=1.0)
+    n_q = len(kayitlar)
+    rp3_s: list[list[list[str]]] = []      # [sorgu][ızgara] → sıra
+    ease_s: list[list[list[str]]] = []
+    ozellik: list[tuple[dict, dict, dict]] = []
+    for q, k in enumerate(kayitlar):
+        satir = G.satir_maskesi(k["haric"])
+        tohum = {a: 1.0 for a in k["tohumlar"]}
+        satirlar = []
+        ortak = None
+        for alfa, beta, bw in RP3_IZGARASI:
+            G.w = np.where(G.baglam, bw, 1.0).astype("float32")
+            skor, _, ortak_k = M.rp3(G, tohum, alfa=alfa, beta=beta, satir=satir)
+            ortak = ortak_k if ortak is None else ortak
+            satirlar.append(M.sirala(skor, G, k["sahip"]))
+        rp3_s.append(satirlar)
+        ease_satir = []
+        for lam, bw in EASE_IZGARASI:
+            G.w = np.where(G.baglam, bw, 1.0).astype("float32")
+            ease_satir.append(M.sirala(M.ease(G, tohum, lam=lam, satir=satir), G, k["sahip"]))
+        ease_s.append(ease_satir)
+        ozellik.append(M.ortak_ozeti(G, ortak))
+        if (q + 1) % 25 == 0:
+            print(f"  motor {q + 1}/{n_q}", file=sys.stderr)
+
+    hedef = [k["gizli"] for k in kayitlar]
+
+    def mrr(listeler, indeksler, g):
+        return float(np.mean([_rr1(listeler[q][g], hedef[q]) for q in indeksler])) \
+            if indeksler else 0.0
+
+    def en_iyi(listeler, indeksler, n_izgara):
+        return max(range(n_izgara), key=lambda g: (mrr(listeler, indeksler, g), -g))
+
+    def kayit(q, g_rp3, g_ease):
+        toplam, pay = ozellik[q]
+        havuz, F = M.oznitelikler(
+            {"rp3": rp3_s[q][g_rp3], "ease": ease_s[q][g_ease],
+             "liste": kayitlar[q]["liste"], "ses": kayitlar[q]["ses"]},
+            ortak=toplam, tohum_payi=pay)
+        return {"havuz": havuz, "F": F, "hedef": hedef[q]}
+
+    rng = np.random.default_rng(0)
+    katman = rng.permutation(n_q) % DIS_KAT
+    s_rp3: list[int | None] = [None] * n_q
+    s_ease: list[int | None] = [None] * n_q
+    s_motor: list[int | None] = [None] * n_q
+    gorunur = {"rp3": [], "ease": [], "motor": []}
+    gorunurluk = gorunurluk or {}
+
+    def ilk10(liste):
+        return float(np.median([gorunurluk.get(x, 0) for x in liste[:10]])) if liste else np.nan
+
+    katlar = []
+    for kat in range(DIS_KAT):
+        egit = [q for q in range(n_q) if katman[q] != kat]
+        sina = [q for q in range(n_q) if katman[q] == kat]
+        g_r = en_iyi(rp3_s, egit, len(RP3_IZGARASI))
+        g_e = en_iyi(ease_s, egit, len(EASE_IZGARASI))
+        ornek = [o for o in (M._ornek(kayit(q, g_r, g_e)) for q in egit) if o is not None]
+        lam = M.lambda_sec(ornek, tohum=kat)
+        theta = M.logit_egit(ornek, lam=lam)
+        katlar.append({"rp3": RP3_IZGARASI[g_r], "ease": EASE_IZGARASI[g_e],
+                       "lam": lam, "theta": theta.round(3).tolist()})
+        for q in sina:
+            s_rp3[q] = sira_bul(rp3_s[q][g_r], hedef[q])
+            s_ease[q] = sira_bul(ease_s[q][g_e], hedef[q])
+            r = kayit(q, g_r, g_e)
+            s_motor[q] = M._hedef_sirasi(r, theta)
+            sira = np.argsort(-M.puanla(r["F"], theta), kind="stable")[:10] if r["havuz"] else []
+            gorunur["rp3"].append(ilk10(rp3_s[q][g_r]))
+            gorunur["ease"].append(ilk10(ease_s[q][g_e]))
+            gorunur["motor"].append(ilk10([r["havuz"][i] for i in sira]))
+
+    def yol(siralar, havuzlar):
+        return {"siralar": siralar,
+                "erisilebilir": sum(1 for q in range(n_q) if hedef[q] in havuzlar[q]),
+                "ayrinti": [(kut[h], s) for h, s in zip(hedef, siralar)],
+                "havuz": int(np.median([len(h) for h in havuzlar])) if havuzlar else 0}
+
+    g_r_tum = en_iyi(rp3_s, range(n_q), len(RP3_IZGARASI))
+    g_e_tum = en_iyi(ease_s, range(n_q), len(EASE_IZGARASI))
+    tum_kayit = [kayit(q, g_r_tum, g_e_tum) for q in range(n_q)]
+    sonuc["rp3"] = yol(s_rp3, [set(rp3_s[q][g_r_tum]) for q in range(n_q)])
+    sonuc["ease"] = yol(s_ease, [set(ease_s[q][g_e_tum]) for q in range(n_q)])
+    sonuc["motor"] = yol(s_motor, [set(r["havuz"]) for r in tum_kayit])
+    for ad, deger in gorunur.items():
+        sonuc[ad]["belirsizlik"] = deger
+
+    ornek = [o for o in map(M._ornek, tum_kayit) if o is not None]
+    lam = M.lambda_sec(ornek)
+    theta = M.logit_egit(ornek, lam=lam)
+    alfa, beta, bw = RP3_IZGARASI[g_r_tum]
+    lam_e, bw_e = EASE_IZGARASI[g_e_tum]
+    rr = {ad: _rr_listesi(sonuc[ad]["siralar"])
+          for ad in ("motor", "rp3", "ease", "melez", "liste_birlikteligi", "ses_benzerligi")}
+    kiyas = {f"{a} − {b}": M.eslesmis_kiyas(rr[a], rr[b])
+             for a, b in (("motor", "melez"), ("motor", "rp3"), ("rp3", "liste_birlikteligi"),
+                          ("ease", "liste_birlikteligi"), ("motor", "ses_benzerligi"))}
+    sonuc["_motor_ayar"] = {
+        "alfa": alfa, "beta": beta, "lam_ease": lam_e,
+        # RP3β ve EASE ayrı bağlam ağırlığı seçebilir; üretim RP3β'nınkini alır.
+        "baglam_agirligi": bw, "baglam_agirligi_ease": bw_e,
+        "theta": theta.round(4).tolist(), "lam_logit": lam,
+        "katlar": katlar, "kiyas": kiyas, "sorgu": n_q,
+    }
+
+
+def _rr1(liste: list[str], hedef: str) -> float:
+    s = sira_bul(liste, hedef)
+    return 1.0 / s if s else 0.0
+
+
+def motor_raporu(sonuc: dict) -> str:
+    ayar = sonuc.get("_motor_ayar")
+    if not ayar:
+        return ""
+    from python.motor import OZNITELIKLER
+    satirlar = ["Motor — iç içe CV (her sayı, ayarın SEÇİLMEDİĞİ sorgularda)", "=" * 74,
+                f"üretim ayarı: RP3β α={ayar['alfa']} β={ayar['beta']} "
+                f"bağlam={ayar['baglam_agirligi']} · EASE λ={ayar['lam_ease']} · "
+                f"logit λ={ayar['lam_logit']}",
+                "füzyon ağırlıkları: " + ", ".join(
+                    f"{a}={t:+.2f}" for a, t in zip(OZNITELIKLER, ayar["theta"])),
+                "", f"{'eşli kıyas (MRR farkı)':<34}{'fark':>8}{'%95 aralık':>20}{'p':>8}"]
+    for ad, k in ayar["kiyas"].items():
+        aralik = f"[{k['alt']:+.3f}, {k['ust']:+.3f}]"
+        satirlar.append(f"{ad:<34}{k['fark']:>+8.3f}{aralik:>20}{k['p']:>8.3f}")
+    secimler = Counter(str(k["rp3"]) for k in ayar["katlar"])
+    satirlar += ["", "kat başına RP3β seçimi (α, β, bağlam): " + ", ".join(
+        f"{a} ×{n}" for a, n in secimler.most_common()),
+        "p: işaret çevirmeli permütasyon (20.000), aralık: eşli bootstrap.", ""]
+    return "\n".join(satirlar)
 
 
 def rapor(sonuc: dict[str, dict]) -> str:
@@ -723,6 +975,8 @@ def rapor(sonuc: dict[str, dict]) -> str:
         "-" * 84,
     ]
     for ad, veri in sonuc.items():
+        if ad.startswith("_"):
+            continue
         o = veri["ozet"]
         medyan = o["medyan_sira"]
         yuzde = o["medyan_yuzdelik"]
@@ -783,6 +1037,10 @@ def main(argv: list[str] | None = None) -> int:
     ayristirici.add_argument("--ses-kural", choices=("cok_sesli", "en_yakin_eksen", "eksen"),
                              default=SES_KURALI,
                              help="ses erişiminde eksen kuralı (kıyas için)")
+    ayristirici.add_argument("--motor", action="store_true",
+                             help="RP3β, EASE ve öğrenilmiş füzyonu da ölç (iç içe CV)")
+    ayristirici.add_argument("--eski-protokol", action="store_true",
+                             help="sızıntı düzeltmesi KAPALI (eski sayıları üretmek için)")
     ayristirici.add_argument("--en-kotu", type=int, default=0,
                              help="hiç bulunamayan ilk N sanatçıyı listele")
     args = ayristirici.parse_args(argv)
@@ -807,10 +1065,15 @@ def main(argv: list[str] | None = None) -> int:
                              float(x) for x in args.melez_agirlik.split(",")),
                          buzulme=args.buzulme, calisma=args.calisma,
                          liste_agirlik=args.liste_agirlik,
-                         ag=args.ag or args.ag_genis, ag_genis=args.ag_genis)
+                         ag=args.ag or args.ag_genis, ag_genis=args.ag_genis,
+                         sizinti=not args.eski_protokol, motor=args.motor)
         print(rapor(sonuc))
+        if args.motor:
+            print(motor_raporu(sonuc))
         if args.en_kotu:
             for ad, veri in sonuc.items():
+                if ad.startswith("_"):
+                    continue
                 kayip = [s for s, k in veri["ayrinti"] if k is None]
                 print(f"{ad}: bulunamayan {len(kayip)} — "
                       f"{', '.join(kayip[:args.en_kotu])}")
