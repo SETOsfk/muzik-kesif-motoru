@@ -551,6 +551,41 @@ KOMSU_COGUNLUK = 2
 ASGARI_PARCA = 2
 
 
+#: Ses benzerliğinin ölçeği. "merkez" (varsayılan): kosinüsten iki tarafın
+#: ortalama benzerliği çıkarılır — cebirsel olarak (a−m)·(u−m) − ‖m‖², yani
+#: ortalama MERKEZLEME. "mp": Mutual Proximity (Schnitzer ve ark. 2012, Gauss
+#: yaklaşımı) — iki tarafın da kendi benzerlik dağılımında komşuyu ne kadar
+#: «yakın» bulduğu. Feldbauer & Flexer 2019 kıyasında ölçekleme yöntemleri
+#: tutarlı kazandı, merkezleme karışıktı (`docs/arastirma/3-*`). ÖLÇÜLMEDİ:
+#: `degerlendirme --ses-olcek mp` ile kıyaslanmadan varsayılan olmaz (K19).
+SES_OLCEGI = "merkez"
+
+
+def _phi(z: np.ndarray) -> np.ndarray:
+    """Standart normal dağılım fonksiyonu — Abramowitz & Stegun 7.1.26 erf
+    yaklaşımı (en büyük hata 1,5e-7); scipy bağımlılığı yok."""
+    x = np.abs(z) / np.sqrt(2.0)
+    t = 1.0 / (1.0 + 0.3275911 * x)
+    y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+                - 0.284496736) * t + 0.254829592) * t * np.exp(-x * x)
+    return 0.5 * (1.0 + np.sign(z) * y)
+
+
+def mutual_proximity(S: np.ndarray) -> np.ndarray:
+    """(havuz × kütüphane) ham kosinüsten Gauss MP: Φ(z_satır) · Φ(z_sütun)."""
+    z_s = (S - S.mean(axis=1, keepdims=True)) / (S.std(axis=1, keepdims=True) + 1e-9)
+    z_u = (S - S.mean(axis=0, keepdims=True)) / (S.std(axis=0, keepdims=True) + 1e-9)
+    return _phi(z_s) * _phi(z_u)
+
+
+def ses_olcegi(S: np.ndarray, taban_satir, taban_sutun, yontem: str | None = None
+               ) -> np.ndarray:
+    """Üretim ve değerlendirmenin ORTAK ölçekleme işlevi (K19)."""
+    if (yontem or SES_OLCEGI) == "mp":
+        return mutual_proximity(S)
+    return S - taban_satir - taban_sutun
+
+
 def komsu_cogunlugu(tum: np.ndarray, eksende: np.ndarray, k: int = KOMSU_K
                     ) -> tuple[np.ndarray, np.ndarray]:
     """(eksendeki komşu sayısı, eksendeki en yakın k albüme ortalama skor).
@@ -663,7 +698,7 @@ def acik_havuz_adaylari(
     # 0,10→0,09); yinelenme tanım gereği sıfır.
     if len(k_tum) >= 10:
         taban_tum = (A_tum @ A_tum.T).mean(axis=1, keepdims=True)
-        S_tum = A_havuz @ A_tum.T - taban_havuz - taban_tum.T
+        S_tum = ses_olcegi(A_havuz @ A_tum.T, taban_havuz, taban_tum.T)
         uye_kume = set(k_uye)
         eksende = np.array([k in uye_kume for k in k_tum])
         skor = np.where(eksende[S_tum.argmax(axis=1)], skor, -np.inf)

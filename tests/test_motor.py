@@ -202,3 +202,51 @@ def test_clap_pencereleri_sabit():
     assert [len(x) for x in p] == [10 * sr] * 3 and p[1][0] == 10 * sr
     assert len(pencereler(y[: 25 * sr])) == 2
     assert len(pencereler(y[: 5 * sr])) == 1
+
+
+def test_insan_ciftleri_sinamasi(tmp_path, monkeypatch):
+    """Doğrulanmış çift okunur; sahip olunan öneri atlanır; tohumla güçlü bağlı
+    öneri olumsuz çiftten yukarıda sıralanır."""
+    import python.degerlendirme as D
+
+    monkeypatch.setattr(M, "AYAR_DOSYASI", tmp_path / "yok.json")
+    conn = _grafik({1: ["Meshuggah", "Vildhjarta", "Gojira"], 2: ["Meshuggah", "Vildhjarta"],
+                    3: ["Meshuggah", "Vildhjarta", "Textures"], 4: ["Textures", "Coldplay"],
+                    5: ["Coldplay", "Adele"], 6: ["Gojira", "Car Bomb"]})
+    with conn:
+        conn.execute("INSERT INTO albums (album_id, artist, title) VALUES ('a', 'Gojira', 'x')")
+    yol = tmp_path / "ciftler.csv"
+    yol.write_text(
+        "tohumlar,oneri,onay,op,negatif,dogrulama,bolum,kaynak\n"
+        "Meshuggah,Vildhjarta,3,+,0,dogrulandi,3.1,u\n"
+        "Meshuggah,Gojira,2,,0,dogrulandi,3.1,u\n"           # sahip: atlanır
+        "Meshuggah,Coldplay,1,-,1,dogrulandi,3.10,u\n"
+        "Meshuggah,Car Bomb,1,,0,bulunamadi,3.1,u\n",       # doğrulanmamış: okunmaz
+        encoding="utf-8")
+    ciftler = D.ciftleri_oku(yol)
+    assert [c["oneri"] for c in ciftler] == ["Vildhjarta", "Gojira", "Coldplay"]
+    s = D.cift_sinamasi(conn, ciftler)
+    assert s["sayim"]["zaten_sahip"] == 1 and s["sayim"]["olculen"] == 2
+    for yol_adi in ("rp3", "ease", "motor"):
+        o = s["ozet"][yol_adi]
+        assert o["n"] == 1 and o["@10"] == 1.0, yol_adi
+        assert o["yuzdelik"] < o["negatif_yuzdelik"], yol_adi
+    assert "İnsan çiftleri" in D.cift_raporu(s)
+
+
+def test_mutual_proximity():
+    """Φ yaklaşımı doğru; MP 'her şeye yakın' satırın (hub) üstünlüğünü kırar."""
+    from math import erf, sqrt
+
+    from python.etiket_clap import _phi, mutual_proximity, ses_olcegi
+
+    z = np.linspace(-4, 4, 81)
+    assert np.allclose(_phi(z), [0.5 * (1 + erf(v / sqrt(2))) for v in z], atol=2e-7)
+    rng = np.random.default_rng(0)
+    S = rng.normal(0.2, 0.05, (40, 10))
+    S[0] += 0.45                       # hub: her kütüphane albümüne yakın
+    S[1, 3] = 0.6                      # yalnız 3. albüme özgü yakınlık
+    ham_en_yakin = S[:, 3].argmax()
+    mp = mutual_proximity(S)
+    assert ham_en_yakin == 0 and mp[:, 3].argmax() == 1
+    assert np.allclose(ses_olcegi(S, 0.1, 0.2, "merkez"), S - 0.3)

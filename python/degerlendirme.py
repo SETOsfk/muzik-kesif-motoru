@@ -365,6 +365,7 @@ class SesErisimi:
     #: birden çok parça (`etiket_clap.komsu_cogunlugu` / `sanatci_sirala` —
     #: üretimin işlevleri ÇAĞRILIR, K19). Varsayılan üretiminki.
     from python.etiket_clap import SES_KURALI as kural
+    from python.etiket_clap import SES_OLCEGI as olcek
 
     def sirala(
         self, gizlenen: str, sahip: set[str], sorgu: set[str] | None = None,
@@ -400,9 +401,10 @@ class SesErisimi:
         dusen = haric_satir if haric_satir is not None else np.zeros(len(satir), bool)
 
         if self.kural == "cok_sesli" and sorgu is not None:
-            from python.etiket_clap import komsu_cogunlugu, sanatci_sirala
-            tum = (self.S[:, kalan] - taban_havuz
-                   - self.LL[np.ix_(kalan, kalan)].mean(axis=1)[None, :])
+            from python.etiket_clap import komsu_cogunlugu, sanatci_sirala, ses_olcegi
+            tum = ses_olcegi(self.S[:, kalan], taban_havuz,
+                             self.LL[np.ix_(kalan, kalan)].mean(axis=1)[None, :],
+                             self.olcek)
             eksende = np.isin(self._sahip_dizi[kalan], list(sorgu))
             sayi, ort = komsu_cogunlugu(tum, eksende)
             ort = np.where(dusen, np.nan, ort)
@@ -964,6 +966,124 @@ def motor_raporu(sonuc: dict) -> str:
     return "\n".join(satirlar)
 
 
+# --------------------------------------------------------------------------- #
+# İnsan çiftleri — forumlardaki «X'i seven Y'yi dener» (2026-10-20)
+# --------------------------------------------------------------------------- #
+
+def ciftleri_oku(yol: Path) -> list[dict]:
+    """`docs/arastirma/insan-ciftleri.csv`: tohumlar ('A | B'), oneri, onay,
+    op, negatif, dogrulama, bolum, kaynak. Yalnız doğrulanmış satırlar sayılır."""
+    import csv
+
+    with open(yol, newline="", encoding="utf-8") as f:
+        satirlar = list(csv.DictReader(f))
+    sonuc = []
+    for r in satirlar:
+        if r.get("dogrulama") not in ("dogrulandi", "onay_daha_az", "op_farkli"):
+            continue
+        tohum = [t.strip() for t in (r.get("tohumlar") or "").split("|") if t.strip()]
+        if tohum and r.get("oneri"):
+            sonuc.append({**r, "tohumlar": tohum,
+                          "negatif": r.get("negatif") in ("1", "True", "true")})
+    return sonuc
+
+
+def cift_sinamasi(conn: sqlite3.Connection, ciftler: list[dict]) -> dict:
+    """Dışarıdan gelen insan önerileriyle ikinci ölçüt — gizleme sınamasının
+    vekil sorununu (sahip olunan = popüler) taşımıyor: öneriler çoğunlukla
+    kütüphanede OLMAYAN, niş sanatçılar.
+
+    Sorgu çiftin tohumları (kütüphaneden bağımsız: YÖNTEMİN benzerlik bilgisini
+    ölçer). Aday havuzu grafiğin tamamı; tohumlar ve sahip olunanlar çıkarılır,
+    önerilen sanatçı sahip olunansa çift atlanır («zaten biliyorum»). Ses yolu
+    burada yok (tohumların ses gömüsü kütüphanede değil) — motor üç yolla.
+    """
+    from python import motor as M
+
+    ayar = M.ayar_oku()
+    G = M.grafik_kur(conn, baglam_agirligi=ayar["baglam_agirligi"])
+    sahip = set(kutuphane(conn))
+    theta = np.asarray(ayar["theta"])
+    yollar = ("liste_birlikteligi", "rp3", "ease", "motor")
+    sonuc = {y: {"pozitif": [], "negatif": []} for y in yollar}
+    sayim = Counter()
+    gruplar: dict[tuple, list[dict]] = defaultdict(list)
+    for c in ciftler:
+        gruplar[tuple(sorted(normalize_esleme(t) for t in c["tohumlar"]))].append(c)
+    for tohum_t, grup in gruplar.items():
+        tohum = {t: 1.0 for t in tohum_t if t in G.sira}
+        if not tohum:
+            sayim["tohum_grafikte_yok"] += len(grup)
+            continue
+        haric = sahip | set(tohum)
+        s_rp3, _, ortak = M.rp3(G, tohum, alfa=ayar["alfa"], beta=ayar["beta"])
+        tablo = pmi_tablosu(conn, set(tohum), olcut="npmi", buzulme=1.0)
+        siralar = {
+            "rp3": M.sirala(s_rp3, G, haric, derinlik=len(G.anahtar)),
+            "ease": M.sirala(M.ease(G, tohum, lam=ayar["lam_ease"]), G, haric,
+                             derinlik=len(G.anahtar)),
+            "liste_birlikteligi": pmi_sirala(tablo, set(tohum), haric),
+        }
+        toplam, pay = M.ortak_ozeti(G, ortak)
+        havuz, F = M.oznitelikler({"rp3": siralar["rp3"], "ease": siralar["ease"],
+                                   "liste": siralar["liste_birlikteligi"]},
+                                  ortak=toplam, tohum_payi=pay)
+        siralar["motor"] = [havuz[i] for i in np.argsort(-M.puanla(F, theta), kind="stable")]
+        aday_sayisi = len(G.anahtar) - len(haric & set(G.sira))
+        for c in grup:
+            hedef = normalize_esleme(c["oneri"])
+            if hedef in sahip:
+                sayim["zaten_sahip"] += 1
+                continue
+            if hedef not in G.sira:
+                sayim["oneri_grafikte_yok"] += 1
+            sayim["olculen"] += 1
+            for y in yollar:
+                r = sira_bul(siralar[y], hedef)
+                # Erişilemeyen olumsuz çift en iyi sonuç: en sona (yüzdelik 1).
+                yuzde = r / aday_sayisi if r else (1.0 if c["negatif"] else None)
+                sonuc[y]["negatif" if c["negatif"] else "pozitif"].append((r, yuzde))
+    ozet = {}
+    for y, v in sonuc.items():
+        poz, neg = v["pozitif"], v["negatif"]
+        rr = [1.0 / r if r else 0.0 for r, _ in poz]
+        yuzde = [p for _, p in poz if p is not None]
+        ozet[y] = {
+            "n": len(poz), "tavan": sum(1 for r, _ in poz if r),
+            "@10": sum(1 for r, _ in poz if r and r <= 10) / len(poz) if poz else 0.0,
+            "@50": sum(1 for r, _ in poz if r and r <= 50) / len(poz) if poz else 0.0,
+            "mrr": float(np.mean(rr)) if rr else 0.0,
+            "yuzdelik": float(np.median(yuzde)) if yuzde else float("nan"),
+            "negatif_yuzdelik": float(np.median([p for _, p in neg if p is not None]))
+            if any(p is not None for _, p in neg) else float("nan"),
+            "rr": rr,
+        }
+    kiyas = {f"{a} − {b}": M.eslesmis_kiyas(ozet[a]["rr"], ozet[b]["rr"])
+             for a, b in (("motor", "liste_birlikteligi"), ("rp3", "liste_birlikteligi"),
+                          ("ease", "liste_birlikteligi"), ("motor", "rp3"))}
+    return {"ozet": ozet, "kiyas": kiyas, "sayim": dict(sayim), "ogrenildi": ayar["ogrenildi"]}
+
+
+def cift_raporu(s: dict) -> str:
+    satirlar = ["", "İnsan çiftleri — forumda «X'i seven Y'yi dener» (doğrulanmış satırlar)",
+                "=" * 74,
+                f"{'yol':<22}{'n':>5}{'tavan':>7}{'@10':>7}{'@50':>7}{'MRR':>8}"
+                f"{'yüzdelik':>10}{'olumsuz yüzd.':>15}"]
+    for y, o in s["ozet"].items():
+        satirlar.append(f"{y:<22}{o['n']:>5}{o['tavan']:>7}{o['@10']:>7.2f}{o['@50']:>7.2f}"
+                        f"{o['mrr']:>8.3f}{o['yuzdelik']:>10.3f}{o['negatif_yuzdelik']:>15.3f}")
+    satirlar += ["", f"{'eşli kıyas (MRR farkı)':<34}{'fark':>8}{'%95 aralık':>20}{'p':>8}"]
+    for ad, k in s["kiyas"].items():
+        aralik = f"[{k['alt']:+.3f}, {k['ust']:+.3f}]"
+        satirlar.append(f"{ad:<34}{k['fark']:>+8.3f}{aralik:>20}{k['p']:>8.3f}")
+    satirlar += ["", "sayım: " + ", ".join(f"{k}={v}" for k, v in sorted(s["sayim"].items())),
+                 "yüzdelik: medyan sıra / aday sayısı (küçük iyi, rastgele 0,5). Olumsuz",
+                 "çiftlerin yüzdeliği olumlulardan BÜYÜK olmalı (forumda reddedilenler aşağıda).",
+                 "motor ayarı " + ("öğrenilmiş (motor.json)" if s["ogrenildi"]
+                                   else "VARSAYILAN — önce `python -m python.motor --egit`"), ""]
+    return "\n".join(satirlar)
+
+
 def rapor(sonuc: dict[str, dict]) -> str:
     satirlar = [
         "",
@@ -1041,11 +1161,19 @@ def main(argv: list[str] | None = None) -> int:
                              help="RP3β, EASE ve öğrenilmiş füzyonu da ölç (iç içe CV)")
     ayristirici.add_argument("--eski-protokol", action="store_true",
                              help="sızıntı düzeltmesi KAPALI (eski sayıları üretmek için)")
+    ayristirici.add_argument("--ciftler", type=Path,
+                             help="insan çiftleri CSV'si (docs/arastirma/insan-ciftleri.csv); "
+                                  "yalnız bu sınamayı koşar")
+    ayristirici.add_argument("--ses-olcek", choices=("merkez", "mp"), default=None,
+                             help="ses benzerliği ölçeği: merkezleme (varsayılan) ya da "
+                                  "Mutual Proximity (kıyas için)")
     ayristirici.add_argument("--en-kotu", type=int, default=0,
                              help="hiç bulunamayan ilk N sanatçıyı listele")
     args = ayristirici.parse_args(argv)
 
     SesErisimi.kural = args.ses_kural
+    if args.ses_olcek:
+        SesErisimi.olcek = args.ses_olcek
     conn = baglan(args.db)
     # Bilinmeyen çalışma kimliği SESSİZCE boş eksen haritası veriyordu ve
     # sonuçlar rastgeleye yakın çıkıyordu (2026-09-28: yer tutucu kimlikle
@@ -1058,6 +1186,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"HATA: '{args.calisma}' diye bir kümeleme çalışması yok. Son çalışmalar:",
               *mevcut, sep="\n  ")
         return 2
+    if args.ciftler:
+        try:
+            print(cift_raporu(cift_sinamasi(conn, ciftleri_oku(args.ciftler))))
+        finally:
+            conn.close()
+        return 0
     try:
         sonuc = calistir(conn, limit=args.limit, ayrinti=args.ayrinti,
                          kapsam=args.kapsam, olcut=args.olcut,
