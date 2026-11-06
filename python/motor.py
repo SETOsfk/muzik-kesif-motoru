@@ -404,24 +404,27 @@ LAMBDA_IZGARASI = (1e4, 100.0, 30.0, 10.0, 3.0, 1.0, 0.3)
 
 
 def lambda_sec(ornekler, *, kat: int = 5, tohum: int = 0) -> float:
-    """Gruplu k-katlı CV; ölçüt dışarıda bırakılan sorguların MRR'ı — asıl
-    istenen sıralama, olabilirlik değil. Eşitlikte büyük λ (öncüle yakın)."""
+    """Gruplu k-katlı CV; ölçüt dışarıda bırakılan sorguların NDCG'si
+    (tek ilgili öğe: 1/log₂(1+sıra); Järvelin & Kekäläinen 2002) — sıralamanın
+    tamamı, olabilirlik değil. MRR DEĞİL: yapay sınamada MRR birkaç birinci
+    sıra isabetine kilitlenip erişimi genişleten çözümü (@50 0,17 → 0,07)
+    eledi. Eşitlikte büyük λ (öncüle yakın)."""
     if len(ornekler) < kat * 2:
         return LAMBDA_IZGARASI[0]
     rng = np.random.default_rng(tohum)
     katman = rng.permutation(len(ornekler)) % kat
-    en_iyi, en_iyi_mrr = LAMBDA_IZGARASI[0], -np.inf
+    en_iyi, en_iyi_ndcg = LAMBDA_IZGARASI[0], -np.inf
     for lam in LAMBDA_IZGARASI:
-        rr = []
+        puan = []
         for k in range(kat):
             egit = [o for o, c in zip(ornekler, katman) if c != k]
             theta = logit_egit(egit, lam=lam)
             for F, pos in (o for o, c in zip(ornekler, katman) if c == k):
                 s = puanla(F, theta)
-                rr.append(1.0 / (1 + int((s > s[pos]).sum())))
-        mrr = float(np.mean(rr))
-        if mrr > en_iyi_mrr + 1e-12:
-            en_iyi, en_iyi_mrr = lam, mrr
+                puan.append(1.0 / np.log2(2 + int((s > s[pos]).sum())))
+        ndcg = float(np.mean(puan))
+        if ndcg > en_iyi_ndcg + 1e-12:
+            en_iyi, en_iyi_ndcg = lam, ndcg
     return en_iyi
 
 
