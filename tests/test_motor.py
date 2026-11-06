@@ -89,7 +89,10 @@ def test_logit_bilgili_ozniteligi_ogrenir_ve_buyuk_lambda_onculdur():
         ornekler.append((F, pos))
     theta = M.logit_egit(ornekler, lam=0.1)
     assert theta[0] > 2 and abs(theta[0]) > np.abs(theta[1:]).max()
-    assert np.allclose(M.logit_egit(ornekler, lam=1e9), M.oncul(), atol=1e-4)
+    # λ → ∞: ceza yalnız öncüle DİK bileşende → θ öncülle aynı yönde (ölçek veriden).
+    uzak = M.logit_egit(ornekler, lam=1e9)
+    mu = M.oncul()
+    assert uzak @ mu / (np.linalg.norm(uzak) * np.linalg.norm(mu)) > 0.9999
 
 
 def test_eslesmis_kiyas():
@@ -178,19 +181,27 @@ def test_uretim_motor_stratejisi_ve_gerekce(tmp_path, monkeypatch):
             for k in (0, 1):
                 conn.execute("INSERT INTO memberships (album_id, calisma_id, kume_id, uyelik)"
                              " VALUES (?,?,?,?)", (f"a{i}", cal, k, 0.9 if k == eksen else 0.1))
+    # K19 kapısı: bu kütüphanede ölçülüp ayarlanmadan motor aday yazmaz.
+    assert A.motor(conn, cal, 0, adet=5) == []
+    ayar_yolu = tmp_path / "motor.json"
+    monkeypatch.setattr(M, "AYAR_DOSYASI", ayar_yolu)
+    M.ayar_yaz({k: v for k, v in M.ayar_oku(conn).items() if k != "ogrenildi"}, ayar_yolu)
     adaylar = A.motor(conn, cal, 0, adet=5)
     adlar = [a.artist for a in adaylar]
     assert adlar[0] == "Vildhjarta" and "Sezen Aksu" not in adlar
     assert not {"Meshuggah", "Gojira"} & set(adlar)
+    # Car Bomb yalnız TEK ortak listeyle bağlı: kanıt eşiğinin altında, kart olmaz.
+    assert "Car Bomb" not in adlar
     ilk = adaylar[0]
-    assert ilk.dayanak["parca_id"]
+    assert ilk.dayanak["parca_id"] and ilk.dayanak["tekil_ortak_liste"] == 3
     assert tuple(ilk.dayanak["tohumlar"][0]) == ("Meshuggah", 2)
     belirtec = AKTIF_DIL.set("tr")
     try:
         metin = gerekce("motor", ilk.dayanak, eksen="metal")
     finally:
         AKTIF_DIL.reset(belirtec)
-    assert "Meshuggah (2)" in metin
+    assert "Meshuggah (2)" in metin and "Toplam 3 listede" in metin
+    assert "Zayıf kanıt: yalnız 3 ayrı listeye" in metin
 
 
 def test_clap_pencereleri_sabit():
@@ -200,7 +211,10 @@ def test_clap_pencereleri_sabit():
     y = np.arange(30 * sr, dtype="float32")
     p = pencereler(y)
     assert [len(x) for x in p] == [10 * sr] * 3 and p[1][0] == 10 * sr
-    assert len(pencereler(y[: 25 * sr])) == 2
+    # Kalan ≥ 2 sn: sona hizalı pencere (29,99 sn'lik klip son 10 sn'yi atmasın).
+    kuyruk = pencereler(y[: int(29.99 * sr)])
+    assert len(kuyruk) == 3 and kuyruk[-1][-1] == int(29.99 * sr) - 1
+    assert len(pencereler(y[: 21 * sr])) == 2          # kalan 1 sn: atlanır
     assert len(pencereler(y[: 5 * sr])) == 1
 
 
@@ -230,7 +244,9 @@ def test_insan_ciftleri_sinamasi(tmp_path, monkeypatch):
     for yol_adi in ("rp3", "ease", "motor"):
         o = s["ozet"][yol_adi]
         assert o["n"] == 1 and o["@10"] == 1.0, yol_adi
-        assert o["yuzdelik"] < o["negatif_yuzdelik"], yol_adi
+        assert o["negatif_n"] == 1 and o["negatif_@50"] <= 1.0, yol_adi
+    # rp3: Coldplay'e Meshuggah'tan liste yolu yok → olumsuz ilk 50'de değil.
+    assert s["ozet"]["rp3"]["negatif_@50"] == 0.0
     assert "İnsan çiftleri" in D.cift_raporu(s)
 
 
@@ -250,3 +266,62 @@ def test_mutual_proximity():
     mp = mutual_proximity(S)
     assert ham_en_yakin == 0 and mp[:, 3].argmax() == 1
     assert np.allclose(ses_olcegi(S, 0.1, 0.2, "merkez"), S - 0.3)
+
+
+def test_ses_dusen_parca_sanatci_sayisinda_kalmaz():
+    """2026-10-20 incelemesinde üç bağımsız sınamadan geçen hata: sızan listeden
+    gelen parça NaN yapılıp sanatçının parça sayısında kalıyordu; gizlenenin
+    tek kalan parçasıyla tek parça kuralı hiç uygulanamıyordu. Değerlendirme
+    üretimdeki (parça hiç yok) sonucu vermeli."""
+    from python.degerlendirme import SesErisimi
+
+    rng = np.random.default_rng(1)
+
+    def birim(v):
+        return (v / np.linalg.norm(v)).astype("float32")
+
+    eksen, dis = birim(rng.normal(size=512)), birim(rng.normal(size=512))
+    yakin = lambda y, s: birim(y + s * rng.normal(size=512) / np.sqrt(512) * 5)  # noqa: E731
+    kutup = {a: np.stack([yakin(eksen, 0.3)]) for a in ("l1", "l2", "l3")}
+    kutup |= {a: np.stack([yakin(dis, 0.3)]) for a in ("d1", "d2", "d3")}
+    kutup["h"] = np.stack([birim(eksen + 0.1 * rng.normal(size=512))])
+    t_kalan, t_dusen = yakin(eksen, 0.2), yakin(dis, 0.2)
+    diger = {f"x{i}": np.stack([birim(rng.normal(size=512)) for _ in range(2)])
+             for i in range(4)}
+    sahip, sorgu = {"l1", "l2", "l3", "d1", "d2", "d3"}, {"l1", "l2", "l3"}
+
+    s = SesErisimi(kutup, {"h": np.stack([t_dusen, t_kalan]), **diger})
+    dusen = np.array([a == "h" and i == 0 for a in s.havuz_anahtar
+                      for i in range(2)])
+    uretim = SesErisimi(kutup, {"h": np.stack([t_kalan]), **diger}).sirala("h", sahip, sorgu)
+    assert "h" in uretim
+    assert s.sirala("h", sahip, sorgu, haric_satir=dusen) == uretim
+
+
+def test_sizinti_bulucu_ad_icerirse_gizlenenin_aramasi():
+    """«Allan Holdsworth & Gordon Beck» araması da Holdsworth'ün adıyla yapılmış
+    bir aramadır: yalnız ikisinin bulduğu liste Holdsworth katmanında düşer."""
+    import python.degerlendirme as D
+
+    assert D._ad_icerir("allan holdsworth gordon beck", "allan holdsworth")
+    assert not D._ad_icerir("allan holdsworthian", "allan holdsworth")
+    conn = baglan(":memory:")
+    with conn:
+        for ad in ("Allan Holdsworth", "Allan Holdsworth & Gordon Beck", "Gojira"):
+            conn.execute("INSERT INTO albums (album_id, artist, title) VALUES (?,?,'x')",
+                         (ad, ad))
+        conn.executemany("INSERT INTO calma_listesi (liste_id, baslik, tohum_sanatci) "
+                         "VALUES (?,?,?)", [(1, "a", "Allan Holdsworth"),
+                                            (2, "b", "Allan Holdsworth & Gordon Beck"),
+                                            (3, "c", "Gojira")])
+    import python.discover.calma_listesi as L
+    cevap = {"Allan Holdsworth": [{"id": 1}, {"id": 2}],
+             "Allan Holdsworth & Gordon Beck": [{"id": 2}], "Gojira": [{"id": 3}, {"id": 1}]}
+    eski = L.liste_ara
+    L.liste_ara = lambda istemci, ad, adet=6: cevap.get(ad, [])
+    try:
+        harita = D.sizinti_listeleri(conn)
+    finally:
+        L.liste_ara = eski
+    assert harita["allan holdsworth"] == {2}          # 1'i Gojira da buldu
+    assert harita["gojira"] == {3}

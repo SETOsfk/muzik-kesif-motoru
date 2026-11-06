@@ -14,6 +14,8 @@ tam kaynak listeleri bu klasördeki altı raporda.
 | [6-degerlendirme-ve-siralama.md](6-degerlendirme-ve-siralama.md) | Çevrimdışı değerlendirme, küçük veride sıralayıcı öğrenme, istatistiksel test | ~50 |
 | [7-algoritma-dogrulama.md](7-algoritma-dogrulama.md) | **Tam metin:** RP3β, EASE/EDLAE + Woodbury, Aiolli, Dacrema ayarı, GF-CF, Pixie, kalibrasyon | sayfa künyeli |
 | [8-muzik-dogrulama.md](8-muzik-dogrulama.md) | **Tam metin:** Lesota, Kowald, vl6, Zamani, Anderson, BaRT, Tamm & Aljanaki, Sandler 2026 | sayfa künyeli |
+| [9-topluluk-tam-metin.md](9-topluluk-tam-metin.md) | **Tam metin:** 41 forum ipliği (666 ileti) + 7 HN ipliği (530 yorum); temalar, insan çifti tablosu. Reddit giriş duvarı yüzünden okunamadı | iplik künyeli |
+| [insan-ciftleri.csv](insan-ciftleri.csv) | 306 «X'i seven Y'yi dener» çifti; 130 çekirdek çift kaynak ipliği yeniden okunarak tek tek doğrulandı (86 doğru, 20 onay az, 21 OP kararı farklı, 3 yok). `degerlendirme --ciftler` | — |
 | [10-kaynak-dogrulama.md](10-kaynak-dogrulama.md) | **Asıl koşul metinleri** + kapsama ölçümü (Wikidata, MusicBrainz, ListenBrainz, Deezer) | ham sayfalar |
 
 ## Yöntemin sınırları — okumadan önce
@@ -26,7 +28,7 @@ tam kaynak listeleri bu klasördeki altı raporda.
   Raporlar her iddiayı işaretliyor († / [B] / [H] = önceki bilgiden).
   Ağ açıldıktan sonra **ikinci dalga (7, 8, 10) makaleleri ve koşul metinlerini
   tam okudu** ve ilk dalgayı düzeltti (aşağıda). Topluluk iplerinin tam
-  okuması (9) ayrı.
+  okuması 9'da.
 - **Reddit ve forumlar yalnız OKUNDU.** Motor bunlardan veri çekmiyor: Reddit API
   başvurusu reddedildi, onaysız uç nokta kullanılmaz (K10). Okumanın ürünü
   tasarım ilkeleri ve sınama için insan eliyle kurulmuş "X'i seven Y'yi dener" çiftleri.
@@ -94,6 +96,16 @@ tam kaynak listeleri bu klasördeki altı raporda.
 4. **CLAP sabit pencereler.** Kütüphane ve havuz BİRLİKTE yeniden gömülmeli:
    `python -m python.etiket_clap --gomu --yeniden` ve
    `python -m python.etiket_clap --parca-gomu --yeniden`.
+
+## Kod incelemesi (2026-11-06)
+
+Motor kodu dört boyutta incelendi; 31 bulgu çıktı, gerçek olanların hepsi düzeltildi
+(karar günlüğü (23)). En önemlileri:
+- ses yolunda sızıntı katmanının tek parça kuralını bozması;
+- öncül cezasının yönü ölçekle karıştırması;
+- motorun 1000 derinlikten «bağımsız uzlaşma» üretmesi (Sezen Aksu vakasının tekrarı);
+- motorun ölçülmeden aktarım ve «büyüt» yoluyla üretime girmesi. Artık o
+  kütüphanede ölçülüp ayarlanmadan aday yazmıyor.
 
 ## Sıradakiler — kanıt sırasıyla, hepsi K19'dan geçecek
 

@@ -193,8 +193,8 @@ SOZLUK_EN: dict[str, dict[str, str]] = {
         "ad": "engine",
         "kisa": "Four routes (two playlist-graph methods, RP3β and EASE, plus link strength and sound similarity) blended with weights LEARNED from the hide-an-artist test.",
         "nasil": "For each pick, the route ranks and evidence counts (shared playlists, share of linked library artists) feed a conditional logit whose weights are chosen by nested cross-validation. The popularity penalty lives in RP3β's β. Language and mood playlists are down-weighted.",
-        "capalar": "With infinite regularisation the engine equals the hybrid ranking; it only departs from it when the measurement says so.",
-        "uyari": "The weights are learned from finding artists you own again, which measures reach, not liking. Your real decisions decide its share of the deck.",
+        "capalar": "With infinite regularisation the weights point the same WAY as the hybrid ranking's (playlists 1 : sound 2); it departs from that only when the measurement says so. It is not identical to the hybrid: it uses more seed artists and a deeper candidate list.",
+        "uyari": "The weights are learned in YOUR library, from finding artists you own again, which measures reach, not liking. It produces nothing until it has been measured and tuned. Your real decisions decide its share of the deck.",
     },
     "melez": {
         "ad": "hybrid ranking",

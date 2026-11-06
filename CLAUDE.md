@@ -440,8 +440,9 @@ kaynaklar ARASINDA Thompson örneklemesi, Beta(1+beğendim, 1+tutmadı), sanatç
 düzeyinde, gerçek kararlardan. Sebep ölçüldü: vekil ölçütün "en iyisi" melez,
 gerçek tercihte %25 [10–49]; ses %67 [25–92] (n küçük). Tohum çalışma + karar
 sayısı: aynı durum aynı deste (K2). Deste derinliği tavanı 50 (ölçülmüş ufuk).
-Uzlaşma (2026-10-20): birden çok bağımsız kanıt ailesinin gösterdiği sanatçı
-strateji içinde öne alınır (en çok 1 σ); ÖLÇÜLMEDİ, `kesif.uzlasma_isabeti` ölçer.
+Uzlaşma (2026-10-20, 11-06 düzeltmesi): kendi ailesi dışında bağımsız bir
+kanıt ailesinin de gösterdiği sanatçı strateji içinde aile başına 2 basamak öne
+alınır (en çok 4, sıra uzayında); ÖLÇÜLMEDİ, `kesif.uzlasma_isabeti` ölçer.
 
 **Listem** (`liste` tablosu) feedback'ten ayrıdır: biri ölçüm, öteki iş listesi.
 Listeden otomatik indirme YAPILMAZ (belgelenmemiş uçlar, K10); dışa aktarım +
@@ -456,7 +457,13 @@ koşullu logitle birleştiriyor.
 - Öncül bugünkü melez; λ iç CV'yle seçiliyor, λ → ∞ iken motor melezle aynı.
 - Popülerlik öznitelik değil (PDA yapay veride motoru çökertti); ceza RP3β'nın β'sında.
 - Dil ve ruh hâli listelerinin ağırlığı kısılıyor.
-- Ayarlar iç içe CV'de yalnız eğitim sorgularında seçiliyor.
+- Ayarlar iç içe CV'de yalnız eğitim sorgularında seçiliyor (öncülün yönü ve
+  liste ayarları hariç; rapor bunu yazar). Öncül cezası μ'ya DİK bileşende.
+- **Ölçülüp ayarlanmadan aday yazmaz** (`{id}.motor.json`, kullanıcıya özgü,
+  `python -m python.motor --egit`). Kart «kaynak»ı yalnız ilk 48 sıra ve ≥ 2
+  ayrı ortak liste (Sezen Aksu vakası).
+- İkinci ölçüt: forumdan doğrulanmış 127 insan çifti
+  (`degerlendirme --ciftler docs/arastirma/insan-ciftleri.csv`).
 
 **Sınama sızıntısı düzeltildi:** gizlenen sanatçının ADIYLA bulunmuş listeler o
 katmanda çıkarılıyor (`degerlendirme.sizinti_listeleri`, varsayılan). Bu tarihten
@@ -497,7 +504,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 339 test geçiyor (bulutta `sklearn`
+- **Testler:** `.venv/bin/python -m pytest` — 342 test geçiyor (bulutta `sklearn`
   olmadığı için 2 ses kümesi testi düşer). Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
@@ -539,7 +546,8 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 ### Sıradaki işler (öncelik sırasıyla)
 -2. **Motoru gerçek veride ölç ve ayarla** (K24, karar günlüğü (22)):
    `degerlendirme --motor --olcut npmi --buzulme 1 --melez-agirlik 1,2`, sonra
-   `python -m python.motor --egit` ve `adaylar --tum-eksenler --strateji motor`.
+   `python -m python.motor --egit` ve `adaylar --tum-eksenler --strateji motor`;
+   ardından `degerlendirme --ciftler docs/arastirma/insan-ciftleri.csv`.
    Önce CLAP gömülerini `--yeniden` ile tazele. Araştırmanın sıradaki adımları:
    `docs/arastirma/README.md` (Mutual Proximity, çok klip, vokalsiz CLAP).
 -1. Spektral çalışma ölçüldü ve etkin (karar günlüğü (17)): liste yolu belirgin

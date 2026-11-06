@@ -50,8 +50,10 @@ import numpy as np
 
 from python.metin import normalize_esleme
 
-#: Öğrenilmiş ayarların yeri. `data/` git'e girmez; ayar makineye ve
-#: kütüphaneye aittir. Dosya yoksa literatür varsayılanları kullanılır.
+#: Ayar dosyası KULLANICIYA özgü: ana veritabanının yanında `{id}.motor.json`
+#: (`ayar_yolu`). Bu yalnız bağlantının dosyası yoksa (bellek içi) kullanılır.
+#: Ayar bir kütüphanenin gizleme sınamasından öğrenildiği için başka
+#: kullanıcıya uygulanmaz (K20).
 AYAR_DOSYASI = Path("data/cache/motor.json")
 
 #: RP3β varsayılanları — Dacrema ve ark. 2019'un resmî kodu (α=1, β=0,6).
@@ -73,8 +75,18 @@ YOL_DERINLIGI = 1000
 #: Öznitelikler — sıra eğitimde ve puanlamada aynı olmalı.
 OZNITELIKLER = ("rr_rp3", "rr_ease", "rr_liste", "rr_ses",
                 "ortak_liste", "tohum_payi")
-#: Öncül merkezi = üretimdeki melez (RRF, liste 1 : ses 2).
+#: Öncül YÖNÜ = üretimdeki melez (RRF, liste 1 : ses 2). Ceza yalnız bu yöne
+#: DİK bileşende (`logit_egit`): ölçek serbest, çünkü koşullu logitte ölçek
+#: sıralamayı değil «sıcaklığı» belirler. 2026-10-20 incelemesi ölçtü: ceza
+#: ‖θ − μ‖² iken CV, yön doğru olsa bile μ'yü hiç seçmiyordu.
 ONCUL = {"rr_liste": 1.0, "rr_ses": 2.0}
+#: Bir yolun karta «kaynak» (kanıt ailesi) olarak yazılması için en derin sıra:
+#: melezin baktığı derinlik (4 × 12). 1000 derinlikteki her sanatçı tek ortak
+#: listeyle «bağımsız uzlaşma» kazanıyordu (Sezen Aksu vakasının tekrarı).
+KANIT_DERINLIGI = 48
+#: RP3β/EASE yolu ancak bu kadar AYRI ortak listeyle kanıt sayılır (PMI'nın
+#: `asgari_liste`'siyle aynı: tek liste tesadüf olabilir).
+ASGARI_TEKIL_LISTE = 2
 
 
 # --------------------------------------------------------------------------- #
@@ -201,32 +213,58 @@ def rp3(G: Grafik, tohum: dict[str, float], *, alfa: float = ALFA,
     return katki.sum(axis=0), katki, ortak
 
 
+_EASE_ONBELLEK: dict[tuple, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+
+
 def ease(G: Grafik, tohum: dict[str, float], *, lam: float = LAMBDA,
-         satir: np.ndarray | None = None) -> np.ndarray:
+         satir: np.ndarray | None = None, w: np.ndarray | None = None) -> np.ndarray:
     """EASE (Steck 2019), Woodbury özdeşliğiyle: yalnız m×m ters alma.
 
     P = (XᵀX + λI)⁻¹ = (1/λ)[I − Xᵀ(λI + XXᵀ)⁻¹X],   X = √w · B
     B_ease = I − P·diag(P)⁻¹  ⇒  tohum dışı j için skor_j = −(qP)_j / P_jj
     m = 482 ≪ n ≈ 10 bin: 10k×10k (~400 MB) yerine 482×482 ters alınıyor.
+
+    `w`: liste ağırlığı (verilmezse grafiğinki). EASE'nin bağlam ağırlığı
+    RP3β'nınkinden ayrı seçiliyor; üretim ölçülen ağırlıkla koşmalı.
+    (λI + XXᵀ)⁻¹X tohumdan bağımsız: tam grafikte (satir yok) önbelleklenir —
+    eksen başına yeniden hesaplanmasın.
     """
     i, q = _tohumlar(G, tohum)
     n = G.B.shape[1]
     if not i.size:
         return np.zeros(n)
+    w = G.w if w is None else w
     B = G.B if satir is None else G.B[satir]
-    w = G.w if satir is None else G.w[satir]
-    X = (np.sqrt(w)[:, None] * B).astype("float64")
-    m = X.shape[0]
-    K_ters = np.linalg.inv(lam * np.eye(m) + X @ X.T)
-    KX = K_ters @ X                                            # (m × n)
+    w = w if satir is None else w[satir]
+    anahtar = (id(G), G.B.shape, lam, w.tobytes()) if satir is None else None
+    if anahtar is not None and anahtar in _EASE_ONBELLEK:
+        X, KX, diagP = _EASE_ONBELLEK[anahtar]
+    else:
+        X = (np.sqrt(w)[:, None] * B).astype("float64")
+        m = X.shape[0]
+        KX = np.linalg.solve(lam * np.eye(m) + X @ X.T, X)     # (m × n)
+        diagP = (1.0 - np.einsum("pj,pj->j", X, KX)) / lam
+        if anahtar is not None:
+            _EASE_ONBELLEK.clear()          # tek grafik, tek ayar: bellek sınırlı
+            _EASE_ONBELLEK[anahtar] = (X, KX, diagP)
     qXt = X[:, i] @ q                                          # (m,)
     qP = -(qXt @ KX) / lam
     qP[i] += q / lam
-    diagP = (1.0 - np.einsum("pj,pj->j", X, KX)) / lam
     skor = -qP / diagP
     skor[i] = 0.0
     skor[B.sum(axis=0) == 0] = 0.0
     return skor
+
+
+def tekil_ortak(G: Grafik, tohum: dict[str, float], satir: np.ndarray | None = None
+                ) -> np.ndarray:
+    """Her sanatçının tohumlardan EN AZ BİRİYLE paylaştığı AYRI liste sayısı.
+    Tohum başına sayıları toplamak aynı listeyi birden çok kez sayar."""
+    i, _ = _tohumlar(G, tohum)
+    B = G.B if satir is None else G.B[satir]
+    if not i.size:
+        return np.zeros(B.shape[1])
+    return (B[:, i].any(axis=1).astype("float32")) @ B
 
 
 def ortak_ozeti(G: Grafik, ortak: np.ndarray) -> tuple[dict[str, float], dict[str, float]]:
@@ -237,6 +275,21 @@ def ortak_ozeti(G: Grafik, ortak: np.ndarray) -> tuple[dict[str, float], dict[st
     toplam, pay = ortak[:, nz].sum(axis=0), (ortak[:, nz] > 0).mean(axis=0)
     return ({G.anahtar[j]: float(t) for j, t in zip(nz, toplam)},
             {G.anahtar[j]: float(p) for j, p in zip(nz, pay)})
+
+
+def tam_sira(skor: np.ndarray, G: Grafik, sahip_idx: np.ndarray, hedef: str
+             ) -> tuple[int | None, int]:
+    """(hedefin KESİLMEMİŞ sırası ya da None, destek = pozitif skorlu sahip
+    olunmayan aday sayısı). `sirala` ile aynı düzen (kararlı, eşitlikte sütun
+    sırası); tavan ve yüzdelik 1000'de kesilmiş listeden hesaplanmasın diye."""
+    m = skor > 0
+    m[sahip_idx] = False
+    destek = int(m.sum())
+    j = G.sira.get(hedef)
+    if j is None or not m[j]:
+        return None, destek
+    once = int((m & (skor > skor[j])).sum()) + int((m[:j] & (skor[:j] == skor[j])).sum())
+    return once + 1, destek
 
 
 def sirala(skor: np.ndarray, G: Grafik, sahip: set[str], derinlik: int = YOL_DERINLIGI
@@ -300,20 +353,24 @@ def logit_egit(ornekler: list[tuple[np.ndarray, int]], *, lam: float,
 
     ornekler: [(F_q [aday × d], pozitifin satırı)]. Her sorgu bir seçim kümesi,
     gizlenen sanatçı tek pozitif (eşleşmiş vaka–kontrol).
-        ℓ(θ) = Σ_q [θᵀx_q+ − log Σ_j exp θᵀx_qj] − (λ/2)‖θ − μ‖²
-    λ → ∞: θ = μ, yani üretimdeki füzyon.
+        ℓ(θ) = Σ_q [θᵀx_q+ − log Σ_j exp θᵀx_qj] − (λ/2)‖Pθ‖²,  P = I − uuᵀ, u = μ/‖μ‖
+    Ceza yalnız μ'ya DİK bileşende: λ → ∞ iken θ ∝ μ (ölçek veriden), yani
+    sıralama öncülün sıralamasıyla aynı. ‖θ − μ‖² cezası ölçeği de μ'ye
+    çekiyordu ve CV λ'yı yönü değil sıcaklığı ayarlamak için kullanıyordu.
     """
     d = len(OZNITELIKLER)
     mu = oncul() if mu is None else mu
+    u = mu / (np.linalg.norm(mu) or 1.0)
+    P = np.eye(d) - np.outer(u, u)
     theta = mu.copy()
 
     def amac(t):
-        return logit_olabilirlik(ornekler, t) - lam / 2 * float((t - mu) @ (t - mu))
+        return logit_olabilirlik(ornekler, t) - lam / 2 * float(t @ P @ t)
 
     eski = amac(theta)
     for _ in range(adim):
-        g = -lam * (theta - mu)
-        H = lam * np.eye(d)
+        g = -lam * (P @ theta)
+        H = lam * P + 1e-8 * np.eye(d)
         for F, pos in ornekler:
             z = F @ theta
             p = np.exp(z - z.max())
@@ -342,25 +399,29 @@ def logit_olabilirlik(ornekler, theta: np.ndarray) -> float:
     return toplam
 
 
-#: λ ızgarası — iç çapraz doğrulama seçer. Büyük uç = üretim füzyonu.
-LAMBDA_IZGARASI = (0.3, 1.0, 3.0, 10.0, 30.0, 100.0, 1e4)
+#: λ ızgarası — iç çapraz doğrulama seçer. Büyük uç = öncülün yönü (melez).
+LAMBDA_IZGARASI = (1e4, 100.0, 30.0, 10.0, 3.0, 1.0, 0.3)
 
 
 def lambda_sec(ornekler, *, kat: int = 5, tohum: int = 0) -> float:
-    """Gruplu k-katlı CV, ortalama dışarıda-bırakılan log-olabilirlik."""
+    """Gruplu k-katlı CV; ölçüt dışarıda bırakılan sorguların MRR'ı — asıl
+    istenen sıralama, olabilirlik değil. Eşitlikte büyük λ (öncüle yakın)."""
     if len(ornekler) < kat * 2:
-        return LAMBDA_IZGARASI[-1]
+        return LAMBDA_IZGARASI[0]
     rng = np.random.default_rng(tohum)
     katman = rng.permutation(len(ornekler)) % kat
-    en_iyi, en_iyi_ll = LAMBDA_IZGARASI[-1], -np.inf
+    en_iyi, en_iyi_mrr = LAMBDA_IZGARASI[0], -np.inf
     for lam in LAMBDA_IZGARASI:
-        ll = 0.0
+        rr = []
         for k in range(kat):
             egit = [o for o, c in zip(ornekler, katman) if c != k]
-            sina = [o for o, c in zip(ornekler, katman) if c == k]
-            ll += logit_olabilirlik(sina, logit_egit(egit, lam=lam))
-        if ll > en_iyi_ll + 1e-9:
-            en_iyi, en_iyi_ll = lam, ll
+            theta = logit_egit(egit, lam=lam)
+            for F, pos in (o for o, c in zip(ornekler, katman) if c == k):
+                s = puanla(F, theta)
+                rr.append(1.0 / (1 + int((s > s[pos]).sum())))
+        mrr = float(np.mean(rr))
+        if mrr > en_iyi_mrr + 1e-12:
+            en_iyi, en_iyi_mrr = lam, mrr
     return en_iyi
 
 
@@ -397,27 +458,45 @@ def eslesmis_kiyas(rr_a: list[float], rr_b: list[float], *, tekrar: int = 20000,
     a, b = np.asarray(rr_a, float), np.asarray(rr_b, float)
     fark = a - b
     n = len(fark)
+    if n == 0:
+        return {"fark": 0.0, "alt": 0.0, "ust": 0.0, "p": 1.0, "n": 0,
+                "a_mrr": 0.0, "b_mrr": 0.0}
     rng = np.random.default_rng(tohum)
-    gozlenen = fark.mean() if n else 0.0
+    gozlenen = fark.mean()
     isaret = rng.choice((-1.0, 1.0), size=(tekrar, n))
-    p = float((np.abs((isaret * fark).mean(axis=1)) >= abs(gozlenen) - 1e-12).mean())
-    boot = fark[rng.integers(0, n, size=(tekrar, n))].mean(axis=1) if n else np.zeros(1)
+    asan = int((np.abs((isaret * fark).mean(axis=1)) >= abs(gozlenen) - 1e-12).sum())
+    # Phipson & Smyth 2010: Monte Carlo p-değeri sıfır olamaz.
+    p = (1 + asan) / (1 + tekrar)
+    boot = fark[rng.integers(0, n, size=(tekrar, n))].mean(axis=1)
     return {"fark": float(gozlenen), "alt": float(np.percentile(boot, 2.5)),
             "ust": float(np.percentile(boot, 97.5)), "p": p, "n": n,
-            "a_mrr": float(a.mean()) if n else 0.0, "b_mrr": float(b.mean()) if n else 0.0}
+            "a_mrr": float(a.mean()), "b_mrr": float(b.mean())}
 
 
 # --------------------------------------------------------------------------- #
 # Ayarlar
 # --------------------------------------------------------------------------- #
 
-def ayar_oku(yol: Path = AYAR_DOSYASI) -> dict:
-    """Öğrenilmiş ayarlar; yoksa literatür varsayılanları + üretim füzyonu."""
+def ayar_yolu(conn: sqlite3.Connection | None = None) -> Path:
+    """Kullanıcının ayar dosyası: bağlantının ana veritabanının yanında
+    (`data/db/kullanici/1.sqlite` → `1.motor.json`). Bellek içi bağlantıda
+    `AYAR_DOSYASI`."""
+    if conn is not None:
+        for _, ad, dosya in conn.execute("PRAGMA database_list"):
+            if ad == "main" and dosya:
+                return Path(dosya).with_suffix(".motor.json")
+    return AYAR_DOSYASI
+
+
+def ayar_oku(conn: sqlite3.Connection | None = None, yol: Path | None = None) -> dict:
+    """Öğrenilmiş ayarlar; yoksa literatür varsayılanları + öncül füzyon ve
+    `ogrenildi` False — üretim motoru o durumda aday YAZMAZ (K19)."""
     varsayilan = {"alfa": ALFA, "beta": BETA, "lam_ease": LAMBDA,
                   "baglam_agirligi": BAGLAM_AGIRLIGI,
+                  "baglam_agirligi_ease": BAGLAM_AGIRLIGI,
                   "theta": oncul().tolist(), "ogrenildi": False}
     try:
-        veri = json.loads(Path(yol).read_text())
+        veri = json.loads(Path(yol or ayar_yolu(conn)).read_text())
     except (OSError, ValueError):
         return varsayilan
     if veri.get("oznitelikler") != list(OZNITELIKLER):
@@ -425,7 +504,7 @@ def ayar_oku(yol: Path = AYAR_DOSYASI) -> dict:
     return {**varsayilan, **veri, "ogrenildi": True}
 
 
-def ayar_yaz(ayar: dict, yol: Path = AYAR_DOSYASI) -> None:
+def ayar_yaz(ayar: dict, yol: Path) -> None:
     Path(yol).parent.mkdir(parents=True, exist_ok=True)
     Path(yol).write_text(json.dumps(
         {**ayar, "oznitelikler": list(OZNITELIKLER), "tarih": date.today().isoformat()},
@@ -459,17 +538,22 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     from python.discover.adaylar import eksen_sanatcilari
     from python.etiket_clap import acik_havuz_adaylari
 
-    ayar = ayar or ayar_oku()
+    ayar = ayar or ayar_oku(conn)
     G = _grafik(conn, ayar["baglam_agirligi"])
     sanatcilar = eksen_sanatcilari(conn, calisma_id, eksen, adet=40)
     if sanatcilar.empty:
         return []
-    tohum = {normalize_esleme(a): 1.0 for a in sanatcilar.index}
+    # Gerekçede kütüphanedeki yazım («Mötley Crüe»), Deezer'ınki değil.
+    okunur = {normalize_esleme(a): a for a in sanatcilar.index}
+    tohum = {a: 1.0 for a in okunur}
     sahip = {normalize_esleme(r[0]) for r in conn.execute(
         "SELECT DISTINCT artist FROM albums") if r[0]}
 
     s_rp3, katki, ortak = rp3(G, tohum, alfa=ayar["alfa"], beta=ayar["beta"])
-    s_ease = ease(G, tohum, lam=ayar["lam_ease"])
+    w_ease = np.where(G.baglam, ayar.get("baglam_agirligi_ease", ayar["baglam_agirligi"]),
+                      1.0).astype("float32")
+    s_ease = ease(G, tohum, lam=ayar["lam_ease"], w=w_ease)
+    tekil = tekil_ortak(G, tohum)
     yollar = {"rp3": sirala(s_rp3, G, sahip), "ease": sirala(s_ease, G, sahip)}
 
     yer = ",".join("?" * len(tohum))
@@ -489,25 +573,35 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     if not havuz:
         return []
     skor = puanla(F, np.asarray(ayar["theta"]))
+    sira = {ad: {a: r for r, a in enumerate(liste, 1)} for ad, liste in yollar.items()}
     sonuc = []
-    for k in np.argsort(-skor, kind="stable")[:adet]:
+    for k in np.argsort(-skor, kind="stable"):
         a = havuz[k]
         j = G.sira.get(a)
+        n_tekil = int(tekil[j]) if j is not None else 0
+        # Kanıt ailesi: yalnız melezin derinliğinde ve (liste grafiği yolları
+        # için) en az iki AYRI ortak listeyle. Kanıtı olmayan aday kart olmaz.
+        kaynaklar = [ad for ad in ("rp3", "ease", "liste", "ses")
+                     if sira[ad].get(a, KANIT_DERINLIGI + 1) <= KANIT_DERINLIGI
+                     and (ad not in ("rp3", "ease") or n_tekil >= ASGARI_TEKIL_LISTE)]
+        if not kaynaklar:
+            continue
         tohumlar = []
         if j is not None and katki.size:
             for t in np.argsort(-katki[:, j])[:3]:
                 if ortak[t, j] > 0:
-                    tohumlar.append((G.ad.get(G.anahtar[tohum_idx[t]], G.anahtar[tohum_idx[t]]),
+                    anahtar_t = G.anahtar[tohum_idx[t]]
+                    tohumlar.append((okunur.get(anahtar_t, G.ad.get(anahtar_t, anahtar_t)),
                                      int(ortak[t, j])))
-        kaynaklar = [ad for ad, sutun in (("rp3", 0), ("ease", 1), ("liste", 2), ("ses", 3))
-                     if F[k, sutun] > 0]
         sonuc.append({
             "anahtar": a, "ad": G.ad.get(a) or (ses_kayit.get(a) or {}).get("sanatci") or a,
             "skor": float(skor[k]), "kaynaklar": kaynaklar, "tohumlar": tohumlar,
-            "ortak_liste": int(toplam_ortak.get(a, 0)),
+            "ortak_liste": int(toplam_ortak.get(a, 0)), "tekil_ortak_liste": n_tekil,
             "liste_sayisi": int(populer.get(a, 0)),
             "ses": ses_kayit.get(a),
         })
+        if len(sonuc) >= adet:
+            break
     return sonuc
 
 
@@ -521,7 +615,8 @@ def main(argv: list[str] | None = None) -> int:
     ay.add_argument("--calisma")
     ay.add_argument("--limit", type=int)
     ay.add_argument("--egit", action="store_true",
-                    help="RP3β/EASE ayarla, füzyonu öğren, ölç ve motor.json'a yaz")
+                    help="RP3β/EASE ayarla, füzyonu öğren, ölç ve kullanıcının "
+                         "{id}.motor.json dosyasına yaz")
     ay.add_argument("--yazma", action="store_true", help="ölç ama ayarı yazma")
     args = ay.parse_args(argv)
     if not args.egit:
@@ -535,8 +630,9 @@ def main(argv: list[str] | None = None) -> int:
         print(D.rapor(sonuc))
         print(D.motor_raporu(sonuc))
         if not args.yazma and "_motor_ayar" in sonuc:
-            ayar_yaz(sonuc["_motor_ayar"])
-            print(f"\nAyar yazıldı: {AYAR_DOSYASI}")
+            yol = ayar_yolu(conn)
+            ayar_yaz(sonuc["_motor_ayar"], yol)
+            print(f"\nAyar yazıldı: {yol}")
     finally:
         conn.close()
     return 0

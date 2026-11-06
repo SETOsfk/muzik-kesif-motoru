@@ -2858,3 +2858,75 @@ politikası); bulgular özet düzeyinde ve raporlarda işaretli.
     CC0 aylık dökümler bu soruyu ortadan kaldırıyor.
   - ListenBrainz popülerlik ve radyo uçlarının bir kısmı artık jeton istiyor.
   - AcousticBrainz API'si «şimdilik» açık; döküm yedeklenmeli.
+
+### 2026-11-06 (23) — Motor kod incelemesi, insan çifti sınama kümesi
+
+**Kod incelemesi.** Motor kodu dört boyutta (matematik, ölçüm geçerliliği, üretim,
+proje kuralları) incelendi; 31 bulgu çıktı. Çürütme turu harcama sınırına takıldı,
+yalnız biri üç bağımsız sınamadan geçti. Kalanlar elle, kodda tek tek doğrulandı.
+Gerçek olanlar düzeltildi:
+
+- **Ölçüm.**
+  - Ses yolunda sızan listeden gelen parça NaN yapılıp sanatçının parça sayısında
+    kalıyordu; tek parça kuralı gizlenene hiç uygulanamıyordu (üç sınamadan geçen).
+    Düşen parça artık hiç verilmiyor.
+  - CLAP havuzuna girme eşiği (≥ 3 liste, `PARCA_ASGARI_LISTE`) katmanda yeniden
+    uygulanıyor.
+  - Adında gizlenenin adı geçen aramalar («Allan Holdsworth & Gordon Beck») da
+    gizlenenin araması sayılıyor.
+  - RP3β/EASE'de sıra, tavan ve yüzdelik kesilmemiş skor desteğinden
+    (`motor.tam_sira`) ve sıranın geldiği katın ızgarasıyla hesaplanıyor.
+  - Permütasyon p-değeri Phipson & Smyth'e göre hiç 0 olmuyor; boş kıyas p=1.
+  - Raporun iç içe CV iddiası daraltıldı: öncülün yönü ve liste ayarları önceki
+    çalışmalarda tüm sorgularda seçilmişti.
+- **Öğrenme.**
+  - Öncül cezası ‖θ−μ‖² ölçeği yönle karıştırıyordu: yön doğru olsa bile CV
+    μ'yü seçmiyordu. Ceza artık yalnız μ'ya dik bileşende.
+  - λ iç katlarda MRR ile seçiliyor; eşitlikte büyük λ, yani öncüle yakın olan.
+- **Üretim.**
+  - EASE artık kendi ölçülen bağlam ağırlığıyla koşuyor.
+  - Bir yol ancak ilk 48 sırada (melezin derinliği) ve liste grafiği yolları için
+    en az 2 ayrı ortak listeyle karta «kaynak» sayılıyor. Önceden 1000 derinlikteki
+    tek liste sahte uzlaşma üretiyordu; Sezen Aksu vakası tekrar ediyordu.
+  - Kanıtı olmayan aday kart olmuyor.
+  - Çalınabilirlik süzgeci adet kesiminden önce uygulanıyor.
+  - **Ayar kullanıcıya özgü** (`{id}.motor.json`, K20).
+  - **Motor ancak o kütüphanede ölçülüp ayarlandıktan sonra aday yazıyor (K19).**
+    Önceden aktarım ve «büyüt» onu ölçülmeden üretime sokuyordu.
+- **Deste.**
+  - Uzlaşma ödülü σ yerine sıra uzayında: aile başına 2 basamak, en çok 4.
+    σ'lı ödül 1/basamak skorlarında 12. kartı 3. sıraya sıçratıyordu.
+  - `uzlasma_isabeti` artık ödülün uygulandığı grubu ölçüyor.
+  - Satırın kendi kanıt ailesi bir kez ayrıştırılıyor.
+- **Metin (K22).**
+  - «2,00 listede» düzeltildi.
+  - Zayıf kanıt eşiği AYRI ortak liste sayısıyla (`tekil_ortak_liste`).
+  - Uzlaşma cümlesi: da/de ünlü uyumu, ve/and, points/point.
+  - Sayıya dayanmayan popülerlik cümlesi kaldırıldı.
+  - Tohum adları kütüphanedeki yazımla.
+- **CLAP.** Pencereler sona hizalı kuyruk penceresi alıyor (kalan ≥ 2 sn).
+
+Düzeltilmeyen: yoğun matris belleği (ortak havuz 5 kullanıcıda ~3000 liste ×
+50 bin sanatçıya çıkarsa EASE ~3 GB). Şimdilik m = 482; büyüyünce seyrek matrise geçilir.
+
+**İnsan çifti sınama kümesi** (`docs/arastirma/insan-ciftleri.csv`,
+`degerlendirme --ciftler`).
+- Kaynak: forumlardaki «X'i seven Y'yi dener» önerileri. 41 iplik (Metal-Archives,
+  Ultimate-Guitar, DonanımHaber, MusicBanter, Physics Forums) tam okundu. Reddit
+  giriş duvarı yüzünden okunamadı; aşılmaya çalışılmadı.
+- 306 çift ayrıştırıldı. 130 çekirdek çiftin her biri kaynak ipliği yeniden okuyan
+  ayrı bir ajanla, çürütmeye yönelik doğrulandı:
+
+  | sonuç | çift |
+  |---|---:|
+  | doğrulandı | 86 |
+  | onay sayısı daha az | 20 |
+  | OP kararı farklı | 21 |
+  | bulunamadı | 3 |
+
+- Bir tohum hatası düzeltildi: t=990479'da Shawn Lane öneri, tohum değil.
+- Sınamaya 127 çift giriyor (21 olumsuz).
+- Ölçüt kütüphaneden bağımsız: sorgu çiftin tohumları, ölçülen yöntemin benzerlik
+  bilgisi. Olumsuzlar için «olumsuz @50» kullanılıyor (küçük iyi, havuz boyundan
+  bağımsız).
+- Sınır: metal ağırlıklı, 2009–2018 forumları; J-füzyon (5) ve hip-hop (2) çok az.

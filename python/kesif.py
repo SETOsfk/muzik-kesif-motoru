@@ -98,12 +98,14 @@ KANIT_AILESI = {
 }
 
 #: Uzlaşma ödülü: satırın KENDİ ailesi dışında aynı sanatçıyı gösteren her
-#: bağımsız aile için strateji içi σ cinsinden itki; en çok UZLASMA_AZAMI aile
-#: sayılır (tavan 1 σ). ÖLÇÜLMEDİ (2026-10-20, kullanıcının «tutarlı ve güçlü
-#: öneri» isteğiyle varsayılan) — `uzlasma_isabeti` gerçek kararlardan
-#: «tek yol» ↔ «birden çok yol» zevk isabetini kıyaslar; ETKI_TAVANI ile aynı
-#: istisna: sıralamayı devirmez, kaydırır.
-UZLASMA_AGIRLIGI = 0.5
+#: bağımsız aile için strateji içi sırada UZLASMA_BASAMAK basamak yukarı; en çok
+#: UZLASMA_AZAMI aile sayılır (en çok 4 basamak). ÖLÇÜLMEDİ (2026-10-20,
+#: kullanıcının «tutarlı ve güçlü öneri» isteğiyle varsayılan) —
+#: `uzlasma_isabeti` gerçek kararlardan «ödül almadı» ↔ «ödül aldı» zevk
+#: isabetini kıyaslar. Sıra uzayında, σ'da DEĞİL: melez/motor skorları
+#: 1/basamak ve σ'yı birinci sıra belirliyor; σ'lı ödül 12. adayı 3. sıraya
+#: sıçratıyordu (2026-10-20 incelemesi). Sıralamayı devirmez, kaydırır.
+UZLASMA_BASAMAK = 2
 UZLASMA_AZAMI = 2
 
 
@@ -172,6 +174,15 @@ class _Satir:
     gerekce: str
     skor: float
     dayanak: str | None = None
+    kendi: frozenset | None = None      # satırın kendi kanıt aileleri (önbellek)
+
+
+def _kendi_aileler(s: "_Satir") -> frozenset:
+    """Satırın kendi aileleri bir kez ayrıştırılır (sıralama anahtarında
+    her karşılaştırmada JSON çözülmesin)."""
+    if s.kendi is None:
+        s.kendi = frozenset(_aileler(s.strateji, s.dayanak))
+    return s.kendi
 
 
 def _aileler(strateji: str, dayanak) -> set[str]:
@@ -200,7 +211,7 @@ def sanatci_aileleri(conn: sqlite3.Connection, calisma_id: str) -> dict[str, set
 
 def _ek_aileler(s: _Satir, aileler: dict[str, set[str]]) -> set[str]:
     """Satırın kendi ailesi DIŞINDA sanatçıyı gösteren aileler."""
-    return aileler.get(normalize_esleme(s.artist), set()) - _aileler(s.strateji, s.dayanak)
+    return aileler.get(normalize_esleme(s.artist), set()) - _kendi_aileler(s)
 
 
 def strateji_sonsallari(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
@@ -225,24 +236,27 @@ def strateji_sonsallari(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
 
 
 def uzlasma_isabeti(conn: sqlite3.Connection) -> list[dict]:
-    """Zevk isabeti, kaç bağımsız kanıt ailesinin sanatçıyı gösterdiğine göre
-    (1 / 2+). UZLASMA_AGIRLIGI'nın ölçümü budur: «birden çok yol» isabeti
-    «tek yol»unkinden yüksek değilse ödül kaldırılır. Sanatçı düzeyinde, son
-    karar; «zaten biliyorum» paydaya girmez (bkz. `strateji_sonsallari`)."""
+    """Zevk isabeti, kararın verildiği satır uzlaşma ÖDÜLÜ almış mı (kendi
+    ailesi DIŞINDA en az bir aile — destedeki ödülün tanımıyla aynı) diye.
+    UZLASMA_BASAMAK'ın ölçümü budur: «cok» isabeti «tek»inkinden yüksek
+    değilse ödül kaldırılır. Sanatçı düzeyinde, son karar; «zaten biliyorum»
+    paydaya girmez. Sınır: aileler BUGÜNKÜ adaylardan; sonradan eklenen
+    stratejiler eski kararın grubunu değiştirebilir."""
     from python.geri_bildirim import wilson
 
-    son: dict[tuple[str, str], str] = {}
-    for calisma_id, artist, karar in conn.execute(
-        """SELECT f.calisma_id, a.artist, f.karar FROM feedback f
+    son: dict[tuple[str, str], tuple] = {}
+    for calisma_id, artist, strateji, dayanak, karar in conn.execute(
+        """SELECT f.calisma_id, a.artist, a.strateji, a.dayanak, f.karar FROM feedback f
              JOIN adaylar a ON a.aday_id = f.aday_id AND a.calisma_id = f.calisma_id
             WHERE f.karar IN ('begendim', 'tutmadi') ORDER BY f.tarih"""):
-        son[(calisma_id, normalize_esleme(artist))] = karar
+        son[(calisma_id, normalize_esleme(artist))] = (strateji, dayanak, karar)
     aile_onbellek: dict[str, dict[str, set[str]]] = {}
     sayim = {"tek": [0, 0], "cok": [0, 0]}
-    for (calisma_id, anahtar), karar in son.items():
+    for (calisma_id, anahtar), (strateji, dayanak, karar) in son.items():
         if calisma_id not in aile_onbellek:
             aile_onbellek[calisma_id] = sanatci_aileleri(conn, calisma_id)
-        grup = "cok" if len(aile_onbellek[calisma_id].get(anahtar, ())) >= 2 else "tek"
+        ek = aile_onbellek[calisma_id].get(anahtar, set()) - _aileler(strateji, dayanak)
+        grup = "cok" if ek else "tek"
         sayim[grup][0 if karar == "begendim" else 1] += 1
     sonuc = []
     for grup, (b, tt) in sayim.items():
@@ -255,24 +269,26 @@ def uzlasma_isabeti(conn: sqlite3.Connection) -> list[dict]:
 def _strateji_sirasi(satirlar: list[_Satir], etki: dict[str, tuple[float, str]],
                      tavan: float, aileler: dict[str, set[str]] | None = None,
                      ) -> list[_Satir]:
-    """Bir stratejinin kendi sırası — skor + geri bildirim kayması + uzlaşma
-    ödülü (ikisi de σ, o stratejinin kendi skorlarından). Eşitlikte önce
-    uzlaşma, sonra çalınabilir olan öne geçer."""
+    """Bir stratejinin kendi sırası — skor + geri bildirim kayması (σ, o
+    stratejinin kendi skorlarından), sonra uzlaşma ödülü SIRA uzayında
+    (aile başına UZLASMA_BASAMAK basamak). Eşitlikte önce uzlaşma, sonra
+    çalınabilir olan öne geçer."""
     if not satirlar:
         return []
     skorlar = [s.skor for s in satirlar]
     ort = sum(skorlar) / len(skorlar)
     sigma = (sum((x - ort) ** 2 for x in skorlar) / len(skorlar)) ** 0.5
-
-    def ek(s: _Satir) -> int:
-        return min(len(_ek_aileler(s, aileler)), UZLASMA_AZAMI) if aileler else 0
+    ek = {id(s): min(len(_ek_aileler(s, aileler)), UZLASMA_AZAMI) if aileler else 0
+          for s in satirlar}
 
     def ayarli(s: _Satir) -> float:
         pay = etki.get(normalize_esleme(s.artist), (0.0, ""))[0]
-        return s.skor + (tavan * pay + UZLASMA_AGIRLIGI * ek(s)) * sigma
+        return s.skor + tavan * pay * sigma
 
-    # σ = 0 (eşit skorlar) iken ödül sıfırlanır; uzlaşma eşitliği de bozar.
-    return sorted(satirlar, key=lambda s: (-ayarli(s), -ek(s), s.parca_id is None))
+    temel = sorted(satirlar, key=lambda s: (-ayarli(s), -ek[id(s)], s.parca_id is None))
+    yer = {id(s): k for k, s in enumerate(temel)}
+    return sorted(temel, key=lambda s: (yer[id(s)] - UZLASMA_BASAMAK * ek[id(s)],
+                                        -ek[id(s)], yer[id(s)]))
 
 
 def _eksen_sirasi(satirlar: list[_Satir], stratejiler: tuple[str, ...],

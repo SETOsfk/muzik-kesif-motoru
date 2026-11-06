@@ -155,7 +155,12 @@ def pencereler(y: np.ndarray, sr: int = CLAP_ORNEKLEME) -> list[np.ndarray]:
     n = PENCERE_SN * sr
     if len(y) < n:
         return [y]
-    return [y[i:i + n] for i in range(0, len(y) - n + 1, n)]
+    parcalar = [y[i:i + n] for i in range(0, len(y) - n + 1, n)]
+    # 29,99 sn'lik klip son ~10 sn'yi atmasın: kalan ≥ 2 sn ise sona hizalı
+    # bir pencere daha (yine belirlenimci).
+    if len(y) % n >= 2 * sr:
+        parcalar.append(y[-n:])
+    return parcalar
 
 
 def klip_gomusu(y: np.ndarray) -> np.ndarray:
@@ -331,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
     #: (1.384 sanatçı). Düşürmek uzun kuyruğu açar: ses benzerliği PMI'a
     #: ihtiyaç duymaz, tek listede geçen sanatçıyı da bulabilir — ve
     #: "hiç duymadığım sanatçı" hedefi tam orada yaşıyor.
-    ayristirici.add_argument("--asgari-liste", type=int, default=3)
+    ayristirici.add_argument("--asgari-liste", type=int, default=PARCA_ASGARI_LISTE)
     ayristirici.add_argument("--yeniden", action="store_true",
                              help="var olan gömülerin üstüne yaz (pencere düzeltmesi)")
     args = ayristirici.parse_args(argv)
@@ -461,8 +466,13 @@ def benzer_adaylar(
 PARCA_GOMU = Path("data/cache/clap_parca")
 
 
+#: Bir sanatçının parçaları ancak bu kadar AYRI listede geçiyorsa gömülür.
+#: Değerlendirme aynı eşiği sızıntı katmanında yeniden uygular.
+PARCA_ASGARI_LISTE = 3
+
+
 def parca_gomule(
-    conn: sqlite3.Connection, *, asgari_liste: int = 3, kisi_basi: int = 2,
+    conn: sqlite3.Connection, *, asgari_liste: int = PARCA_ASGARI_LISTE, kisi_basi: int = 2,
     limit: int | None = None, yeniden: bool = False,
 ) -> dict[str, int]:
     """Çalma listesi parçalarını göm — sanatçı başına birkaç parça.

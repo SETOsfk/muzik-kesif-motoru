@@ -113,11 +113,19 @@ def sizinti_listeleri(conn: sqlite3.Connection) -> dict[str, set[int]]:
     for liste_id, ad in conn.execute(
             "SELECT liste_id, tohum_sanatci FROM calma_listesi WHERE tohum_sanatci != ''"):
         bulucu[int(liste_id)].add(normalize_esleme(ad))
+    # Bulucu, gizlenenin adını İÇERİYORSA da gizlenenin aramasıdır: «Allan
+    # Holdsworth & Gordon Beck» araması Holdsworth listelerini getirir.
     sonuc: dict[str, set[int]] = defaultdict(set)
-    for liste_id, bulanlar in bulucu.items():
-        if len(bulanlar) == 1:
-            sonuc[next(iter(bulanlar))].add(liste_id)
+    for a in kutuphane(conn):
+        for liste_id, bulanlar in bulucu.items():
+            if all(_ad_icerir(b, a) for b in bulanlar):
+                sonuc[a].add(liste_id)
     return dict(sonuc)
+
+
+def _ad_icerir(arama: str, ad: str) -> bool:
+    """Normalize `arama`, normalize `ad`ı tam sözcükler olarak içeriyor mu?"""
+    return f" {ad} " in f" {arama} "
 
 
 # --------------------------------------------------------------------------- #
@@ -406,9 +414,12 @@ class SesErisimi:
                              self.LL[np.ix_(kalan, kalan)].mean(axis=1)[None, :],
                              self.olcek)
             eksende = np.isin(self._sahip_dizi[kalan], list(sorgu))
-            sayi, ort = komsu_cogunlugu(tum, eksende)
-            ort = np.where(dusen, np.nan, ort)
-            sk = sanatci_sirala(ort, sayi, self.havuz_sahip)
+            # Düşen parça bu katmanda havuzda YOK: NaN değil, hiç verilmez —
+            # yoksa sanatçının parça sayısında kalır ve tek parça kuralı
+            # (üretimde geçerli olan) hiç uygulanamaz.
+            kal = ~dusen
+            sayi, ort = komsu_cogunlugu(tum[kal], eksende)
+            sk = sanatci_sirala(ort, sayi, [a for a, k in zip(self.havuz_sahip, kal) if k])
             sk = {a: d for a, d in sk.items() if not (a in sahip and a != gizlenen)}
             return [a for a, _ in sorted(sk.items(), key=lambda x: -x[1])]
 
@@ -669,13 +680,17 @@ def calistir(
     # protokol: eski sayıları yeniden üretmek ve farkı göstermek için.
     haric_harita = sizinti_listeleri(conn) if sizinti else {}
     parca_liste: dict[int, set[int]] = defaultdict(set)
+    sanatci_liste: dict[str, set[int]] = defaultdict(set)
     if haric_harita:
-        for pid, lid in conn.execute(
-                "SELECT parca_id, liste_id FROM liste_parca WHERE parca_id IS NOT NULL"):
-            parca_liste[int(pid)].add(int(lid))
+        for pid, lid, anahtar in conn.execute(
+                "SELECT parca_id, liste_id, sanatci_anahtar FROM liste_parca"):
+            sanatci_liste[anahtar].add(int(lid))
+            if pid is not None:
+                parca_liste[int(pid)].add(int(lid))
         print(f"sızıntı düzeltmesi: {sum(len(v) for v in haric_harita.values())} liste "
               f"yalnız gizlenenin adıyla bulunmuş, o katmanda çıkarılıyor", file=sys.stderr)
     motor_kayit: list[dict] = []
+    from python.etiket_clap import PARCA_ASGARI_LISTE
     print(f"  kütüphane {ses.L.shape[0]} gömü · havuz {ses.P.shape[0]} gömü "
           f"({len(ses.havuz_anahtar)} sanatçı)", file=sys.stderr)
 
@@ -720,8 +735,15 @@ def calistir(
             tablo_k = pmi_tablosu(conn, sahip_tam, olcut=olcut, buzulme=buzulme,
                                   agirlik=liste_agirlik, haric_listeler=haric)
             pmi_havuz_k = {b for a in tablo_k for b in tablo_k[a]}
-            dusen = np.array([bool(parca_liste.get(pid)) and parca_liste[pid] <= haric
-                              for pid in ses.havuz_parca], dtype=bool)
+            # Havuz uygunluğu da katmanda: sanatçı ancak ≥ PARCA_ASGARI_LISTE
+            # listede geçiyorsa gömülüyor; sızan listeler çıkınca altına
+            # düşen sanatçının bütün parçaları bu katmanda havuzda yok.
+            yetersiz = {a for a in set(ses.havuz_sahip)
+                        if sanatci_liste.get(a, set()) & haric
+                        and len(sanatci_liste[a] - haric) < PARCA_ASGARI_LISTE}
+            dusen = np.array([a in yetersiz or (bool(parca_liste.get(pid))
+                                                and parca_liste[pid] <= haric)
+                              for a, pid in zip(ses.havuz_sahip, ses.havuz_parca)], dtype=bool)
             ses_var = any(a == gizli and not d for a, d in zip(ses.havuz_sahip, dusen))
         else:
             tablo_k, pmi_havuz_k, dusen = tablo, pmi_havuz, None
@@ -822,48 +844,60 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
               kut: dict[str, str], gorunurluk: dict[str, int] | None = None) -> None:
     """RP3β ve EASE ızgarası + koşullu logit füzyonu, iç içe CV ile.
 
-    Dış katta (10 kat, sorgu = gizlenen sanatçı) ızgara noktası ve füzyon
-    ağırlıkları YALNIZ eğitim sorgularında seçilir, dışarıdaki sorgular
-    sıralanır. Raporlanan her motor sayısı bu yüzden seçilmediği sorgularda
-    ölçülmüştür (Varma & Simon 2006; Dacrema 2019'un ana eleştirisi).
-    Üretim ayarı (`_motor_ayar`) ayrıca TÜM sorgularda seçilir.
+    Dış katta (10 kat, sorgu = gizlenen sanatçı) RP3β/EASE ızgara noktası,
+    logit λ'sı ve füzyon ağırlıkları YALNIZ eğitim sorgularında seçilir,
+    dışarıdaki sorgular sıralanır (Varma & Simon 2006; Dacrema 2019).
+    İÇ İÇE OLMAYAN kısım (rapora yazılır): öncülün yönü (liste 1 : ses 2) ve
+    liste yolunun ayarları (npmi, büzülme 1) önceki çalışmalarda TÜM
+    sorgularda seçilmişti. Üretim ayarı (`_motor_ayar`) TÜM sorgularda seçilir.
+
+    Sıra, tavan ve yüzdelik KESİLMEMİŞ skor desteğinden ve sıranın geldiği
+    katın ızgarasıyla (`motor.tam_sira`); öznitelikler ilk 1000'den.
     """
     from python import motor as M
 
     print("Motor: grafik ve ızgara…", file=sys.stderr)
     G = M.grafik_kur(conn, baglam_agirligi=1.0)
     n_q = len(kayitlar)
-    rp3_s: list[list[list[str]]] = []      # [sorgu][ızgara] → sıra
+    rp3_s: list[list[list[str]]] = []      # [sorgu][ızgara] → ilk 1000 (öznitelik)
     ease_s: list[list[list[str]]] = []
-    ozellik: list[tuple[dict, dict, dict]] = []
+    rp3_t: list[list[tuple]] = []          # [sorgu][ızgara] → (tam sıra, destek)
+    ease_t: list[list[tuple]] = []
+    ozellik: list[tuple[dict, dict]] = []
     for q, k in enumerate(kayitlar):
         satir = G.satir_maskesi(k["haric"])
         tohum = {a: 1.0 for a in k["tohumlar"]}
-        satirlar = []
+        sahip_idx = np.array([G.sira[a] for a in k["sahip"] if a in G.sira], dtype=int)
+        satirlar, tamlar = [], []
         ortak = None
         for alfa, beta, bw in RP3_IZGARASI:
             G.w = np.where(G.baglam, bw, 1.0).astype("float32")
             skor, _, ortak_k = M.rp3(G, tohum, alfa=alfa, beta=beta, satir=satir)
             ortak = ortak_k if ortak is None else ortak
             satirlar.append(M.sirala(skor, G, k["sahip"]))
+            tamlar.append(M.tam_sira(skor, G, sahip_idx, k["gizli"]))
         rp3_s.append(satirlar)
-        ease_satir = []
+        rp3_t.append(tamlar)
+        satirlar, tamlar = [], []
         for lam, bw in EASE_IZGARASI:
             G.w = np.where(G.baglam, bw, 1.0).astype("float32")
-            ease_satir.append(M.sirala(M.ease(G, tohum, lam=lam, satir=satir), G, k["sahip"]))
-        ease_s.append(ease_satir)
+            skor = M.ease(G, tohum, lam=lam, satir=satir)
+            satirlar.append(M.sirala(skor, G, k["sahip"]))
+            tamlar.append(M.tam_sira(skor, G, sahip_idx, k["gizli"]))
+        ease_s.append(satirlar)
+        ease_t.append(tamlar)
         ozellik.append(M.ortak_ozeti(G, ortak))
         if (q + 1) % 25 == 0:
             print(f"  motor {q + 1}/{n_q}", file=sys.stderr)
 
     hedef = [k["gizli"] for k in kayitlar]
 
-    def mrr(listeler, indeksler, g):
-        return float(np.mean([_rr1(listeler[q][g], hedef[q]) for q in indeksler])) \
-            if indeksler else 0.0
+    def mrr(tamlar, indeksler, g):
+        return float(np.mean([1.0 / tamlar[q][g][0] if tamlar[q][g][0] else 0.0
+                              for q in indeksler])) if indeksler else 0.0
 
-    def en_iyi(listeler, indeksler, n_izgara):
-        return max(range(n_izgara), key=lambda g: (mrr(listeler, indeksler, g), -g))
+    def en_iyi(tamlar, indeksler, n_izgara):
+        return max(range(n_izgara), key=lambda g: (mrr(tamlar, indeksler, g), -g))
 
     def kayit(q, g_rp3, g_ease):
         toplam, pay = ozellik[q]
@@ -878,6 +912,8 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     s_rp3: list[int | None] = [None] * n_q
     s_ease: list[int | None] = [None] * n_q
     s_motor: list[int | None] = [None] * n_q
+    destek = {"rp3": [0] * n_q, "ease": [0] * n_q, "motor": [0] * n_q}
+    tavan = {"rp3": [False] * n_q, "ease": [False] * n_q, "motor": [False] * n_q}
     gorunur = {"rp3": [], "ease": [], "motor": []}
     gorunurluk = gorunurluk or {}
 
@@ -888,35 +924,39 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     for kat in range(DIS_KAT):
         egit = [q for q in range(n_q) if katman[q] != kat]
         sina = [q for q in range(n_q) if katman[q] == kat]
-        g_r = en_iyi(rp3_s, egit, len(RP3_IZGARASI))
-        g_e = en_iyi(ease_s, egit, len(EASE_IZGARASI))
+        g_r = en_iyi(rp3_t, egit, len(RP3_IZGARASI))
+        g_e = en_iyi(ease_t, egit, len(EASE_IZGARASI))
         ornek = [o for o in (M._ornek(kayit(q, g_r, g_e)) for q in egit) if o is not None]
         lam = M.lambda_sec(ornek, tohum=kat)
         theta = M.logit_egit(ornek, lam=lam)
         katlar.append({"rp3": RP3_IZGARASI[g_r], "ease": EASE_IZGARASI[g_e],
                        "lam": lam, "theta": theta.round(3).tolist()})
         for q in sina:
-            s_rp3[q] = sira_bul(rp3_s[q][g_r], hedef[q])
-            s_ease[q] = sira_bul(ease_s[q][g_e], hedef[q])
+            s_rp3[q], destek["rp3"][q] = rp3_t[q][g_r]
+            s_ease[q], destek["ease"][q] = ease_t[q][g_e]
             r = kayit(q, g_r, g_e)
             s_motor[q] = M._hedef_sirasi(r, theta)
+            destek["motor"][q] = len(r["havuz"])
+            tavan["rp3"][q] = s_rp3[q] is not None
+            tavan["ease"][q] = s_ease[q] is not None
+            tavan["motor"][q] = hedef[q] in r["havuz"]
             sira = np.argsort(-M.puanla(r["F"], theta), kind="stable")[:10] if r["havuz"] else []
             gorunur["rp3"].append(ilk10(rp3_s[q][g_r]))
             gorunur["ease"].append(ilk10(ease_s[q][g_e]))
             gorunur["motor"].append(ilk10([r["havuz"][i] for i in sira]))
 
-    def yol(siralar, havuzlar):
-        return {"siralar": siralar,
-                "erisilebilir": sum(1 for q in range(n_q) if hedef[q] in havuzlar[q]),
+    def yol(ad, siralar):
+        # Tavan ve havuz, sıranın üretildiği katın ızgarasından (aynı katman).
+        return {"siralar": siralar, "erisilebilir": sum(tavan[ad]),
                 "ayrinti": [(kut[h], s) for h, s in zip(hedef, siralar)],
-                "havuz": int(np.median([len(h) for h in havuzlar])) if havuzlar else 0}
+                "havuz": int(np.median(destek[ad])) if n_q else 0}
 
-    g_r_tum = en_iyi(rp3_s, range(n_q), len(RP3_IZGARASI))
-    g_e_tum = en_iyi(ease_s, range(n_q), len(EASE_IZGARASI))
+    g_r_tum = en_iyi(rp3_t, range(n_q), len(RP3_IZGARASI))
+    g_e_tum = en_iyi(ease_t, range(n_q), len(EASE_IZGARASI))
     tum_kayit = [kayit(q, g_r_tum, g_e_tum) for q in range(n_q)]
-    sonuc["rp3"] = yol(s_rp3, [set(rp3_s[q][g_r_tum]) for q in range(n_q)])
-    sonuc["ease"] = yol(s_ease, [set(ease_s[q][g_e_tum]) for q in range(n_q)])
-    sonuc["motor"] = yol(s_motor, [set(r["havuz"]) for r in tum_kayit])
+    sonuc["rp3"] = yol("rp3", s_rp3)
+    sonuc["ease"] = yol("ease", s_ease)
+    sonuc["motor"] = yol("motor", s_motor)
     for ad, deger in gorunur.items():
         sonuc[ad]["belirsizlik"] = deger
 
@@ -932,16 +972,12 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
                           ("ease", "liste_birlikteligi"), ("motor", "ses_benzerligi"))}
     sonuc["_motor_ayar"] = {
         "alfa": alfa, "beta": beta, "lam_ease": lam_e,
-        # RP3β ve EASE ayrı bağlam ağırlığı seçebilir; üretim RP3β'nınkini alır.
+        # RP3β ve EASE ayrı bağlam ağırlığı seçebilir; üretim ikisini de
+        # kendi değeriyle koşar (`motor.eksen_sirasi`).
         "baglam_agirligi": bw, "baglam_agirligi_ease": bw_e,
         "theta": theta.round(4).tolist(), "lam_logit": lam,
         "katlar": katlar, "kiyas": kiyas, "sorgu": n_q,
     }
-
-
-def _rr1(liste: list[str], hedef: str) -> float:
-    s = sira_bul(liste, hedef)
-    return 1.0 / s if s else 0.0
 
 
 def motor_raporu(sonuc: dict) -> str:
@@ -949,7 +985,10 @@ def motor_raporu(sonuc: dict) -> str:
     if not ayar:
         return ""
     from python.motor import OZNITELIKLER
-    satirlar = ["Motor — iç içe CV (her sayı, ayarın SEÇİLMEDİĞİ sorgularda)", "=" * 74,
+    satirlar = ["Motor — iç içe CV: RP3β/EASE ızgarası, λ ve θ dış katın eğitim sorgularında",
+                "seçildi. İç içe OLMAYAN: öncülün yönü (liste 1 : ses 2) ve liste yolunun",
+                "ayarları (npmi, büzülme 1) önceki çalışmalarda tüm sorgularda seçilmişti.",
+                "=" * 74,
                 f"üretim ayarı: RP3β α={ayar['alfa']} β={ayar['beta']} "
                 f"bağlam={ayar['baglam_agirligi']} · EASE λ={ayar['lam_ease']} · "
                 f"logit λ={ayar['lam_logit']}",
@@ -1000,8 +1039,10 @@ def cift_sinamasi(conn: sqlite3.Connection, ciftler: list[dict]) -> dict:
     """
     from python import motor as M
 
-    ayar = M.ayar_oku()
+    ayar = M.ayar_oku(conn)
     G = M.grafik_kur(conn, baglam_agirligi=ayar["baglam_agirligi"])
+    w_ease = np.where(G.baglam, ayar.get("baglam_agirligi_ease", ayar["baglam_agirligi"]),
+                      1.0).astype("float32")
     sahip = set(kutuphane(conn))
     theta = np.asarray(ayar["theta"])
     yollar = ("liste_birlikteligi", "rp3", "ease", "motor")
@@ -1020,7 +1061,7 @@ def cift_sinamasi(conn: sqlite3.Connection, ciftler: list[dict]) -> dict:
         tablo = pmi_tablosu(conn, set(tohum), olcut="npmi", buzulme=1.0)
         siralar = {
             "rp3": M.sirala(s_rp3, G, haric, derinlik=len(G.anahtar)),
-            "ease": M.sirala(M.ease(G, tohum, lam=ayar["lam_ease"]), G, haric,
+            "ease": M.sirala(M.ease(G, tohum, lam=ayar["lam_ease"], w=w_ease), G, haric,
                              derinlik=len(G.anahtar)),
             "liste_birlikteligi": pmi_sirala(tablo, set(tohum), haric),
         }
@@ -1040,9 +1081,10 @@ def cift_sinamasi(conn: sqlite3.Connection, ciftler: list[dict]) -> dict:
             sayim["olculen"] += 1
             for y in yollar:
                 r = sira_bul(siralar[y], hedef)
-                # Erişilemeyen olumsuz çift en iyi sonuç: en sona (yüzdelik 1).
-                yuzde = r / aday_sayisi if r else (1.0 if c["negatif"] else None)
-                sonuc[y]["negatif" if c["negatif"] else "pozitif"].append((r, yuzde))
+                # Olumlu da olumsuz da AYNI kural: erişilemeyen yüzdelikten
+                # düşer, ayrı sayılır. Havuz boyundan bağımsız kıyas @50'de.
+                sonuc[y]["negatif" if c["negatif"] else "pozitif"].append(
+                    (r, r / aday_sayisi if r else None))
     ozet = {}
     for y, v in sonuc.items():
         poz, neg = v["pozitif"], v["negatif"]
@@ -1054,6 +1096,10 @@ def cift_sinamasi(conn: sqlite3.Connection, ciftler: list[dict]) -> dict:
             "@50": sum(1 for r, _ in poz if r and r <= 50) / len(poz) if poz else 0.0,
             "mrr": float(np.mean(rr)) if rr else 0.0,
             "yuzdelik": float(np.median(yuzde)) if yuzde else float("nan"),
+            "negatif_n": len(neg),
+            # Olumsuz çiftlerin ilk 50'ye girme oranı — küçük iyi; havuz
+            # boyundan bağımsız (erişilemeyen olumsuz ilk 50'de değildir).
+            "negatif_@50": sum(1 for r, _ in neg if r and r <= 50) / len(neg) if neg else 0.0,
             "negatif_yuzdelik": float(np.median([p for _, p in neg if p is not None]))
             if any(p is not None for _, p in neg) else float("nan"),
             "rr": rr,
@@ -1068,17 +1114,19 @@ def cift_raporu(s: dict) -> str:
     satirlar = ["", "İnsan çiftleri — forumda «X'i seven Y'yi dener» (doğrulanmış satırlar)",
                 "=" * 74,
                 f"{'yol':<22}{'n':>5}{'tavan':>7}{'@10':>7}{'@50':>7}{'MRR':>8}"
-                f"{'yüzdelik':>10}{'olumsuz yüzd.':>15}"]
+                f"{'yüzdelik':>10}{'olumsuz @50':>13}{'olumsuz yüzd.':>15}"]
     for y, o in s["ozet"].items():
         satirlar.append(f"{y:<22}{o['n']:>5}{o['tavan']:>7}{o['@10']:>7.2f}{o['@50']:>7.2f}"
-                        f"{o['mrr']:>8.3f}{o['yuzdelik']:>10.3f}{o['negatif_yuzdelik']:>15.3f}")
+                        f"{o['mrr']:>8.3f}{o['yuzdelik']:>10.3f}{o['negatif_@50']:>13.2f}"
+                        f"{o['negatif_yuzdelik']:>15.3f}")
     satirlar += ["", f"{'eşli kıyas (MRR farkı)':<34}{'fark':>8}{'%95 aralık':>20}{'p':>8}"]
     for ad, k in s["kiyas"].items():
         aralik = f"[{k['alt']:+.3f}, {k['ust']:+.3f}]"
         satirlar.append(f"{ad:<34}{k['fark']:>+8.3f}{aralik:>20}{k['p']:>8.3f}")
     satirlar += ["", "sayım: " + ", ".join(f"{k}={v}" for k, v in sorted(s["sayim"].items())),
-                 "yüzdelik: medyan sıra / aday sayısı (küçük iyi, rastgele 0,5). Olumsuz",
-                 "çiftlerin yüzdeliği olumlulardan BÜYÜK olmalı (forumda reddedilenler aşağıda).",
+                 "yüzdelik: medyan sıra / aday sayısı (küçük iyi, rastgele 0,5), yalnız",
+                 "erişilen çiftlerde. olumsuz @50: forumda reddedilenlerin ilk 50'ye girme",
+                 "oranı (küçük iyi; havuz boyundan bağımsız, yollar arasında bu kıyaslanır).",
                  "motor ayarı " + ("öğrenilmiş (motor.json)" if s["ogrenildi"]
                                    else "VARSAYILAN — önce `python -m python.motor --egit`"), ""]
     return "\n".join(satirlar)

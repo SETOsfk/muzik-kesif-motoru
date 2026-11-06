@@ -999,16 +999,28 @@ def melez(
 def motor(
     conn: sqlite3.Connection, calisma_id: str, eksen: int, *, adet: int = 12
 ) -> list[Aday]:
-    """`python/motor.py`'nin sırası; ayar `python -m python.motor --egit` ile
-    öğrenilir (yoksa üretim füzyonuna eşit öncül). Gerekçe dayanaktan
-    kurulur: en çok katkı veren kütüphane sanatçıları ve ortak liste sayıları."""
+    """`python/motor.py`'nin sırası. Gerekçe dayanaktan kurulur: en çok katkı
+    veren kütüphane sanatçıları ve ortak liste sayıları.
+
+    K19: motor ancak bu kullanıcının kütüphanesinde ÖLÇÜLÜP ayarlandıktan
+    sonra aday yazar (`python -m python.motor --egit` → `{id}.motor.json`).
+    Ayar yoksa hiçbir şey üretmez; aktarım ve «desteyi büyüt» de öyle.
+    """
     from python import motor as M
 
-    ayar = M.ayar_oku()
-    sira = M.eksen_sirasi(conn, calisma_id, eksen, adet=adet, ayar=ayar)
+    ayar = M.ayar_oku(conn)
+    if not ayar.get("ogrenildi"):
+        print("NOT: motor bu kütüphanede henüz ölçülmedi/ayarlanmadı "
+              "(`python -m python.motor --egit`); motor adayı yazılmadı.", file=sys.stderr)
+        return []
+    # Fazladan iste: parça kimliği olmayan (çalınamayan) sanatçılar yuvaları yemesin.
+    sira = M.eksen_sirasi(conn, calisma_id, eksen, adet=adet * 4, ayar=ayar)
     kume_adi = _eksen_adi(conn, calisma_id, eksen)
     adaylar: list[Aday] = []
-    for basamak, k in enumerate(sira, 1):
+    for k in sira:
+        if len(adaylar) >= adet:
+            break
+        basamak = len(adaylar) + 1
         ses = k["ses"] or {}
         parca = conn.execute(
             """SELECT sanatci, parca, parca_id, COUNT(*) gecis FROM liste_parca
@@ -1024,9 +1036,10 @@ def motor(
         ad = (parca["sanatci"] if parca else None) or ses.get("sanatci") or k["ad"]
         dayanak = {
             "tohumlar": k["tohumlar"], "ortak_liste": k["ortak_liste"],
+            "tekil_ortak_liste": k["tekil_ortak_liste"],
             "liste_sayisi": k["liste_sayisi"], "kaynaklar": k["kaynaklar"],
             "motor_skor": round(k["skor"], 4), "motor_basamak": basamak,
-            "ogrenildi": bool(ayar.get("ogrenildi")),
+
             "birim": "parca", "parca_id": parca_id,
         }
         if ses:

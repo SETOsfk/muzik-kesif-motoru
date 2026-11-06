@@ -432,7 +432,9 @@ async def anasayfa(istek):
     return RedirectResponse("/kesfet")
 
 
-#: Ana akıştaki yollar — leave-one-artist-out ile ölçüldü ve tuttular.
+#: Ana akıştaki yollar — leave-one-artist-out ile ölçüldü ve tuttular. `motor`
+#: ancak kullanıcının kütüphanesinde ölçülüp ayarlandıktan sonra aday yazar
+#: (`adaylar.motor`), yani bu grupta görünmesi ölçüldüğü anlamına gelir.
 ANA_STRATEJILER = ("motor", "melez", "liste_birlikteligi", "ses_benzerligi")
 
 #: Niş yollar: kredi/kalabalık grafiği. Ölçümde erişimleri çok dar çıktı
@@ -1490,9 +1492,9 @@ def istatistik_sayfasi(istek):
                                          "not": t(f"{x['begendim']}/{x['n']} beğendin",
                                                   f"liked {x['begendim']}/{x['n']}")}
                                         for x in k["kaynaklar"]]}
-        # Uzlaşma ödülünün ölçümü (kesif.UZLASMA_AGIRLIGI): tek yol ↔ birden çok yol.
-        uz_ad = {"tek": t("tek kanıt yolu", "one evidence path"),
-                 "cok": t("birden çok kanıt yolu", "several evidence paths")}
+        # Uzlaşma ödülünün ölçümü (kesif.UZLASMA_BASAMAK): ödül almadı ↔ aldı.
+        uz_ad = {"tek": t("uzlaşma ödülü yok", "no agreement bonus"),
+                 "cok": t("uzlaşma ödülü aldı", "agreement bonus")}
         uz = [{"ad": uz_ad[x["grup"]], "renk": grafik.PALET["vurgu"],
                "orta": round(x["isabet"] * 100), "alt": round(x["alt"] * 100),
                "ust": round(x["ust"] * 100),

@@ -298,10 +298,13 @@ SOZLUK: dict[str, dict[str, str]] = {
                  "kütüphane sanatçısı payı) bir koşullu logite girer; ağırlıklar "
                  "iç içe çapraz doğrulamayla seçilir. Popülerlik cezası RP3β'nın "
                  "β'sında. Dil ve ruh hâli listelerinin ağırlığı kısılır.",
-        "capalar": "Düzenlileştirme sonsuza giderse motor melez sıralamanın aynısıdır; "
-                   "ancak ölçüm gösterirse ondan ayrılır.",
-        "uyari": "Ağırlıklar sahip olduğun sanatçıları geri bulmaya göre öğrenilir; "
-                 "beğeniyi değil erişimi ölçer. Destedeki payını gerçek kararların belirler.",
+        "capalar": "Düzenlileştirme sonsuza giderse ağırlıklar melezinkilerle aynı "
+                   "YÖNDE kalır (liste 1 : ses 2); ancak ölçüm gösterirse ondan ayrılır. "
+                   "Melezle birebir aynı değildir: daha çok tohum ve daha derin aday "
+                   "listesi kullanır.",
+        "uyari": "Ağırlıklar SENİN kütüphanende, sahip olduğun sanatçıları geri bulmaya "
+                 "göre öğrenilir; beğeniyi değil erişimi ölçer. Ölçülüp ayarlanmadan aday "
+                 "üretmez. Destedeki payını gerçek kararların belirler.",
     },
     "melez": {
         "ad": "melez sıralama",

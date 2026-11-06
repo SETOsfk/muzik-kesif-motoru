@@ -149,16 +149,20 @@ def _motor_cumlesi(d: dict, eksen: str, benzedigi: str | None) -> str:
             f"{liste} — parantezde ortak liste sayısı.",
             f"In playlists it sits next to these «{eksen}» artists: {liste} "
             f"(shared playlists in brackets)."))
-        if sum(n for _, n in tohumlar) <= ZAYIF_LISTE:
-            parcalar.append(t("Zayıf kanıt: az sayıda listeye dayanıyor.",
-                              "Weak evidence: it rests on only a few playlists."))
+        # Eşik AYRI liste sayısıyla: tohum başına sayılar toplanırsa aynı
+        # liste birden çok kez sayılır ve uyarı tam Sezen Aksu tipi vakada kaybolur.
+        tekil = int(d.get("tekil_ortak_liste") or max(n for _, n in tohumlar))
+        if tekil <= ZAYIF_LISTE:
+            parcalar.append(t(
+                f"Zayıf kanıt: yalnız {tekil} ayrı listeye dayanıyor.",
+                f"Weak evidence: it rests on only {tekil} separate "
+                f"playlist{'s' if tekil != 1 else ''}."))
     if benzedigi:
         parcalar.append(_ses_cumlesi(benzedigi, d))
-    n = d.get("liste_sayisi")
+    n = int(d.get("liste_sayisi") or 0)
     if n:
-        parcalar.append(t(
-            f"Toplam {sayi(n)} listede geçiyor; sıralamada popülerlik cezalandırıldı.",
-            f"Appears in {sayi(n)} playlists overall; popularity is penalised in the ranking."))
+        parcalar.append(t(f"Toplam {sayi(n, 0)} listede geçiyor.",
+                          f"Appears in {sayi(n, 0)} playlists overall."))
     return " ".join(parcalar)
 
 
@@ -203,25 +207,40 @@ STRATEJI_ADI = {
 
 
 #: Kanıt ailesi adları (`kesif.KANIT_AILESI`), cümle içinde.
+#: Kanıt ailesi adları (`kesif.KANIT_AILESI`): (Türkçe, İngilizce, İngilizcede çoğul mu).
 AILE_ADI = {
-    "liste": ("çalma listeleri", "playlists"),
-    "ses": ("ses benzerliği", "sound similarity"),
-    "kredi": ("ortak müzisyenler", "shared musicians"),
-    "sahne": ("kalabalık komşuluğu", "listener neighbourhood"),
-    "uzaklik": ("iki adımlı kalabalık yolu", "two-step listener path"),
+    "liste": ("çalma listeleri", "playlists", True),
+    "ses": ("ses benzerliği", "sound similarity", False),
+    "kredi": ("ortak müzisyenler", "shared musicians", True),
+    "sahne": ("kalabalık komşuluğu", "listener neighbourhood", False),
+    "uzaklik": ("iki adımlı kalabalık yolu", "two-step listener path", False),
 }
+
+
+def _bagla(ogeler: list[str], ve: str) -> str:
+    return ogeler[0] if len(ogeler) == 1 else ", ".join(ogeler[:-1]) + f" {ve} " + ogeler[-1]
+
+
+def _de_da(sozcuk: str) -> str:
+    """Türkçe «de/da» bağlacı, son ünlüye göre (kalın → da, ince → de)."""
+    for harf in reversed(sozcuk.lower()):
+        if harf in "aıou":
+            return "da"
+        if harf in "eiöü":
+            return "de"
+    return "de"
 
 
 def uzlasma_cumlesi(aileler) -> str:
     """Başka bağımsız yollar da aynı sanatçıyı gösteriyorsa onu söyler."""
-    if not aileler:
+    secili = [AILE_ADI[a] for a in sorted(aileler or ()) if a in AILE_ADI]
+    if not secili:
         return ""
-    adlar = [t(*AILE_ADI[a]) for a in sorted(aileler) if a in AILE_ADI]
-    if not adlar:
-        return ""
-    liste = ", ".join(adlar)
-    return t(f"Ayrıca bağımsız olarak {liste} de bu sanatçıyı gösteriyor.",
-             f"Independently, {liste} also point to this artist.")
+    tr = _bagla([a[0] for a in secili], "ve")
+    en = _bagla([a[1] for a in secili], "and")
+    fiil = "point" if len(secili) > 1 or secili[0][2] else "points"
+    return t(f"Ayrıca bağımsız olarak {tr} {_de_da(tr)} bu sanatçıyı gösteriyor.",
+             f"Independently, {en} also {fiil} to this artist.")
 
 
 def strateji_adi(strateji: str) -> str:
