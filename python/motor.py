@@ -72,13 +72,14 @@ RR_K = 60
 #: motorun tavanını yapay olarak düşürürdü.
 YOL_DERINLIGI = 1000
 
+#: Erişim yolları. İlk dördü çalma listesi grafiği ve ses; son üçü dış
+#: komşuluk (`discover/komsuluk.py`, 2026-11-07): Deezer benzerleri,
+#: ListenBrainz kalabalığı, MusicBrainz kadrosu.
+YOL_ADLARI = ("rp3", "ease", "liste", "ses", "deezer_benzer", "listenbrainz", "kadro")
 #: Öznitelikler — sıra eğitimde ve puanlamada aynı olmalı.
-OZNITELIKLER = ("rr_rp3", "rr_ease", "rr_liste", "rr_ses",
-                "ortak_liste", "tohum_payi")
-#: Öncül YÖNÜ = üretimdeki melez (RRF, liste 1 : ses 2). Ceza yalnız bu yöne
-#: DİK bileşende (`logit_egit`): ölçek serbest, çünkü koşullu logitte ölçek
-#: sıralamayı değil «sıcaklığı» belirler. 2026-10-20 incelemesi ölçtü: ceza
-#: ‖θ − μ‖² iken CV, yön doğru olsa bile μ'yü hiç seçmiyordu.
+OZNITELIKLER = tuple(f"rr_{y}" for y in YOL_ADLARI) + ("ortak_liste", "tohum_payi")
+#: Öncül = üretimdeki melez (RRF, liste 1 : ses 2). λ → ∞ iken motor melezin
+#: sıralamasını verir; λ iç katlarda NDCG ile seçilir (`lambda_sec`).
 ONCUL = {"rr_liste": 1.0, "rr_ses": 2.0}
 #: Bir yolun karta «kaynak» (kanıt ailesi) olarak yazılması için en derin sıra:
 #: melezin baktığı derinlik (4 × 12). 1000 derinlikteki her sanatçı tek ortak
@@ -323,23 +324,16 @@ def oznitelikler(
 ) -> tuple[list[str], np.ndarray]:
     """Aday havuzu (yolların birleşimi) ve öznitelik matrisi [aday × OZNITELIKLER].
 
-    `yollar`: {"rp3": [...], "ease": [...], "liste": [...], "ses": [...]}.
-    Eksik yol sıfır sütun verir; sırası yoksa aday o yolda «yok» demektir.
+    `yollar`: {yol adı (YOL_ADLARI): sıra}. Eksik yol sıfır sütun verir;
+    sırası yoksa aday o yolda «yok» demektir.
     """
     ortak, tohum_payi = ortak or {}, tohum_payi or {}
     rr = {ad: _rr(s[:YOL_DERINLIGI]) for ad, s in yollar.items()}
-    havuz: list[str] = []
-    gorulen: set[str] = set()
-    for ad in ("rp3", "ease", "liste", "ses"):
-        for a in yollar.get(ad, [])[:YOL_DERINLIGI]:
-            if a not in gorulen:
-                gorulen.add(a)
-                havuz.append(a)
+    havuz = list(dict.fromkeys(a for ad in YOL_ADLARI for a in yollar.get(ad, [])[:YOL_DERINLIGI]))
     F = np.zeros((len(havuz), len(OZNITELIKLER)), dtype="float64")
     for k, a in enumerate(havuz):
-        F[k] = (rr.get("rp3", {}).get(a, 0.0), rr.get("ease", {}).get(a, 0.0),
-                rr.get("liste", {}).get(a, 0.0), rr.get("ses", {}).get(a, 0.0),
-                np.log1p(ortak.get(a, 0.0)), tohum_payi.get(a, 0.0))
+        F[k] = ([rr.get(y, {}).get(a, 0.0) for y in YOL_ADLARI]
+                + [np.log1p(ortak.get(a, 0.0)), tohum_payi.get(a, 0.0)])
     return havuz, F
 
 
@@ -353,24 +347,26 @@ def logit_egit(ornekler: list[tuple[np.ndarray, int]], *, lam: float,
 
     ornekler: [(F_q [aday × d], pozitifin satırı)]. Her sorgu bir seçim kümesi,
     gizlenen sanatçı tek pozitif (eşleşmiş vaka–kontrol).
-        ℓ(θ) = Σ_q [θᵀx_q+ − log Σ_j exp θᵀx_qj] − (λ/2)‖Pθ‖²,  P = I − uuᵀ, u = μ/‖μ‖
-    Ceza yalnız μ'ya DİK bileşende: λ → ∞ iken θ ∝ μ (ölçek veriden), yani
-    sıralama öncülün sıralamasıyla aynı. ‖θ − μ‖² cezası ölçeği de μ'ye
-    çekiyordu ve CV λ'yı yönü değil sıcaklığı ayarlamak için kullanıyordu.
+        ℓ(θ) = Σ_q [θᵀx_q+ − log Σ_j exp θᵀx_qj] − (λ/2)‖θ − μ‖²
+    λ → ∞: θ = μ, yani öncülün (melezin) sıralaması BİREBİR.
+
+    2026-10-20 incelemesi: λ log-olabilirlikle seçilince CV λ'yı yönü değil
+    «sıcaklığı» (ölçeği) ayarlamak için kullanıyordu. Çözüm λ'nın NDCG ile
+    seçilmesi (`lambda_sec`) — sıralama ölçütü ölçekten bağımsız. Cezayı
+    yalnız μ'ya dik bileşene koymak denendi ve ELENDİ: bilgisiz veride ölçek
+    eksiye dönüp sıralamayı tersine çevirebiliyordu.
     """
-    d = len(OZNITELIKLER)
-    mu = oncul() if mu is None else mu
-    u = mu / (np.linalg.norm(mu) or 1.0)
-    P = np.eye(d) - np.outer(u, u)
+    mu = oncul() if mu is None else np.asarray(mu, float)
+    d = len(mu)
     theta = mu.copy()
 
     def amac(t):
-        return logit_olabilirlik(ornekler, t) - lam / 2 * float(t @ P @ t)
+        return logit_olabilirlik(ornekler, t) - lam / 2 * float((t - mu) @ (t - mu))
 
     eski = amac(theta)
     for _ in range(adim):
-        g = -lam * (P @ theta)
-        H = lam * P + 1e-8 * np.eye(d)
+        g = -lam * (theta - mu)
+        H = lam * np.eye(d)
         for F, pos in ornekler:
             z = F @ theta
             p = np.exp(z - z.max())
@@ -403,7 +399,8 @@ def logit_olabilirlik(ornekler, theta: np.ndarray) -> float:
 LAMBDA_IZGARASI = (1e4, 100.0, 30.0, 10.0, 3.0, 1.0, 0.3)
 
 
-def lambda_sec(ornekler, *, kat: int = 5, tohum: int = 0) -> float:
+def lambda_sec(ornekler, *, kat: int = 5, tohum: int = 0,
+               mu: np.ndarray | None = None, katman: np.ndarray | None = None) -> float:
     """Gruplu k-katlı CV; ölçüt dışarıda bırakılan sorguların NDCG'si
     (tek ilgili öğe: 1/log₂(1+sıra); Järvelin & Kekäläinen 2002) — sıralamanın
     tamamı, olabilirlik değil. MRR DEĞİL: yapay sınamada MRR birkaç birinci
@@ -411,14 +408,18 @@ def lambda_sec(ornekler, *, kat: int = 5, tohum: int = 0) -> float:
     eledi. Eşitlikte büyük λ (öncüle yakın)."""
     if len(ornekler) < kat * 2:
         return LAMBDA_IZGARASI[0]
-    rng = np.random.default_rng(tohum)
-    katman = rng.permutation(len(ornekler)) % kat
+    if katman is None:
+        katman = np.random.default_rng(tohum).permutation(len(ornekler)) % kat
+    else:
+        kat = int(max(katman)) + 1
     en_iyi, en_iyi_ndcg = LAMBDA_IZGARASI[0], -np.inf
     for lam in LAMBDA_IZGARASI:
         puan = []
         for k in range(kat):
             egit = [o for o, c in zip(ornekler, katman) if c != k]
-            theta = logit_egit(egit, lam=lam)
+            if not egit:
+                continue
+            theta = logit_egit(egit, lam=lam, mu=mu)
             for F, pos in (o for o, c in zip(ornekler, katman) if c == k):
                 s = puanla(F, theta)
                 puan.append(1.0 / np.log2(2 + int((s > s[pos]).sum())))
@@ -491,6 +492,19 @@ def ayar_yolu(conn: sqlite3.Connection | None = None) -> Path:
     return AYAR_DOSYASI
 
 
+def olcum_yolu(conn: sqlite3.Connection | None = None) -> Path:
+    """Son ölçümün raporu (`{id}.olcum.json`) — Ölçümler sayfası okur."""
+    yol = ayar_yolu(conn)
+    return yol.with_name(yol.name.replace(".motor.json", ".olcum.json"))
+
+
+def olcum_oku(conn: sqlite3.Connection | None = None) -> dict | None:
+    try:
+        return json.loads(olcum_yolu(conn).read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def ayar_oku(conn: sqlite3.Connection | None = None, yol: Path | None = None) -> dict:
     """Öğrenilmiş ayarlar; yoksa literatür varsayılanları + öncül füzyon ve
     `ogrenildi` False — üretim motoru o durumda aday YAZMAZ (K19)."""
@@ -532,7 +546,8 @@ def _grafik(conn: sqlite3.Connection, baglam_agirligi: float) -> Grafik:
 
 
 def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
-                 adet: int = 12, ayar: dict | None = None) -> list[dict]:
+                 adet: int = 12, ayar: dict | None = None,
+                 dis: dict[str, dict[str, list[dict]]] | None = None) -> list[dict]:
     """Bir eksen için motorun sanatçı sırası ve her birinin kanıtı.
 
     Dönen: [{"anahtar", "ad", "skor", "kaynaklar", "tohumlar": [(ad, ortak)],
@@ -568,6 +583,28 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     ses_kayit = {normalize_esleme(k["sanatci"]): k
                  for k in acik_havuz_adaylari(conn, calisma_id, eksen, adet=YOL_DERINLIGI)}
     yollar["ses"] = [a for a in ses_kayit if a not in sahip]
+    # Dış komşuluk: tohumların Deezer benzerleri, ListenBrainz komşuları ve
+    # MusicBrainz kadrosu (önbellekli; ilk üretimde ağ ister — K5).
+    from python.discover.komsuluk import DIS_YOLLAR, komsular_topla, tohumlardan_sira
+    if dis is None:
+        try:
+            dis = komsular_topla(okunur.values())
+        except Exception:          # ağ yok / servis düştü: dış yollar boş kalır
+            dis = {}
+    for yol in DIS_YOLLAR:
+        yollar[yol] = tohumlardan_sira({t: dis.get(yol, {}).get(t, []) for t in tohum},
+                                       haric=sahip | set(tohum))
+    kadro_kisi = {normalize_esleme(k["ad"]): (okunur.get(t, t), k.get("kisiler") or [])
+                  for t in tohum for k in dis.get("kadro", {}).get(t, [])}
+    # Kalabalık kanıtı: hangi kütüphane sanatçılarının komşu listesinde (ilk 20).
+    kalabalik: dict[str, list[str]] = {}
+    for yol in ("deezer_benzer", "listenbrainz"):
+        for t in tohum:
+            for k in dis.get(yol, {}).get(t, [])[:20]:
+                ad_t = okunur.get(t, t)
+                liste_k = kalabalik.setdefault(normalize_esleme(k["ad"]), [])
+                if ad_t not in liste_k:
+                    liste_k.append(ad_t)
 
     tohum_idx, _ = _tohumlar(G, tohum)
     toplam_ortak, pay = ortak_ozeti(G, ortak)
@@ -584,8 +621,8 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
         n_tekil = int(tekil[j]) if j is not None else 0
         # Kanıt ailesi: yalnız melezin derinliğinde ve (liste grafiği yolları
         # için) en az iki AYRI ortak listeyle. Kanıtı olmayan aday kart olmaz.
-        kaynaklar = [ad for ad in ("rp3", "ease", "liste", "ses")
-                     if sira[ad].get(a, KANIT_DERINLIGI + 1) <= KANIT_DERINLIGI
+        kaynaklar = [ad for ad in YOL_ADLARI
+                     if sira.get(ad, {}).get(a, KANIT_DERINLIGI + 1) <= KANIT_DERINLIGI
                      and (ad not in ("rp3", "ease") or n_tekil >= ASGARI_TEKIL_LISTE)]
         if not kaynaklar:
             continue
@@ -600,6 +637,12 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
             "anahtar": a, "ad": G.ad.get(a) or (ses_kayit.get(a) or {}).get("sanatci") or a,
             "skor": float(skor[k]), "kaynaklar": kaynaklar, "tohumlar": tohumlar,
             "ortak_liste": int(toplam_ortak.get(a, 0)), "tekil_ortak_liste": n_tekil,
+            # Kadro kanıtı: hangi kütüphane sanatçısının hangi üyesi üzerinden.
+            "kadro": ({"tohum": kadro_kisi[a][0],
+                       "kisiler": [k for k, _ in kadro_kisi[a][1]][:3]}
+                      if "kadro" in kaynaklar and a in kadro_kisi else None),
+            "kalabalik": (kalabalik.get(a, [])[:3]
+                          if {"deezer_benzer", "listenbrainz"} & set(kaynaklar) else []),
             "liste_sayisi": int(populer.get(a, 0)),
             "ses": ses_kayit.get(a),
         })
@@ -621,21 +664,49 @@ def main(argv: list[str] | None = None) -> int:
                     help="RP3β/EASE ayarla, füzyonu öğren, ölç ve kullanıcının "
                          "{id}.motor.json dosyasına yaz")
     ay.add_argument("--yazma", action="store_true", help="ölç ama ayarı yazma")
+    ay.add_argument("--dis-yok", action="store_true",
+                    help="dış komşuluk yollarını (Deezer, ListenBrainz, kadro) kullanma")
+    ay.add_argument("--ciftler", type=Path,
+                    default=Path(__file__).resolve().parents[1] / "docs/arastirma/insan-ciftleri.csv",
+                    help="insan çifti sınaması (yoksa atlanır)")
     args = ay.parse_args(argv)
     if not args.egit:
         ay.error("--egit verilmeli")
 
+    from python.discover.komsuluk import komsular_topla
+
+    def ilerleme(i, n, ad, say):
+        if i % 10 == 0 or i == n:
+            print(f"  dış komşuluk {i}/{n}", file=sys.stderr)
+
     conn = baglan(args.db)
     try:
+        dis = None
+        if not args.dis_yok:
+            adlar = [r[0] for r in conn.execute("SELECT DISTINCT artist FROM albums") if r[0]]
+            print(f"Dış komşuluklar ({len(adlar)} sanatçı; ilk kez ağdan, sonra önbellekten)…",
+                  file=sys.stderr)
+            dis = komsular_topla(adlar, ilerleme=ilerleme)
         sonuc = D.calistir(conn, limit=args.limit, calisma=args.calisma,
                            olcut="npmi", buzulme=1.0, melez_agirlik=(1.0, 2.0),
-                           motor=True)
+                           motor=True, dis_komsular=dis)
         print(D.rapor(sonuc))
         print(D.motor_raporu(sonuc))
+        cift = None
+        if args.ciftler and Path(args.ciftler).exists():
+            ciftler = D.ciftleri_oku(Path(args.ciftler))
+            if not args.yazma and "_motor_ayar" in sonuc:
+                ayar_yaz(sonuc["_motor_ayar"], ayar_yolu(conn))   # çift sınaması motoru da ölçsün
+            tohumlar = sorted({t for c in ciftler for t in c["tohumlar"]})
+            cift_dis = None if args.dis_yok else komsular_topla(tohumlar, ilerleme=ilerleme)
+            cift = D.cift_sinamasi(conn, ciftler, dis_komsular=cift_dis)
+            print(D.cift_raporu(cift))
         if not args.yazma and "_motor_ayar" in sonuc:
             yol = ayar_yolu(conn)
             ayar_yaz(sonuc["_motor_ayar"], yol)
-            print(f"\nAyar yazıldı: {yol}")
+            olcum_yolu(conn).write_text(json.dumps(
+                D.olcum_ozeti(sonuc, cift=cift, kaynak="kütüphane"), ensure_ascii=False, indent=1))
+            print(f"\nAyar yazıldı: {yol}\nÖlçüm raporu: {olcum_yolu(conn)}")
     finally:
         conn.close()
     return 0

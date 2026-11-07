@@ -283,10 +283,10 @@ listesinde geri plana iniyor.
 
 | Kaynak | Kullanım | Sınır |
 |---|---|---|
-| MusicBrainz | Kanonik ID, temel krediler | Rate limit: 1 istek/sn, user-agent zorunlu |
+| MusicBrainz | Kanonik ID, temel krediler; **kadro grafiği** (`member of band`, `supporting musician` — `discover/komsuluk.py`, 2026-11-07) | Rate limit: 1 istek/sn, user-agent zorunlu (iletişim URL'si, e-posta değil — `onbellek.ajan()`). İlişkiler CC0, kalıcı önbellek serbest. Arama servisi yükte 503 «search-shed» verebiliyor: o sanatçı boş geçer, önbelleğe yazılmaz |
 | Discogs | Detaylı krediler, label, ülke | Token gerekli; metal/prog/jazz'da zengin, elektronikte zayıf. **API koşulu (2026-10-20 okundu): 6 saatten eski içerik gösterilmez, gerekenden uzun saklanmaz, «Data provided by Discogs» atfı ister — K5 ile çelişiyor.** Aylık dökümler CC0 |
 | iTunes Search | 30 sn önizleme + katalog | Anahtarsız, ücretsiz — TEST EDİLDİ |
-| Deezer | 30 sn önizleme (yedek) | Anahtarsız, ücretsiz — TEST EDİLDİ. Koşul: ses verisinin yerel saklanması yasak, aile içi özel kullanım (2026-10-20 okundu) |
+| Deezer | 30 sn önizleme (yedek); **«benzer sanatçılar»** (`artist/{id}/related`, kalabalık sinyali — 2026-11-07) | Anahtarsız, ücretsiz — TEST EDİLDİ. Koşul: ses verisinin yerel saklanması yasak, aile içi özel kullanım (2026-10-20 okundu). Benzerler listesi METİN (ad, sıra) — saklanabilir. 0,35 sn aralık |
 | AcousticBrainz | Sende OLMAYAN parçanın ses profili | Anahtarsız. Kayıt MBID'siyle. Yeni veri almıyor (2022'de donduruldu) ama arşiv okunabiliyor — örneklemde %92 kapsama |
 | ListenBrainz | "Bunu dinleyen şunu da dinliyor" | Anahtarsız (labs uç noktası). Kalabalık sinyali. Koşul: saniyede EN ÇOK 1 istek, iletişimli UA (2026-10-20 okundu; `onbellek.ajan()`). Popülerlik/radyo uçlarının bir kısmı jeton istiyor |
 | Deezer çalma listeleri | Ortak filtreleme vekili — 482 liste, 45.899 parça, 10.360 sanatçı | Anahtarsız, belgelenmiş uçlar (`search/playlist`, `playlist/{id}`). Sinyal müzikal benzerlik kadar BAĞLAM da taşıyor; PMI ile popülerlik sönümleniyor |
@@ -458,12 +458,17 @@ koşullu logitle birleştiriyor.
 - Popülerlik öznitelik değil (PDA yapay veride motoru çökertti); ceza RP3β'nın β'sında.
 - Dil ve ruh hâli listelerinin ağırlığı kısılıyor.
 - Ayarlar iç içe CV'de yalnız eğitim sorgularında seçiliyor (öncülün yönü ve
-  liste ayarları hariç; rapor bunu yazar). Öncül cezası μ'ya DİK bileşende.
+  liste ayarları hariç; rapor bunu yazar). λ iç katlarda NDCG ile seçiliyor.
 - **Ölçülüp ayarlanmadan aday yazmaz** (`{id}.motor.json`, kullanıcıya özgü,
   `python -m python.motor --egit`). Kart «kaynak»ı yalnız ilk 48 sıra ve ≥ 2
   ayrı ortak liste (Sezen Aksu vakası).
 - İkinci ölçüt: forumdan doğrulanmış 127 insan çifti
   (`degerlendirme --ciftler docs/arastirma/insan-ciftleri.csv`).
+- **Dış komşuluk yolları (2026-11-07):** Deezer benzerleri, ListenBrainz kalabalığı,
+  MusicBrainz kadrosu (`discover/komsuluk.py`) motorun öznitelikleri; kanıt
+  aileleri «sahne» ve «kredi». İnsan çiftlerinde (bulut, gerçek açık veri) en güçlü
+  tek yol ListenBrainz, en iyisi öğrenilmiş birleşim (karar günlüğü (24)).
+- Sonuçlar uygulamada: `/olcumler` (`{id}.olcum.json`, `--egit` yazar).
 
 **Sınama sızıntısı düzeltildi:** gizlenen sanatçının ADIYLA bulunmuş listeler o
 katmanda çıkarılıyor (`degerlendirme.sizinti_listeleri`, varsayılan). Bu tarihten

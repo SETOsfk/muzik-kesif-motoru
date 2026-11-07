@@ -1902,3 +1902,17 @@ html { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 900px) {
   .zaman-form #zaman-dugme { bottom: calc(3.4rem + env(safe-area-inset-bottom, 0px) + 10px); justify-self: stretch; }
 }
+
+/* ============================================================ Ölçümler (2026-11-07) */
+.olcum-kazanan { border-color: var(--vurgu-kenar); }
+.olcum-kazanan h2 { margin: .1rem 0 .8rem; }
+.olcum-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: .9rem; margin: 0 0 .9rem; }
+.olcum-sayilar div { display: flex; flex-direction: column; gap: .15rem;
+  padding: .7rem .8rem; border-radius: var(--r-m); background: var(--zemin-2); }
+.olcum-sayilar b { font-size: 1.45rem; font-weight: 500; color: var(--metin); }
+.olcum-sayilar span { font-family: var(--font-etiket); font-size: .7rem; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--metin-3); }
+tr.secili td { background: var(--vurgu-zemin); }
+td.en-iyi { font-weight: 600; color: var(--ikincil); }
+.soluk { color: var(--metin-3); }

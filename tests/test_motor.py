@@ -89,10 +89,8 @@ def test_logit_bilgili_ozniteligi_ogrenir_ve_buyuk_lambda_onculdur():
         ornekler.append((F, pos))
     theta = M.logit_egit(ornekler, lam=0.1)
     assert theta[0] > 2 and abs(theta[0]) > np.abs(theta[1:]).max()
-    # λ → ∞: ceza yalnız öncüle DİK bileşende → θ öncülle aynı yönde (ölçek veriden).
-    uzak = M.logit_egit(ornekler, lam=1e9)
-    mu = M.oncul()
-    assert uzak @ mu / (np.linalg.norm(uzak) * np.linalg.norm(mu)) > 0.9999
+    # λ → ∞: θ = öncül (melezin sıralaması birebir).
+    assert np.allclose(M.logit_egit(ornekler, lam=1e9), M.oncul(), atol=1e-4)
 
 
 def test_eslesmis_kiyas():
@@ -167,6 +165,9 @@ def test_uretim_motor_stratejisi_ve_gerekce(tmp_path, monkeypatch):
     monkeypatch.setattr(C, "GOMU_KLASOR", tmp_path / "clap")
     monkeypatch.setattr(C, "PARCA_GOMU", tmp_path / "clap_parca")
     monkeypatch.setattr(M, "AYAR_DOSYASI", tmp_path / "yok.json")
+    # Ağsız: dış komşuluk (Deezer/ListenBrainz/MusicBrainz) çağrılmasın.
+    import python.discover.komsuluk as KO
+    monkeypatch.setattr(KO, "komsular_topla", lambda *a, **k: {})
     M._GRAFIK.clear()
     conn = _grafik({1: ["Meshuggah", "Vildhjarta"], 2: ["Meshuggah", "Vildhjarta"],
                     3: ["Gojira", "Vildhjarta"], 4: ["Gojira", "Car Bomb"],
@@ -241,7 +242,8 @@ def test_insan_ciftleri_sinamasi(tmp_path, monkeypatch):
     assert [c["oneri"] for c in ciftler] == ["Vildhjarta", "Gojira", "Coldplay"]
     s = D.cift_sinamasi(conn, ciftler)
     assert s["sayim"]["zaten_sahip"] == 1 and s["sayim"]["olculen"] == 2
-    for yol_adi in ("rp3", "ease", "motor"):
+    assert "motor" not in s["ozet"]            # ayarlanmamış motor ölçülmez
+    for yol_adi in ("rp3", "ease", "rrf_tum", "birlesim"):
         o = s["ozet"][yol_adi]
         assert o["n"] == 1 and o["@10"] == 1.0, yol_adi
         assert o["negatif_n"] == 1 and o["negatif_@50"] <= 1.0, yol_adi

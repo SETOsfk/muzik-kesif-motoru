@@ -91,8 +91,10 @@ BUYUTME_ADIMI = 20
 #: ve sesin kaynaşması; kendi ailesi `dayanak.kaynaklar`'dan okunur).
 KANIT_AILESI = {
     "liste_birlikteligi": "liste", "ses_benzerligi": "ses",
-    # Motorun yolları (`dayanak.kaynaklar`): üç liste yolu aynı veriden.
+    # Motorun yolları (`dayanak.kaynaklar`): üç liste yolu aynı veriden;
+    # kalabalık benzerliği (Deezer, ListenBrainz) «sahne», kadro bağı «kredi».
     "rp3": "liste", "ease": "liste", "liste": "liste", "ses": "ses",
+    "deezer_benzer": "sahne", "listenbrainz": "sahne", "kadro": "kredi",
     "kredi_sicramasi": "kredi", "sahne_komsulugu": "sahne",
     "bilincli_uzaklik": "uzaklik",
 }

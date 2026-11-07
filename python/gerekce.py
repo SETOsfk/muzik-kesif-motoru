@@ -121,7 +121,7 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
         return _ses_cumlesi(benzedigi, d) + " " + t(
             "Her şeye benzeyen kayıtlar öne çıkmasın diye skor düzeltildi.",
             "The score is corrected so that tracks resembling everything don't float up.")
-    if strateji == "motor" and "tohumlar" in d:
+    if strateji == "motor" and ("tohumlar" in d or d.get("kadro") or d.get("kalabalik")):
         return _motor_cumlesi(d, eksen, benzedigi)
     if strateji == "melez":
         parcalar = []
@@ -157,6 +157,18 @@ def _motor_cumlesi(d: dict, eksen: str, benzedigi: str | None) -> str:
                 f"Zayıf kanıt: yalnız {tekil} ayrı listeye dayanıyor.",
                 f"Weak evidence: it rests on only {tekil} separate "
                 f"playlist{'s' if tekil != 1 else ''}."))
+    kadro = d.get("kadro") or {}
+    if kadro.get("tohum") and kadro.get("kisiler"):
+        kisiler = _bagla(list(kadro["kisiler"])[:3], t("ve", "and"))
+        parcalar.append(t(
+            f"Kadro bağı: kütüphanendeki «{kadro['tohum']}» ile ortak müzisyen — {kisiler}.",
+            f"Lineup link: shares musicians with «{kadro['tohum']}» from your library: {kisiler}."))
+    kalabalik = list(d.get("kalabalik") or [])[:3]
+    if kalabalik:
+        adlar = _bagla(kalabalik, t("ve", "and"))
+        parcalar.append(t(
+            f"Dinleyici kalabalığı: {adlar} dinleyenler bunu da dinliyor (Deezer, ListenBrainz).",
+            f"Listener crowd: people who play {adlar} also play this (Deezer, ListenBrainz)."))
     if benzedigi:
         parcalar.append(_ses_cumlesi(benzedigi, d))
     n = int(d.get("liste_sayisi") or 0)
@@ -241,6 +253,31 @@ def uzlasma_cumlesi(aileler) -> str:
     fiil = "point" if len(secili) > 1 or secili[0][2] else "points"
     return t(f"Ayrıca bağımsız olarak {tr} {_de_da(tr)} bu sanatçıyı gösteriyor.",
              f"Independently, {en} also {fiil} to this artist.")
+
+
+#: Ölçüm yollarının adları (Ölçümler sayfası, raporlar). Kart stratejileri
+#: STRATEJI_ADI'nda; burada değerlendirmenin bütün erişim yolları.
+YOL_ADI = {
+    "liste_birlikteligi": ("çalma listesi bağı (npmi)", "playlist link (npmi)"),
+    "ses_benzerligi": ("ses benzerliği", "sound similarity"),
+    "melez": ("melez: liste + ses", "hybrid: playlists + sound"),
+    "rp3": ("liste grafiği: RP3β", "playlist graph: RP3β"),
+    "ease": ("liste grafiği: EASE", "playlist graph: EASE"),
+    "deezer_benzer": ("Deezer benzerleri", "Deezer related artists"),
+    "listenbrainz": ("ListenBrainz kalabalığı", "ListenBrainz crowd"),
+    "kadro": ("MusicBrainz kadrosu", "MusicBrainz lineups"),
+    "motor": ("motor: öğrenilmiş birleşim", "engine: learned blend"),
+    "rrf_tum": ("eşit ağırlıklı birleşim", "equal-weight blend"),
+    "birlesim": ("öğrenilmiş birleşim", "learned blend"),
+    "kredi_sicramasi": ("kadrondaki müzisyenler", "musicians you know"),
+    "sahne_komsulugu": ("1 adım: komşular", "1 step: neighbours"),
+    "bilincli_uzaklik": ("2 adım: bilinçli uzaklık", "2 steps: deliberate distance"),
+}
+
+
+def yol_adi(yol: str) -> str:
+    tr, en = YOL_ADI.get(yol, (yol, yol))
+    return t(tr, en)
 
 
 def strateji_adi(strateji: str) -> str:

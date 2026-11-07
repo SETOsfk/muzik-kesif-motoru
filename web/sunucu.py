@@ -885,6 +885,54 @@ def _klip_bul(veri: pd.DataFrame, stem: str, etiket: str):
     return url if pd.notna(url) else None
 
 
+async def olcumler(istek):
+    """Ölçümler: her erişim yolu senin kütüphanende nasıl tuttu (K19, K24).
+
+    `python -m python.motor --egit` gizleme sınamasını (ve insan çifti
+    sınamasını) koşup `{id}.olcum.json`'a yazar; sayfa yalnız onu okur —
+    istek içinde ölçüm koşturulmaz (dakikalar sürer).
+    """
+    from python import motor as M
+    from python.gerekce import yol_adi
+    from web import grafik
+
+    conn = _baglanti()
+    try:
+        olcum = M.olcum_oku(conn)
+    finally:
+        conn.close()
+    if not olcum:
+        return SABLONLAR.TemplateResponse(istek, "bos.html", _ortam(
+            istek, mesaj=t("Henüz ölçüm yok. Mac'te `python -m python.motor --egit` "
+                           "çalışınca her yöntemin senin kütüphanende nasıl tuttuğu burada görünür.",
+                           "No measurement yet. Once `python -m python.motor --egit` has run, "
+                           "this page shows how each method did on your library.")))
+    loao = olcum.get("loao", {})
+    satirlar = sorted(loao.items(), key=lambda kv: -(kv[1].get("ndcg") or 0))
+    en_iyi = {k: max((v.get(k) or 0) for v in loao.values())
+              for k in ("recall@10", "recall@50", "mrr", "ndcg")} if loao else {}
+    motor = olcum.get("motor") or {}
+    agirlik = None
+    if motor.get("theta"):
+        ad = {"rr_rp3": yol_adi("rp3"), "rr_ease": yol_adi("ease"),
+              "rr_liste": yol_adi("liste_birlikteligi"), "rr_ses": yol_adi("ses_benzerligi"),
+              "rr_deezer_benzer": yol_adi("deezer_benzer"),
+              "rr_listenbrainz": yol_adi("listenbrainz"), "rr_kadro": yol_adi("kadro"),
+              "ortak_liste": t("ortak liste sayısı", "shared playlists"),
+              "tohum_payi": t("bağlı tohum payı", "share of linked seeds")}
+        agirlik = {"tur": "cubuk", "basamak": True, "birim": "",
+                   "satirlar": [{"ad": ad.get(o, o), "deger": round(float(w), 2),
+                                 "renk": grafik.PALET["vurgu"] if w >= 0 else grafik.PALET["ikincil"]}
+                                for o, w in zip(motor.get("oznitelikler", []), motor["theta"])]}
+    yollar = {"tur": "cubuk", "basamak": True, "birim": "NDCG",
+              "satirlar": [{"ad": yol_adi(a), "deger": round(float(v.get("ndcg") or 0), 3),
+                            "renk": grafik.PALET["vurgu"] if a == "motor" else grafik.PALET["ikincil"]}
+                           for a, v in satirlar]}
+    return SABLONLAR.TemplateResponse(istek, "olcumler.html", _ortam(
+        istek, olcum=olcum, satirlar=satirlar, en_iyi=en_iyi, yol_adi=yol_adi,
+        g_yollar=yollar, g_agirlik=agirlik))
+
+
 async def ogrenme(istek):
     from python.geri_bildirim import (
         kararlar, ozet_cumleleri, sanatci_duzeyi, strateji_isabeti, uzaklik_tercihi,
@@ -2586,6 +2634,7 @@ ROTALAR = [
     Route("/oneriler", oneriler),
     Route("/profil", profil),
     Route("/ogrenme", ogrenme),
+    Route("/olcumler", olcumler),
     Route("/muzisyenler", muzisyenler),
     Route("/kumeler", kumeler),
     Route("/veri", veri_seti),

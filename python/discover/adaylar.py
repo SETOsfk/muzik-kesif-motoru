@@ -1037,6 +1037,7 @@ def motor(
         dayanak = {
             "tohumlar": k["tohumlar"], "ortak_liste": k["ortak_liste"],
             "tekil_ortak_liste": k["tekil_ortak_liste"],
+            "kadro": k.get("kadro"), "kalabalik": k.get("kalabalik") or [],
             "liste_sayisi": k["liste_sayisi"], "kaynaklar": k["kaynaklar"],
             "motor_skor": round(k["skor"], 4), "motor_basamak": basamak,
 
