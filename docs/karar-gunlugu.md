@@ -2930,3 +2930,35 @@ Düzeltilmeyen: yoğun matris belleği (ortak havuz 5 kullanıcıda ~3000 liste 
   bilgisi. Olumsuzlar için «olumsuz @50» kullanılıyor (küçük iyi, havuz boyundan
   bağımsız).
 - Sınır: metal ağırlıklı, 2009–2018 forumları; J-füzyon (5) ve hip-hop (2) çok az.
+
+### 2026-11-07 (24) — Dış komşuluk yolları; iki sınamada en iyi yapı
+
+**Yeni yollar** (`python/discover/komsuluk.py`). Üçü de motorun özniteliği oldu:
+- Deezer `artist/{id}/related` (sıralı benzer sanatçılar), kanıt ailesi «sahne».
+- ListenBrainz labs similar-artists, «sahne».
+- MusicBrainz kadro grafiği (`member of band` 1,0; `supporting musician` 0,5), «kredi».
+  İlişkiler CC0.
+- Tohumlar arası birleşim RRF (k = 60). Hata veren kaynak o sanatçı için boş geçer;
+  MusicBrainz'in yük altında verdiği 503 «search-shed» önbelleğe yazılmaz.
+- User-Agent'ta e-posta yok: `onbellek.ajan()` ortam değişkeni ya da depo adresi.
+
+**Sınama 1 — insan çiftleri** (gerçek açık veri, kütüphaneden bağımsız).
+- 127 çiftin 106'sı ölçülebildi; kalanının önerisi hiçbir grafikte yok.
+- Birleşim her tohum grubu dışarıda bırakılarak öğrenildi (iç içe).
+
+| yol | tavan | @10 | @50 | NDCG | olumsuz @50 |
+|---|---:|---:|---:|---:|---:|
+| çalma listesi (npmi) | 6 | %6 | %6 | 0,038 | %0 |
+| RP3β | 16 | %5 | %13 | 0,053 | %10 |
+| EASE | 20 | %7 | %13 | 0,063 | %10 |
+| Deezer benzerleri | 26 | %13 | %25 | 0,091 | %19 |
+| ListenBrainz | 55 | %11 | %34 | 0,138 | %33 |
+| MusicBrainz kadrosu | 13 | %5 | %10 | 0,035 | %10 |
+| eşit ağırlıklı RRF | 66 | %13 | %37 | 0,151 | %24 |
+| **öğrenilmiş birleşim** | **66** | **%14** | **%40** | **0,159** | %33 |
+
+- Birleşim − liste: MRR +0,030, %95 [−0,006, +0,066], p = 0,10. Yön tutarlı,
+  n = 106'da anlamlı değil.
+- Ağırlıklar: ListenBrainz 2,18 · Deezer 1,43 · kadro 1,17 · RP3β 0,78 · liste 0,74 · EASE 0,50.
+- Bedel: kalabalık yolları forumun reddettiği önerileri de yukarı taşıyor
+  (olumsuz @50 %33). Kalabalık «benzer» ile «popüler komşu»yu ayırmıyor.

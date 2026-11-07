@@ -9,6 +9,7 @@
   'kume': t('Zevk eksenlerin çıkarılıyor', 'Working out your taste axes'),
   'aday': t('Öneriler hazırlanıyor', 'Preparing recommendations'),
 } %}
+<div class="basla">
 <div class="sayfa-basi">
   <img class="cizim" src="{{ statik('cizim/iki-ay.svg') }}" alt="" width="320" height="200">
   <h1>{{ t("Hoş geldin", "Welcome") }}{% if ad %}, {{ ad }}{% endif %}</h1>
@@ -211,9 +212,10 @@
 
   <article class="adim">
     <h2>{{ t("Nasıl çalışıyor?", "How does it work?") }}</h2>
-    <p>{{ t("Kütüphanen olumlu sinyal sayılıyor: sahip olduğun her albüm bir \"evet\". Motor onları bulanık kümelerle zevk eksenlerine ayırıyor, sonra her eksen için sende olmayan ama o sese yakın kayıtları getiriyor. Tür etiketine değil, sesin kendisine ve insanların çalma listelerine bakıyor.",
-            "Your library counts as a positive signal: every album you own is a \"yes\". The engine splits them into taste axes with fuzzy clustering, then, for each axis, brings you records you don't have that sit close to that sound. It looks at the sound itself and at people's playlists, not at genre tags.") }}</p>
+    <p>{{ t("Kütüphanen olumlu sinyal sayılıyor: sahip olduğun her albüm bir \"evet\". Motor onları bulanık kümelerle zevk eksenlerine ayırıyor, sonra her eksen için sende olmayan ama o sese yakın kayıtları getiriyor. Tür etiketine değil; sesin kendisine, insanların çalma listelerine, dinleyici kalabalığına ve ortak müzisyenlere bakıyor.",
+            "Your library counts as a positive signal: every album you own is a \"yes\". The engine splits them into taste axes with fuzzy clustering, then, for each axis, brings you records you don't have that sit close to that sound. It looks at the sound itself, people's playlists, what other listeners play and shared band members, not at genre tags.") }}</p>
     <p><a href="/sozluk">{{ t("Terimler ne demek?", "What do these terms mean?") }}</a> · <a href="/gizlilik">{{ t("Gizlilik", "Privacy") }}</a></p>
   </article>
+</div>
 </div>
 {% endblock %}

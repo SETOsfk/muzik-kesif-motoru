@@ -1081,6 +1081,7 @@ button.tehlike { justify-self: start; padding: .6rem 1.2rem; border-radius: var(
                  border: 1px solid var(--kirmizi); }
 button.tehlike:hover { background: var(--kirmizi); color: var(--zemin); }
 
+.basla { max-width: 46rem; margin: 0 auto; }
 .baslangic { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; max-width: 46rem; }
 .adim { background: var(--kart); border: 1px solid var(--kenar); border-radius: var(--r-l);
         padding: 1.1rem 1.3rem; backdrop-filter: var(--cam); }
