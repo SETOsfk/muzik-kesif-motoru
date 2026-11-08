@@ -280,6 +280,7 @@ YOL_ADI = {
     "kadro": ("MusicBrainz kadrosu", "MusicBrainz lineups"),
     "motor": ("motor: öğrenilmiş birleşim", "engine: learned blend"),
     "motor_kesif": ("motor + keşif cezası", "engine + discovery penalty"),
+    "motor_taban": ("motor, kümeleme girdisi olmadan", "engine without the clustering input"),
     "populerlik": ("yalnız popülerlik (az bilinen önde)", "popularity only (lesser-known first)"),
     "rrf_tum": ("eşit ağırlıklı birleşim", "equal-weight blend"),
     "birlesim": ("öğrenilmiş birleşim", "learned blend"),

@@ -388,3 +388,16 @@ def test_kadro_cumlesi_tohumun_kendisi():
     finally:
         AKTIF_DIL.reset(tok)
     assert "«Dave Weckl» bu kadroda çalıyor; ortak müzisyen — John Patitucci." in m
+
+
+def test_eksen_uyumu_eksene_ozgu_adayi_one_alir():
+    """Kümeleme girdisi: yalnız A ekseniyle liste paylaşan aday, iki eksenle de
+    paylaşan «genel» adaydan yüksek uyum alır (sorgu A ekseni)."""
+    import numpy as np
+    conn = _grafik({1: ["A", "Ozgu"], 2: ["A", "Ozgu"], 3: ["A", "Genel"],
+                    4: ["B", "Genel"], 5: ["B", "Genel"]})
+    G = M.grafik_kur(conn)
+    uyelik = {"a": np.array([0.9, 0.1]), "b": np.array([0.1, 0.9])}
+    v = M.uyum_vektoru(G, uyelik, {"a": 1.0})
+    assert v[G.sira["ozgu"]] > v[G.sira["genel"]] > 0
+    assert not M.uyum_vektoru(G, {}, {"a": 1.0}).any()        # üyelik yoksa sıfır

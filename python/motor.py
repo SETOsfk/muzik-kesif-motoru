@@ -77,7 +77,8 @@ YOL_DERINLIGI = 1000
 #: ListenBrainz kalabalığı, MusicBrainz kadrosu.
 YOL_ADLARI = ("rp3", "ease", "liste", "ses", "deezer_benzer", "listenbrainz", "kadro")
 #: Öznitelikler — sıra eğitimde ve puanlamada aynı olmalı.
-OZNITELIKLER = tuple(f"rr_{y}" for y in YOL_ADLARI) + ("ortak_liste", "tohum_payi")
+OZNITELIKLER = tuple(f"rr_{y}" for y in YOL_ADLARI) + ("ortak_liste", "tohum_payi", "eksen_uyumu")
+UYUM_SUTUNU = len(OZNITELIKLER) - 1          # kümeleme girdisi; taban modelde düşer
 #: Öncül = üretimdeki melez (RRF, liste 1 : ses 2). λ → ∞ iken motor melezin
 #: sıralamasını verir; λ iç katlarda NDCG ile seçilir (`lambda_sec`).
 ONCUL = {"rr_liste": 1.0, "rr_ses": 2.0}
@@ -333,8 +334,62 @@ def oznitelikler(
     F = np.zeros((len(havuz), len(OZNITELIKLER)), dtype="float64")
     for k, a in enumerate(havuz):
         F[k] = ([rr.get(y, {}).get(a, 0.0) for y in YOL_ADLARI]
-                + [np.log1p(ortak.get(a, 0.0)), tohum_payi.get(a, 0.0)])
+                + [np.log1p(ortak.get(a, 0.0)), tohum_payi.get(a, 0.0), 0.0])
     return havuz, F
+
+
+# --------------------------------------------------------------------------- #
+# Kümeleme girdisi — eksen uyumu (K3: üyelik dereceleri motorun girdisi)
+# --------------------------------------------------------------------------- #
+
+def sanatci_uyelikleri(conn: sqlite3.Connection, calisma_id: str | None = None
+                       ) -> dict[str, np.ndarray]:
+    """{sanatçı anahtarı: eksen üyelik vektörü}: albümlerinin bulanık (FCM)
+    üyeliklerinin ortalaması; satır toplamı 1."""
+    if calisma_id is None:
+        satir = conn.execute("SELECT calisma_id FROM clusters ORDER BY calisma_id DESC LIMIT 1").fetchone()
+        if not satir:
+            return {}
+        calisma_id = satir[0]
+    satirlar = conn.execute(
+        """SELECT a.artist, m.kume_id, m.uyelik FROM memberships m JOIN albums a USING (album_id)
+            WHERE m.calisma_id = ?""", (calisma_id,)).fetchall()
+    eksenler = sorted({k for _, k, _ in satirlar})
+    if not eksenler:
+        return {}
+    sutun = {k: i for i, k in enumerate(eksenler)}
+    toplam: dict[str, np.ndarray] = {}
+    for artist, kume, uyelik in satirlar:
+        if artist:
+            v = toplam.setdefault(normalize_esleme(artist), np.zeros(len(eksenler)))
+            v[sutun[kume]] += uyelik
+    return {a: v / v.sum() for a, v in toplam.items() if v.sum() > 0}
+
+
+def uyum_vektoru(G: Grafik, uyelik: dict[str, np.ndarray], tohum: dict[str, float],
+                 satir: np.ndarray | None = None) -> np.ndarray:
+    """Her grafik sanatçısı için eksen uyumu: kütüphanedeki çalma listesi
+    komşularından (ortak liste sayısı ağırlıklı) devraldığı bulanık eksen
+    üyeliği ile tohumların ortalama üyeliği arasındaki kosinüs. Her eksenin
+    listesinde geçen popüler sanatçının devraldığı üyelik yayvandır; eksene
+    özgü aday sivrilir. Gizleme sınamasında `uyelik` gizleneni içermez."""
+    kut = [a for a in uyelik if a in G.sira]
+    agirlikli = [w * uyelik[a] for a, w in tohum.items() if a in uyelik]
+    if not kut or not agirlikli:
+        return np.zeros(len(G.anahtar))
+    t = np.sum(agirlikli, axis=0)
+    B = G.B if satir is None else G.B[satir]
+    Um = np.stack([uyelik[a] for a in kut]).astype("float32")
+    V = B.T @ (B[:, [G.sira[a] for a in kut]] @ Um)        # sanatçı × eksen
+    nV = np.linalg.norm(V, axis=1)
+    return np.where(nV > 0, (V @ t) / np.maximum(nV * np.linalg.norm(t), 1e-12), 0.0)
+
+
+def uyum_sutunu(F: np.ndarray, havuz: list[str], G: Grafik, vektor: np.ndarray) -> np.ndarray:
+    """Öznitelik matrisinin eksen uyumu sütununu doldur (yerinde) ve döndür."""
+    if len(havuz):
+        F[:, UYUM_SUTUNU] = [float(vektor[G.sira[a]]) if a in G.sira else 0.0 for a in havuz]
+    return F
 
 
 def oncul() -> np.ndarray:
@@ -630,6 +685,7 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     toplam_ortak, pay = ortak_ozeti(G, ortak)
     populer = dict(zip(G.anahtar, G.B.sum(axis=0).tolist()))
     havuz, F = oznitelikler(yollar, ortak=toplam_ortak, tohum_payi=pay)
+    uyum_sutunu(F, havuz, G, uyum_vektoru(G, sanatci_uyelikleri(conn, calisma_id), tohum))
     pop = populerlik(havuz, populer)
     if ham:
         return {"havuz": havuz, "F": F, "yollar": yollar, "pop": pop, "sayim": populer}

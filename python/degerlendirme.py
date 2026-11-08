@@ -826,7 +826,7 @@ def calistir(
             print(f"  {sira}/{len(anahtarlar)}", file=sys.stderr)
 
     if motor and motor_kayit:
-        motor_olc(conn, sonuc, motor_kayit, kut, gorunurluk)
+        motor_olc(conn, sonuc, motor_kayit, kut, gorunurluk, calisma=calisma)
 
     for ad, veri in sonuc.items():
         if ad.startswith("_"):
@@ -862,7 +862,8 @@ def _rr_listesi(siralar: list[int | None]) -> list[float]:
 
 
 def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
-              kut: dict[str, str], gorunurluk: dict[str, int] | None = None) -> None:
+              kut: dict[str, str], gorunurluk: dict[str, int] | None = None,
+              calisma: str | None = None) -> None:
     """RP3β ve EASE ızgarası + koşullu logit füzyonu, iç içe CV ile.
 
     Dış katta (10 kat, sorgu = gizlenen sanatçı) RP3β/EASE ızgara noktası,
@@ -886,9 +887,13 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     ease_t: list[list[tuple]] = []
     ozellik: list[tuple[dict, dict]] = []
     sayim_q: list[np.ndarray] = []          # [sorgu] → liste sayısı (sızan listeler hariç)
+    uyum_q: list[np.ndarray] = []           # [sorgu] → eksen uyumu (gizlenen üyeliklerden çıkık)
+    uyelik_tum = M.sanatci_uyelikleri(conn, calisma)
     for q, k in enumerate(kayitlar):
         satir = G.satir_maskesi(k["haric"])
         sayim_q.append(G.B[satir].sum(axis=0))
+        uyum_q.append(M.uyum_vektoru(G, {a: v for a, v in uyelik_tum.items() if a != k["gizli"]},
+                                     {a: 1.0 for a in k["tohumlar"]}, satir))
         tohum = {a: 1.0 for a in k["tohumlar"]}
         sahip_idx = np.array([G.sira[a] for a in k["sahip"] if a in G.sira], dtype=int)
         satirlar, tamlar = [], []
@@ -929,6 +934,7 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
              "liste": kayitlar[q]["liste"], "ses": kayitlar[q]["ses"],
              **kayitlar[q].get("dis", {})},
             ortak=toplam, tohum_payi=pay)
+        M.uyum_sutunu(F, havuz, G, uyum_q[q])
         sayim = {a: float(sayim_q[q][G.sira[a]]) for a in havuz if a in G.sira}
         return {"havuz": havuz, "F": F, "hedef": hedef[q], "pop": M.populerlik(havuz, sayim)}
 
@@ -937,7 +943,12 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     s_rp3: list[int | None] = [None] * n_q
     s_ease: list[int | None] = [None] * n_q
     s_motor: list[int | None] = [None] * n_q
+    s_taban: list[int | None] = [None] * n_q    # kümeleme girdisi (eksen uyumu) OLMADAN
     s_kesif = {g: [None] * n_q for g in M.KESIF_IZGARASI}   # keşif cezasının erişim bedeli
+    mu_taban = np.delete(M.oncul(), M.UYUM_SUTUNU)
+
+    def taban(ornekler):
+        return [(np.delete(F, M.UYUM_SUTUNU, axis=1), i) for F, i in ornekler]
     destek = {"rp3": [0] * n_q, "ease": [0] * n_q, "motor": [0] * n_q}
     tavan = {"rp3": [False] * n_q, "ease": [False] * n_q, "motor": [False] * n_q}
     gorunur = {"rp3": [], "ease": [], "motor": []}
@@ -955,6 +966,8 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
         ornek = [o for o in (M._ornek(kayit(q, g_r, g_e)) for q in egit) if o is not None]
         lam = M.lambda_sec(ornek, tohum=kat)
         theta = M.logit_egit(ornek, lam=lam)
+        ornek_t = taban(ornek)
+        theta_t = M.logit_egit(ornek_t, lam=M.lambda_sec(ornek_t, tohum=kat, mu=mu_taban), mu=mu_taban)
         katlar.append({"rp3": RP3_IZGARASI[g_r], "ease": EASE_IZGARASI[g_e],
                        "lam": lam, "theta": theta.round(3).tolist()})
         for q in sina:
@@ -962,6 +975,7 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
             s_ease[q], destek["ease"][q] = ease_t[q][g_e]
             r = kayit(q, g_r, g_e)
             s_motor[q] = M._hedef_sirasi(r, theta)
+            s_taban[q] = M._hedef_sirasi({**r, "F": np.delete(r["F"], M.UYUM_SUTUNU, axis=1)}, theta_t)
             for g in M.KESIF_IZGARASI:
                 s_kesif[g][q] = M._hedef_sirasi(r, theta, g)
             destek["motor"][q] = len(r["havuz"])
@@ -985,19 +999,22 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     sonuc["rp3"] = yol("rp3", s_rp3)
     sonuc["ease"] = yol("ease", s_ease)
     sonuc["motor"] = yol("motor", s_motor)
+    sonuc["motor_taban"] = yol("motor", s_taban)
     for ad, deger in gorunur.items():
         sonuc[ad]["belirsizlik"] = deger
 
     ornek = [o for o in map(M._ornek, tum_kayit) if o is not None]
     lam = M.lambda_sec(ornek)
     theta = M.logit_egit(ornek, lam=lam)
+    ornek_t = taban(ornek)
+    theta_taban = M.logit_egit(ornek_t, lam=M.lambda_sec(ornek_t, mu=mu_taban), mu=mu_taban)
     alfa, beta, bw = RP3_IZGARASI[g_r_tum]
     lam_e, bw_e = EASE_IZGARASI[g_e_tum]
     dis_adlari = [ad for ad in sonuc if ad in M.YOL_ADLARI[4:]]
     rr = {ad: _rr_listesi(sonuc[ad]["siralar"])
-          for ad in ("motor", "rp3", "ease", "melez", "liste_birlikteligi", "ses_benzerligi",
-                     *dis_adlari)}
-    ciftler_ = [("motor", "melez"), ("motor", "rp3"), ("rp3", "liste_birlikteligi"),
+          for ad in ("motor", "motor_taban", "rp3", "ease", "melez", "liste_birlikteligi",
+                     "ses_benzerligi", *dis_adlari)}
+    ciftler_ = [("motor", "motor_taban"), ("motor", "melez"), ("motor", "rp3"), ("rp3", "liste_birlikteligi"),
                 ("ease", "liste_birlikteligi"), ("motor", "ses_benzerligi")]
     ciftler_ += [(ad, "liste_birlikteligi") for ad in dis_adlari]
     kiyas = {f"{a} − {b}": M.eslesmis_kiyas(rr[a], rr[b]) for a, b in ciftler_}
@@ -1007,6 +1024,7 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
         # kendi değeriyle koşar (`motor.eksen_sirasi`).
         "baglam_agirligi": bw, "baglam_agirligi_ease": bw_e,
         "theta": theta.round(4).tolist(), "lam_logit": lam,
+        "theta_taban": theta_taban.round(4).tolist(),
         "katlar": katlar, "kiyas": kiyas, "sorgu": n_q,
         "kesif_loao": {str(g): {"mrr": float(np.mean(_rr_listesi(v))) if n_q else 0.0,
                                 "recall@10": float(np.mean([bool(x and x <= 10) for x in v])) if n_q else 0.0,
@@ -1326,7 +1344,7 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
     hiç olmayan sanatçı o yolda en düşük skoru alır. Aralık: sorgu düzeyinde
     bootstrap.
     """
-    from python.motor import (KESIF_IZGARASI, OZNITELIKLER, YOL_ADLARI, ayar_oku,
+    from python.motor import (KESIF_IZGARASI, OZNITELIKLER, UYUM_SUTUNU, YOL_ADLARI, ayar_oku,
                               eksen_sirasi, oncul, puanla)
 
     ayar = ayar or ayar_oku(conn)
@@ -1338,6 +1356,9 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
         if eksen is not None and artist:
             son[(cal, int(eksen))][normalize_esleme(artist)] = karar == "begendim"
     yollar = list(YOL_ADLARI) + ["melez", "populerlik", "motor", "motor_kesif"]
+    theta_taban = ayar.get("theta_taban")
+    if theta_taban is not None:
+        yollar.insert(yollar.index("motor"), "motor_taban")
     sutun = {y: OZNITELIKLER.index(f"rr_{y}") for y in YOL_ADLARI}
     gruplar, kapsam, n = [], Counter(), Counter()
     ham_gruplar = []                                   # (beğendi, motor skoru, log pop)
@@ -1355,6 +1376,8 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
         skor = {y: F[:, sutun[y]] for y in YOL_ADLARI}
         skor["melez"] = puanla(F, oncul())
         skor["motor"] = puanla(F, np.asarray(ayar["theta"]))
+        if theta_taban is not None:
+            skor["motor_taban"] = puanla(np.delete(F, UYUM_SUTUNU, axis=1), np.asarray(theta_taban))
         b = np.array(list(karar.values()))
         pop = np.array([np.log1p(r["sayim"].get(a, 0.0)) for a in karar])
         grup = {}
