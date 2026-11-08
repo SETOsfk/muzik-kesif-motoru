@@ -2982,3 +2982,59 @@ yalnız adlar: ses yolu YOK, melez = liste). `scripts/kutuphane_kiyasi.py`.
   küçük ağırlıkla kalıyor (0,61).
 - Ağırlıklar: ListenBrainz 2,46 · Deezer 1,67 · liste 0,97 · kadro 0,61 · RP3β 0,36 ·
   EASE 0,03. Ses ağırlığı (2,00) öncülde kaldı, çünkü bu sınamada ses verisi yok.
+
+**Sınama 3 — gerçek kütüphane, gizleme sınaması** (Drive'daki 2026-10-02 veri kopyası:
+147 sanatçı, 302 albüm, 793 çalma listesi, CLAP gömüleri dahil; bulutta).
+
+| yol | tavan | @10 | @50 | MRR | yüzdelik |
+|---|---:|---:|---:|---:|---:|
+| çalma listesi (npmi) | 100 | %14 | %29 | 0,075 | 0,029 |
+| ses benzerliği | 69 | %0 | %1 | 0,001 | 0,104 |
+| melez (eski ana yol) | 101 | %3 | %15 | 0,012 | 0,036 |
+| RP3β | 111 | %24 | %35 | 0,144 | 0,012 |
+| EASE | 108 | %22 | %39 | 0,140 | 0,007 |
+| Deezer benzerleri | 90 | %21 | %41 | 0,126 | 0,136 |
+| ListenBrainz | 106 | %18 | %37 | 0,089 | 0,085 |
+| MusicBrainz kadrosu | 40 | %7 | %14 | 0,044 | 0,125 |
+| **motor** | **121** | **%25** | **%51** | **0,152** | 0,010 |
+
+- motor − melez: MRR +0,140 [+0,097, +0,187], p < 0,001. motor − RP3β: +0,008 (belirsiz).
+- Ağırlıklar: ListenBrainz 2,65 · Deezer 2,59 · EASE 2,06 · kadro 1,94 · RP3β 0,89 ·
+  liste −0,76 · ses −1,20. Ses yolu erişimde işe yaramıyor; eski CLAP gömüleri
+  rastgele kesimle üretilmişti (K24), Mac'te `--yeniden` ile tazelenmeli.
+
+**Sınama 4 — gerçek kararlar** (`degerlendirme.karar_sinamasi`; 23 sorgu, 61 beğendim,
+86 tutmadı; aynı sorguda beğenileni geçilenin üstüne koyma AUC'si).
+- Bütün yollar 0,5'in altında: RP3β 0,356 · EASE 0,345 · liste 0,363 · ses 0,429 ·
+  Deezer 0,451 · melez 0,396 · motor 0,387. Gösterilmiş kartlar arasında daha güçlü
+  bağlı (daha popüler) sanatçı daha sık geçiliyor.
+- Popülerlik tek başına (az bilinen önde): **AUC 0,706 [0,579, 0,808]**. Liste sayısı
+  medyanı: beğendim 2 · tutmadı 4 · zaten biliyorum 25.
+- Kaynak başına beğeni (sanatçı düzeyi): ses %49 [38–60] · melez %40 [31–50] · liste
+  %33 [21–48]. Uzlaşma ödülü: tek %38, çok %39 (n = 31), fark yok; yeni aileler
+  (sahne, kredi) karar biriktikçe yeniden ölçülecek.
+
+**Karar: keşif cezası.** Motor skoru − γ·log(1 + liste sayısı) (`motor.populerlik`;
+grafikte olmayan aday havuz medyanını alır). γ küçükten büyüğe sınanıyor, beğeni
+kazancının aralığının sıfırı ilk dışladığı değer üretime giriyor (en küçük etkili doz;
+çoklu sınama düzeltmesi yok, bu yüzden örnek dışı yön de raporlanıyor).
+
+| γ | beğeni AUC | kazanç [%95] | gizleme MRR | gizleme @50 |
+|---|---:|---:|---:|---:|
+| 0 | 0,387 | — | 0,152 | %51 |
+| 0,25 | 0,401 | +0,015 [−0,011, +0,044] | 0,153 | %52 |
+| **0,5** | **0,420** | **+0,033 [+0,003, +0,067]** | 0,140 | %53 |
+| 1 | 0,423 | +0,036 [−0,014, +0,082] | 0,103 | %50 |
+| 4 | 0,471 | +0,084 [+0,000, +0,158] | 0,028 | %14 |
+
+- Üretimde γ = 0,5: beğeni kazancı anlamlı, erişim bedeli küçük (MRR −0,012, @50 +2 puan).
+- Sorgu dışarıda bırakılarak seçilen γ 23 sorgunun 23'ünde 4 (yön sağlam; büyüklük
+  erişim bedeli yüzünden küçük tutuldu).
+- Sınır: kartlar o günün stratejilerinden geldi (seçim yanlılığı). Motorun kendi
+  kartları kaydırıldıkça yeniden ölçülecek.
+
+**Seçilen yapı:** motor (7 yolun öğrenilmiş birleşimi) + keşif cezası. Üç erişim
+sınamasında da en iyi ya da en iyiyle aynı (gerçek kütüphane MRR 0,152 vs melez 0,012;
+Drive adları 0,079 vs 0,056; insan çiftlerinde öğrenilmiş birleşim NDCG 0,159).
+Beğeni tarafını deste yönetiyor: kaynaklar arası Thompson örneklemesi gerçek
+kararlardan (K21), motor bir kaynak olarak yarışıyor.

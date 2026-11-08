@@ -375,3 +375,16 @@ def test_kesif_cezasi_gamma_secimi_sorgu_disarida():
     assert _gamma_sec(np.zeros((1, 2, 2)), []) == 0          # veri yok: cezasız
     pop = M.populerlik(["a", "b", "yok"], {"a": 1.0, "b": 7.0})
     assert pop[2] == np.median(pop[:2])                      # grafikte yok: nötr
+
+
+def test_kadro_cumlesi_tohumun_kendisi():
+    """Ortak kişi tohumun kendisiyse «ortak müzisyen — Dave Weckl» değil «bu kadroda çalıyor»."""
+    from python.dil import AKTIF_DIL
+    from python.gerekce import _motor_cumlesi
+    tok = AKTIF_DIL.set("tr")
+    try:
+        m = _motor_cumlesi({"kadro": {"tohum": "Dave Weckl", "kisiler": ["Dave Weckl", "John Patitucci"]}},
+                           "fusion", None)
+    finally:
+        AKTIF_DIL.reset(tok)
+    assert "«Dave Weckl» bu kadroda çalıyor; ortak müzisyen — John Patitucci." in m

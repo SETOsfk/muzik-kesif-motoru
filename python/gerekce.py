@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import re
 
+from python.metin import normalize_esleme
 from python.dil import dil, sayi, t
 
 #: Bu sayıdan az ortak listeye dayanan bağ "zayıf kanıt" olarak işaretlenir.
@@ -159,10 +160,21 @@ def _motor_cumlesi(d: dict, eksen: str, benzedigi: str | None) -> str:
                 f"playlist{'s' if tekil != 1 else ''}."))
     kadro = d.get("kadro") or {}
     if kadro.get("tohum") and kadro.get("kisiler"):
-        kisiler = _bagla(list(kadro["kisiler"])[:3], t("ve", "and"))
-        parcalar.append(t(
-            f"Kadro bağı: kütüphanendeki «{kadro['tohum']}» ile ortak müzisyen — {kisiler}.",
-            f"Lineup link: shares musicians with «{kadro['tohum']}» from your library: {kisiler}."))
+        tohum = kadro["tohum"]
+        digerleri = [k for k in list(kadro["kisiler"])[:3]
+                     if normalize_esleme(k) != normalize_esleme(tohum)]
+        kisiler = _bagla(digerleri, t("ve", "and")) if digerleri else ""
+        if len(digerleri) < len(list(kadro["kisiler"])[:3]):
+            # Ortak kişi tohumun kendisi (Dave Weckl → Chick Corea Elektric Band).
+            parcalar.append(t(
+                f"Kadro bağı: kütüphanendeki «{tohum}» bu kadroda çalıyor"
+                + (f"; ortak müzisyen — {kisiler}." if kisiler else "."),
+                f"Lineup link: «{tohum}» from your library plays in this lineup"
+                + (f"; shared musicians: {kisiler}." if kisiler else ".")))
+        else:
+            parcalar.append(t(
+                f"Kadro bağı: kütüphanendeki «{tohum}» ile ortak müzisyen — {kisiler}.",
+                f"Lineup link: shares musicians with «{tohum}» from your library: {kisiler}."))
     kalabalik = list(d.get("kalabalik") or [])[:3]
     if kalabalik:
         adlar = _bagla(kalabalik, t("ve", "and"))

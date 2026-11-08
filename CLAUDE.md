@@ -468,7 +468,15 @@ koşullu logitle birleştiriyor.
   MusicBrainz kadrosu (`discover/komsuluk.py`) motorun öznitelikleri; kanıt
   aileleri «sahne» ve «kredi». İnsan çiftlerinde (bulut, gerçek açık veri) en güçlü
   tek yol ListenBrainz, en iyisi öğrenilmiş birleşim (karar günlüğü (24)).
-- Sonuçlar uygulamada: `/olcumler` (`{id}.olcum.json`, `--egit` yazar).
+- **Üçüncü ölçüt: gerçek kararlar (2026-11-07).** `degerlendirme.karar_sinamasi`:
+  aynı sorguda beğenileni geçilenin üstüne koyma AUC'si, üretimin kendi yollarıyla
+  (`eksen_sirasi(ham=True)`). Gerçek veride bütün yollar 0,5'in altında; popülerlik
+  tek başına 0,71 (beğendim medyanı 2 liste, tutmadı 4, zaten biliyorum 25).
+- **Keşif cezası (2026-11-07):** motor skoru − γ·log(1 + liste sayısı). γ kararlardan:
+  küçükten büyüğe, beğeni kazancının ilk anlamlı olduğu değer (gerçek veride 0,5;
+  gizleme MRR'si 0,152 → 0,140). Erişim bedeli `kesif_loao`'da. Karar günlüğü (24).
+- Sonuçlar uygulamada: `/olcumler` (`{id}.olcum.json`, `--egit` yazar): gizleme,
+  insan çiftleri, gerçek kararlar, keşif cezası eğrisi.
 
 **Sınama sızıntısı düzeltildi:** gizlenen sanatçının ADIYLA bulunmuş listeler o
 katmanda çıkarılıyor (`degerlendirme.sizinti_listeleri`, varsayılan). Bu tarihten
@@ -504,13 +512,13 @@ Sen; teknik sayfalar menüde «Gelişmiş»; telefonda alt şerit. Görsel yoksa
 Animasyon DURUMU taşımaz: kart girişi CSS, durum `data-sira`da (rAF'e bağlı
 sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 
-## Güncel durum (son güncelleme 2026-10-20)
+## Güncel durum (son güncelleme 2026-11-08)
 
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 342 test geçiyor (bulutta `sklearn`
-  olmadığı için 2 ses kümesi testi düşer). Temiz kurulumda
+- **Testler:** `.venv/bin/python -m pytest` — 352 test; bulutta `librosa` ve `sklearn`
+  olmadığı için 2'si düşer. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
   ağsız sahte Deezer istemcisi kullanıyor.
@@ -549,6 +557,11 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
+-3. **Gerçek veri ölçüldü (bulutta, 2026-11-08; Drive'daki 2026-10-02 kopyasıyla):**
+   motor + keşif cezası seçildi (karar günlüğü (24)). Mac'te güncel veriyle tekrarla:
+   `python -m python.etiket_clap --gomu --yeniden` ve `--parca-gomu --yeniden`
+   (eski CLAP gömüleri rastgele kesimliydi; ses yolu erişimde ~0), sonra
+   `python -m python.motor --egit` ve `python -m python.discover.adaylar --tum-eksenler --strateji motor`.
 -2. **Motoru gerçek veride ölç ve ayarla** (K24, karar günlüğü (22)):
    `degerlendirme --motor --olcut npmi --buzulme 1 --melez-agirlik 1,2`, sonra
    `python -m python.motor --egit` ve `adaylar --tum-eksenler --strateji motor`;

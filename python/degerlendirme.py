@@ -1375,21 +1375,34 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
         gruplar.append(grup)
     if not gruplar:
         return {"ozet": {}, "kiyas": {}, "sayim": dict(n)}
-    # Keşif cezası γ: her sorgu için KALAN sorgularda en iyi γ (eşitlikte küçük),
-    # o sorgu onunla puanlanır. Üretim γ'sı tüm sorgularda seçilir.
+    # Keşif cezası γ — EN KÜÇÜK ETKİLİ DOZ: γ küçükten büyüğe sınanır, kazancın
+    # (motor − γ·pop'un AUC'si − motorunki) aralığının sıfırı İLK dışladığı γ
+    # üretime girer; erişim bedeli en az olan. Hiçbiri anlamlı değilse 0.
+    # Sınır: çoklu sınama düzeltmesi yok. Yönün örnek dışı kanıtı ayrıca
+    # raporlanır: sorgu dışarıda bırakılarak seçilen γ'lar (`kesif_secimi`).
+    assert KESIF_IZGARASI[0] == 0.0
     tablo = np.array([[kazanc(b, m - g * pp) for g in KESIF_IZGARASI]
                       for b, m, pp in ham_gruplar])     # [sorgu × γ × (kazanç, çift)]
-    secim = Counter()
-    for q, grup in enumerate(gruplar):
-        j = _gamma_sec(tablo, [k for k in range(len(gruplar)) if k != q])
-        secim[KESIF_IZGARASI[j]] += 1
-        grup["motor_kesif"] = tuple(tablo[q, j])
-        kapsam["motor_kesif"] += int(np.sum(np.isfinite(ham_gruplar[q][1])))
-    gamma = KESIF_IZGARASI[_gamma_sec(tablo, list(range(len(gruplar))))]
-    W = np.array([[g[y][0] for y in yollar] for g in gruplar])
-    T = np.array([[g[y][1] for y in yollar] for g in gruplar])
     rng = np.random.default_rng(tohum)
     orn = rng.integers(0, len(gruplar), size=(tekrar, len(gruplar)))
+    secim = Counter(KESIF_IZGARASI[_gamma_sec(tablo, [k for k in range(len(gruplar)) if k != q])]
+                    for q in range(len(gruplar)))
+    b0 = tablo[:, 0, 0][orn].sum(1) / tablo[:, 0, 1][orn].sum(1)
+    a0 = tablo[:, 0, 0].sum() / tablo[:, 0, 1].sum()
+    egri, j_secilen = {}, 0
+    for j, g in enumerate(KESIF_IZGARASI[1:], 1):
+        bj = tablo[:, j, 0][orn].sum(1) / tablo[:, j, 1][orn].sum(1)
+        fark = bj - b0
+        egri[str(g)] = {"auc": float(tablo[:, j, 0].sum() / tablo[:, j, 1].sum()),
+                        "fark": float(tablo[:, j, 0].sum() / tablo[:, j, 1].sum() - a0),
+                        "alt": float(np.quantile(fark, .025)), "ust": float(np.quantile(fark, .975))}
+        if not j_secilen and egri[str(g)]["alt"] > 0:
+            j_secilen = j
+    for q, grup in enumerate(gruplar):
+        grup["motor_kesif"] = tuple(tablo[q, j_secilen])
+        kapsam["motor_kesif"] += int(np.sum(np.isfinite(ham_gruplar[q][1])))
+    W = np.array([[g[y][0] for y in yollar] for g in gruplar])
+    T = np.array([[g[y][1] for y in yollar] for g in gruplar])
     auc = W.sum(0) / T.sum(0)
     boot = W[orn].sum(1) / T[orn].sum(1)               # [tekrar × yol]
     toplam = n["begendim"] + n["tutmadi"]
@@ -1407,13 +1420,9 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
                                  "alt": float(np.quantile(fark, .025)),
                                  "ust": float(np.quantile(fark, .975)),
                                  "p": float(min(1.0, 2 * min((fark <= 0).mean(), (fark >= 0).mean())))}
-    kesif = kiyas.get("motor − motor_kesif")
-    # Önceden yazılı kural: ceza ancak sorgu dışarıda bırakılarak ölçülen kazanç
-    # anlamlıysa (fark aralığı sıfırı dışlıyor) üretime girer.
-    uygula = bool(kesif and kesif["ust"] < 0)
     return {"ozet": ozet, "kiyas": kiyas, "sayim": dict(n),
-            "kesif_cezasi": gamma if uygula else 0.0, "kesif_secimi": dict(secim),
-            "kesif_olculen": gamma}
+            "kesif_cezasi": KESIF_IZGARASI[j_secilen], "kesif_egrisi": egri,
+            "kesif_secimi": {str(k): v for k, v in sorted(secim.items())}}
 
 
 def karar_raporu(s: dict) -> str:
@@ -1428,11 +1437,15 @@ def karar_raporu(s: dict) -> str:
     satirlar += ["", f"{'eşli kıyas (AUC farkı)':<34}{'fark':>8}{'%95 aralık':>20}{'p':>8}"]
     for ad, k in s["kiyas"].items():
         satirlar.append(f"{ad:<34}{k['fark']:>+8.3f}{'[%+.3f, %+.3f]' % (k['alt'], k['ust']):>20}{k['p']:>8.3f}")
-    if "kesif_olculen" in s:
-        satirlar.append(f"keşif cezası γ: tüm sorgularda {s['kesif_olculen']} · sorgu başına seçim "
-                        f"{s['kesif_secimi']} · üretime giren {s['kesif_cezasi']}")
+    if "kesif_egrisi" in s:
+        satirlar.append("keşif cezası (küçükten büyüğe; kazancın ilk anlamlı olduğu γ üretime girer):")
+        for g, o in s["kesif_egrisi"].items():
+            satirlar.append(f"  γ={g:>5}  AUC {o['auc']:.3f}  kazanç {o['fark']:+.3f} "
+                            f"[{o['alt']:+.3f}, {o['ust']:+.3f}]")
+        satirlar.append(f"  üretime giren γ = {s['kesif_cezasi']} · sorgu dışarıda bırakılarak "
+                        f"seçilenler {s['kesif_secimi']}")
     satirlar += ["kapsam: kararlı sanatçıların o yolun listesinde bulunma payı.",
-                 "motor_kesif: motor − γ·log(1+liste sayısı), γ sorgu dışarıda bırakılarak.",
+                 "motor_kesif: motor − γ·log(1+liste sayısı), üretime giren γ ile.",
                  "Sınır: kartlar o günün stratejilerinden geldi (seçim yanlılığı).", ""]
     return "\n".join(satirlar)
 
