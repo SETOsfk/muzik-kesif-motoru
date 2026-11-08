@@ -340,7 +340,7 @@ def oznitelikler(
 # --------------------------------------------------------------------------- #
 # Kümeleme girdisi — eksen uyumu (K3: üyelik dereceleri motorun girdisi).
 # ÜRETİMDE YOK: gerçek veride (2026-11-08) gizleme MRR'sini düşürdü
-# (0,155 → 0,131, eşli fark aralığı sıfırın altında), kararlarda kazancı
+# (0,155 → 0,135, eşli fark aralığı sıfırın altında), kararlarda kazancı
 # anlamsızdı. `--egit` onu her seferinde «motor_uyumlu» olarak yeniden ölçer.
 # --------------------------------------------------------------------------- #
 

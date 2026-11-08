@@ -477,7 +477,7 @@ koşullu logitle birleştiriyor.
   beğeni kazancının ilk anlamlı olduğu değer (gerçek veride 0,5; gizleme MRR'si
   0,152 → 0,140). Erişim bedeli `kesif_loao`'da. Karar günlüğü (24), (25).
 - **Kümeleme girdisi (eksen uyumu) ölçüldü, üretimde YOK (2026-11-08):** gizleme MRR'sini
-  düşürdü (0,155 → 0,131, eşli aralık sıfırın altında), kararlarda kazancı anlamsız.
+  düşürdü (0,155 → 0,135, eşli aralık sıfırın altında), kararlarda kazancı anlamsız.
   `--egit` «motor_uyumlu» olarak her seferinde yeniden ölçer. Kümeleme yine iskelet:
   eksenler ve tohumlar ondan.
 - Sonuçlar uygulamada: `/olcumler` (`{id}.olcum.json`, `--egit` yazar): gizleme,

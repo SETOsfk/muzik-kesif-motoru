@@ -3051,14 +3051,15 @@ devralıyor; bunun tohumların ortalama üyeliğiyle kosinüsü öznitelik. Bekl
 eksenin listesinde geçen popüler ama yayvan sanatçı geri düşer.
 
 Gerçek veride, aynı koşuda eşli (iç içe CV):
-- Gizleme: girdili MRR 0,131, girdisiz 0,155; fark −0,024 [−0,044, −0,008], p = 0,008.
-  @50 ikisinde de %51; kayıp üst sıralarda (@1: 0,05'e karşı 0,10).
+- Gizleme: girdili MRR 0,135, girdisiz 0,155; fark −0,021 [−0,039, −0,005], p = 0,015
+  (son koşu; ilk denemede −0,024, p = 0,008). @50 ikisinde de %51; kayıp üst
+  sıralarda (@1: 0,05'e karşı 0,10).
 - Kararlar: AUC 0,401'e karşı 0,387; +0,015 [−0,013, +0,053], anlamlı değil.
 - **Karar: üretime girmedi** (K19). `--egit` onu her seferinde «motor_uyumlu» adıyla
   yeniden ölçer; Mac'te taze veriyle (yeni CLAP gömüleri) kazandırırsa yeniden bakılır.
 
-**Yan bulgu ve düzeltme.** Girdili modelde «en küçük etkili doz» kuralı γ = 2'yi seçti;
-gizleme MRR'si 0,131 → 0,050'ye, @50 %51 → %33'e düştü. Beğeni kazancı sıralamayı
+**Yan bulgu ve düzeltme.** İlk denemede girdili model üretimdeydi ve «en küçük etkili
+doz» kuralı γ = 2'yi seçti; gizleme MRR'si 0,131 → 0,050'ye, @50 %51 → %33'e düştü. Beğeni kazancı sıralamayı
 popülerliğe teslim ederek alınıyordu. Kural: erişimi (gizleme MRR'si) %10'dan fazla
 düşüren γ aday olamaz (`motor.ERISIM_BEDELI_TAVANI`). Girdisiz modelde seçim değişmiyor
 (γ = 0,5: MRR 0,152 → 0,140, %8).
