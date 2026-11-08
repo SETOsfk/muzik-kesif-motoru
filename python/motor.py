@@ -547,11 +547,14 @@ def _grafik(conn: sqlite3.Connection, baglam_agirligi: float) -> Grafik:
 
 def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
                  adet: int = 12, ayar: dict | None = None,
-                 dis: dict[str, dict[str, list[dict]]] | None = None) -> list[dict]:
+                 dis: dict[str, dict[str, list[dict]]] | None = None,
+                 ham: bool = False) -> list[dict] | dict:
     """Bir eksen için motorun sanatçı sırası ve her birinin kanıtı.
 
     Dönen: [{"anahtar", "ad", "skor", "kaynaklar", "tohumlar": [(ad, ortak)],
     "ortak_liste", "liste_sayisi", "ses": {...} | None}].
+    `ham=True`: kart kurmadan {"havuz", "F", "yollar"} — karar sınaması üretimin
+    kendi yollarını ölçsün diye (K19: kopyalanmaz, çağrılır).
     """
     from python.discover.adaylar import eksen_sanatcilari
     from python.etiket_clap import acik_havuz_adaylari
@@ -560,7 +563,7 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     G = _grafik(conn, ayar["baglam_agirligi"])
     sanatcilar = eksen_sanatcilari(conn, calisma_id, eksen, adet=40)
     if sanatcilar.empty:
-        return []
+        return {"havuz": [], "F": np.zeros((0, len(OZNITELIKLER))), "yollar": {}} if ham else []
     # Gerekçede kütüphanedeki yazım («Mötley Crüe»), Deezer'ınki değil.
     okunur = {normalize_esleme(a): a for a in sanatcilar.index}
     tohum = {a: 1.0 for a in okunur}
@@ -610,6 +613,8 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     toplam_ortak, pay = ortak_ozeti(G, ortak)
     populer = dict(zip(G.anahtar, G.B.sum(axis=0).tolist()))
     havuz, F = oznitelikler(yollar, ortak=toplam_ortak, tohum_payi=pay)
+    if ham:
+        return {"havuz": havuz, "F": F, "yollar": yollar}
     if not havuz:
         return []
     skor = puanla(F, np.asarray(ayar["theta"]))
@@ -701,11 +706,17 @@ def main(argv: list[str] | None = None) -> int:
             cift_dis = None if args.dis_yok else komsular_topla(tohumlar, ilerleme=ilerleme)
             cift = D.cift_sinamasi(conn, ciftler, dis_komsular=cift_dis)
             print(D.cift_raporu(cift))
+        karar = None
+        if "_motor_ayar" in sonuc:
+            karar = D.karar_sinamasi(conn, ayar={**ayar_oku(conn), **sonuc["_motor_ayar"]}, dis=dis)
+            if karar["ozet"]:
+                print(D.karar_raporu(karar))
         if not args.yazma and "_motor_ayar" in sonuc:
             yol = ayar_yolu(conn)
             ayar_yaz(sonuc["_motor_ayar"], yol)
             olcum_yolu(conn).write_text(json.dumps(
-                D.olcum_ozeti(sonuc, cift=cift, kaynak="kütüphane"), ensure_ascii=False, indent=1))
+                D.olcum_ozeti(sonuc, cift=cift, karar=karar, kaynak="kütüphane"),
+                ensure_ascii=False, indent=1))
             print(f"\nAyar yazıldı: {yol}\nÖlçüm raporu: {olcum_yolu(conn)}")
     finally:
         conn.close()

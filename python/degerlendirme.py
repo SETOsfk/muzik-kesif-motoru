@@ -1005,7 +1005,8 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     }
 
 
-def olcum_ozeti(sonuc: dict, *, cift: dict | None = None, kaynak: str = "") -> dict:
+def olcum_ozeti(sonuc: dict, *, cift: dict | None = None, karar: dict | None = None,
+                kaynak: str = "") -> dict:
     """Ölçümler sayfasının ve raporun okuduğu, JSON'a yazılabilir özet.
 
     Bütün erişim yollarının LOAO özeti, eşli kıyaslar, motorun ayarı ve
@@ -1039,6 +1040,8 @@ def olcum_ozeti(sonuc: dict, *, cift: dict | None = None, kaynak: str = "") -> d
         ozet["ciftler"] = {"ozet": {y: {k: v for k, v in o.items() if k != "rr"}
                                     for y, o in cift["ozet"].items()},
                            "kiyas": cift["kiyas"], "sayim": cift["sayim"]}
+    if karar and karar.get("ozet"):
+        ozet["kararlar"] = karar
     return _json_uyumlu(ozet)
 
 
@@ -1290,6 +1293,95 @@ def cift_raporu(s: dict) -> str:
     satirlar += ["tavan: önerinin o yolun listesinde HİÇ bulunması. olumsuz @50: forumda",
                  "reddedilenlerin ilk 50'ye girme oranı (küçük iyi). NDCG: 1/log₂(1+sıra).",
                  "birlesim: her tohum grubu dışarıda bırakılarak öğrenilmiş (iç içe).", ""]
+    return "\n".join(satirlar)
+
+
+def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
+                   dis: dict | None = None, tekrar: int = 2000, tohum: int = 0) -> dict:
+    """Gerçek kaydırma kararlarıyla sınama: beğenilen sanatçı geçilenden yukarıda mı?
+
+    Ölçüt AUC: aynı (çalışma, eksen) sorgusundaki her (beğendim, tutmadı)
+    çiftinde beğenilenin skoru büyükse 1, eşitse ½. Gizleme sınaması ERİŞİMİ
+    ölçer; bu, BEĞENİYİ ölçer. Sanatçı düzeyinde son karar; «zaten biliyorum»
+    girmez. Skorlar üretimin kendi yollarından (`eksen_sirasi(ham=True)`).
+    Sınır: kartlar o günün stratejilerinden geldi (seçim yanlılığı); bir yolda
+    hiç olmayan sanatçı o yolda en düşük skoru alır. Aralık: sorgu düzeyinde
+    bootstrap.
+    """
+    from python.motor import OZNITELIKLER, YOL_ADLARI, ayar_oku, eksen_sirasi, oncul, puanla
+
+    ayar = ayar or ayar_oku(conn)
+    son: dict[tuple[str, int], dict[str, bool]] = defaultdict(dict)
+    for cal, eksen, artist, karar in conn.execute(
+            """SELECT f.calisma_id, COALESCE(f.eksen, a.eksen), a.artist, f.karar FROM feedback f
+                 JOIN adaylar a ON a.aday_id = f.aday_id AND a.calisma_id = f.calisma_id
+                WHERE f.karar IN ('begendim', 'tutmadi') ORDER BY f.tarih"""):
+        if eksen is not None and artist:
+            son[(cal, int(eksen))][normalize_esleme(artist)] = karar == "begendim"
+    yollar = list(YOL_ADLARI) + ["melez", "motor"]
+    sutun = {y: OZNITELIKLER.index(f"rr_{y}") for y in YOL_ADLARI}
+    gruplar, kapsam, n = [], Counter(), Counter()
+    for (cal, eksen), karar in sorted(son.items()):
+        if len(set(karar.values())) < 2:
+            continue                                   # çift kurulamıyor
+        r = eksen_sirasi(conn, cal, eksen, ayar=ayar, dis=dis, ham=True)
+        idx = {a: k for k, a in enumerate(r["havuz"])}
+        F = r["F"]
+        skor = {y: F[:, sutun[y]] for y in YOL_ADLARI}
+        skor["melez"] = puanla(F, oncul())
+        skor["motor"] = puanla(F, np.asarray(ayar["theta"]))
+        grup = {}
+        for y in yollar:
+            ic = [(b, float(skor[y][idx[a]]) if a in idx else -np.inf) for a, b in karar.items()]
+            L = np.array([x for b, x in ic if b])
+            P = np.array([x for b, x in ic if not b])
+            kazanc = float((L[:, None] > P[None, :]).sum() + 0.5 * (L[:, None] == P[None, :]).sum())
+            grup[y] = (kazanc, L.size * P.size)
+            kapsam[y] += sum(1 for b, x in ic if x > 0 and np.isfinite(x))
+        n["sorgu"] += 1
+        n["begendim"] += sum(karar.values())
+        n["tutmadi"] += sum(not b for b in karar.values())
+        gruplar.append(grup)
+    if not gruplar:
+        return {"ozet": {}, "kiyas": {}, "sayim": dict(n)}
+    W = np.array([[g[y][0] for y in yollar] for g in gruplar])
+    T = np.array([[g[y][1] for y in yollar] for g in gruplar])
+    rng = np.random.default_rng(tohum)
+    orn = rng.integers(0, len(gruplar), size=(tekrar, len(gruplar)))
+    auc = W.sum(0) / T.sum(0)
+    boot = W[orn].sum(1) / T[orn].sum(1)               # [tekrar × yol]
+    toplam = n["begendim"] + n["tutmadi"]
+    ozet = {y: {"auc": float(auc[j]), "alt": float(np.quantile(boot[:, j], .025)),
+                "ust": float(np.quantile(boot[:, j], .975)),
+                "kapsam": kapsam[y] / toplam if toplam else 0.0}
+            for j, y in enumerate(yollar)}
+    m = yollar.index("motor")
+    kiyas = {}
+    for j, y in enumerate(yollar):
+        if j == m:
+            continue
+        fark = boot[:, m] - boot[:, j]
+        kiyas[f"motor − {y}"] = {"fark": float(auc[m] - auc[j]),
+                                 "alt": float(np.quantile(fark, .025)),
+                                 "ust": float(np.quantile(fark, .975)),
+                                 "p": float(min(1.0, 2 * min((fark <= 0).mean(), (fark >= 0).mean())))}
+    return {"ozet": ozet, "kiyas": kiyas, "sayim": dict(n)}
+
+
+def karar_raporu(s: dict) -> str:
+    n = s["sayim"]
+    satirlar = ["", "Gerçek kararlar — beğenilen sanatçı geçilenden yukarıda mı? (AUC; rastgele 0,50)",
+                "=" * 82,
+                f"sorgu {n.get('sorgu', 0)} · beğendim {n.get('begendim', 0)} · tutmadı {n.get('tutmadi', 0)}",
+                f"{'yol':<22}{'AUC':>8}{'%95 aralık':>18}{'kapsam':>9}"]
+    for y, o in s["ozet"].items():
+        satirlar.append(f"{y:<22}{o['auc']:>8.3f}{'[%.3f, %.3f]' % (o['alt'], o['ust']):>18}"
+                        f"{o['kapsam']:>9.0%}")
+    satirlar += ["", f"{'eşli kıyas (AUC farkı)':<34}{'fark':>8}{'%95 aralık':>20}{'p':>8}"]
+    for ad, k in s["kiyas"].items():
+        satirlar.append(f"{ad:<34}{k['fark']:>+8.3f}{'[%+.3f, %+.3f]' % (k['alt'], k['ust']):>20}{k['p']:>8.3f}")
+    satirlar += ["kapsam: kararlı sanatçıların o yolun listesinde bulunma payı.",
+                 "Sınır: kartlar o günün stratejilerinden geldi (seçim yanlılığı).", ""]
     return "\n".join(satirlar)
 
 

@@ -2962,3 +2962,23 @@ Düzeltilmeyen: yoğun matris belleği (ortak havuz 5 kullanıcıda ~3000 liste 
 - Ağırlıklar: ListenBrainz 2,18 · Deezer 1,43 · kadro 1,17 · RP3β 0,78 · liste 0,74 · EASE 0,50.
 - Bedel: kalabalık yolları forumun reddettiği önerileri de yukarı taşıyor
   (olumsuz @50 %33). Kalabalık «benzer» ile «popüler komşu»yu ayırmıyor.
+
+**Sınama 2 — kütüphane gizleme sınaması, Drive klasör adlarından** (103 sanatçı,
+yalnız adlar: ses yolu YOK, melez = liste). `scripts/kutuphane_kiyasi.py`.
+
+| yol | tavan | @10 | @50 | MRR | yüzdelik |
+|---|---:|---:|---:|---:|---:|
+| çalma listesi (npmi) | 48 | %14 | %24 | 0,056 | 0,032 |
+| RP3β | 61 | %17 | %26 | 0,054 | 0,039 |
+| EASE | 63 | %17 | %27 | 0,065 | 0,021 |
+| Deezer benzerleri | 49 | %13 | %34 | 0,061 | 0,168 |
+| ListenBrainz | 68 | %19 | %35 | 0,058 | 0,084 |
+| MusicBrainz kadrosu | 18 | %4 | %9 | 0,016 | 0,137 |
+| **motor** | **76** | **%22** | **%42** | **0,079** | 0,023 |
+
+- motor − melez: MRR +0,024, %95 [−0,009, +0,059], p = 0,19.
+- motor − RP3β: +0,025 [+0,004, +0,051], p = 0,03.
+- kadro − liste: −0,039 [−0,077, −0,005], p = 0,03. Kadro tek başına zayıf; motorda
+  küçük ağırlıkla kalıyor (0,61).
+- Ağırlıklar: ListenBrainz 2,46 · Deezer 1,67 · liste 0,97 · kadro 0,61 · RP3β 0,36 ·
+  EASE 0,03. Ses ağırlığı (2,00) öncülde kaldı, çünkü bu sınamada ses verisi yok.

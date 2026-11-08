@@ -21,14 +21,14 @@
   <p class="etiket-ust">{{ t("üretimde kullanılan yapı", "structure in production") }}</p>
   <h2>{{ yol_adi('motor') }}</h2>
   <div class="olcum-sayilar">
-    <div><b>{{ '%.3f'|format(m.ndcg or 0) }}</b><span>NDCG</span></div>
+    <div><b>{{ (m.ndcg or 0)|sayi(3) }}</b><span>NDCG</span></div>
     <div><b>{{ (m['recall@50'] or 0)|yuzde }}</b><span>{{ t("ilk 50'de bulunan", "found in top 50") }}</span></div>
     <div><b>{{ m.erisilebilir }}/{{ m.gizlenen }}</b><span>{{ t("erişilebilen", "reachable") }}</span></div>
-    {% if mel %}<div><b>{{ '%.3f'|format(mel.ndcg or 0) }}</b><span>{{ t("melez (önceki ana yol)", "hybrid (previous main route)") }}</span></div>{% endif %}
+    {% if mel %}<div><b>{{ (mel.ndcg or 0)|sayi(3) }}</b><span>{{ t("melez (önceki ana yol)", "hybrid (previous main route)") }}</span></div>{% endif %}
   </div>
   {% if mk %}
-  <p class="aciklama">{{ t("Motor ile melez arasındaki MRR farkı " ~ ('%+.3f'|format(mk.fark)) ~ ", %95 aralık [" ~ ('%+.3f'|format(mk.alt)) ~ ", " ~ ('%+.3f'|format(mk.ust)) ~ "], p = " ~ ('%.3f'|format(mk.p)) ~ ".",
-                           "MRR difference between engine and hybrid " ~ ('%+.3f'|format(mk.fark)) ~ ", 95% interval [" ~ ('%+.3f'|format(mk.alt)) ~ ", " ~ ('%+.3f'|format(mk.ust)) ~ "], p = " ~ ('%.3f'|format(mk.p)) ~ ".") }}
+  <p class="aciklama">{{ t("Motor ile melez arasındaki MRR farkı " ~ ((mk.fark)|sayi(3, isaret=true)) ~ ", %95 aralık [" ~ ((mk.alt)|sayi(3, isaret=true)) ~ ", " ~ ((mk.ust)|sayi(3, isaret=true)) ~ "], p = " ~ ((mk.p)|sayi(3)) ~ ".",
+                           "MRR difference between engine and hybrid " ~ ((mk.fark)|sayi(3, isaret=true)) ~ ", 95% interval [" ~ ((mk.alt)|sayi(3, isaret=true)) ~ ", " ~ ((mk.ust)|sayi(3, isaret=true)) ~ "], p = " ~ ((mk.p)|sayi(3)) ~ ".") }}
     {% if mk.p < 0.05 and mk.fark > 0 %}<span class="rozet yesil">{{ t("anlamlı üstünlük", "significant gain") }}</span>
     {% elif mk.p < 0.05 %}<span class="rozet gri">{{ t("anlamlı geride", "significantly behind") }}</span>
     {% else %}<span class="rozet gri">{{ t("fark belirsiz", "no clear difference") }}</span>{% endif %}
@@ -61,9 +61,9 @@
           {% for k in ('recall@10', 'recall@50') %}
           <td class="sayi{% if (o[k] or 0) == en_iyi[k] and en_iyi[k] > 0 %} en-iyi{% endif %}">{{ (o[k] or 0)|yuzde }}</td>
           {% endfor %}
-          <td class="sayi{% if (o.mrr or 0) == en_iyi.mrr and en_iyi.mrr > 0 %} en-iyi{% endif %}">{{ '%.3f'|format(o.mrr or 0) }}</td>
-          <td class="sayi{% if (o.ndcg or 0) == en_iyi.ndcg and en_iyi.ndcg > 0 %} en-iyi{% endif %}">{{ '%.3f'|format(o.ndcg or 0) }}</td>
-          <td class="sayi">{{ '%.3f'|format(o.medyan_yuzdelik) if o.medyan_yuzdelik is not none else '—' }}</td>
+          <td class="sayi{% if (o.mrr or 0) == en_iyi.mrr and en_iyi.mrr > 0 %} en-iyi{% endif %}">{{ (o.mrr or 0)|sayi(3) }}</td>
+          <td class="sayi{% if (o.ndcg or 0) == en_iyi.ndcg and en_iyi.ndcg > 0 %} en-iyi{% endif %}">{{ (o.ndcg or 0)|sayi(3) }}</td>
+          <td class="sayi">{{ (o.medyan_yuzdelik)|sayi(3) if o.medyan_yuzdelik is not none else '—' }}</td>
           <td class="sayi">{{ o.gorunurluk|int if o.gorunurluk is not none else '—' }}</td>
         </tr>
       {% endfor %}
@@ -83,9 +83,9 @@
     <tbody>{% for ad, k in kiyas.items() %}
       {% set parca = ad.split(' − ') %}
       <tr><td>{{ yol_adi(parca[0]) }} <span class="soluk">−</span> {{ yol_adi(parca[1]) }}</td>
-        <td class="sayi">{{ '%+.3f'|format(k.fark) }}</td>
-        <td class="sayi">[{{ '%+.3f'|format(k.alt) }}, {{ '%+.3f'|format(k.ust) }}]</td>
-        <td class="sayi">{{ '%.3f'|format(k.p) }}</td>
+        <td class="sayi">{{ (k.fark)|sayi(3, isaret=true) }}</td>
+        <td class="sayi">[{{ (k.alt)|sayi(3, isaret=true) }}, {{ (k.ust)|sayi(3, isaret=true) }}]</td>
+        <td class="sayi">{{ (k.p)|sayi(3) }}</td>
         <td>{% if k.p < 0.05 %}<span class="rozet {{ 'yesil' if k.fark > 0 else 'gri' }}">{{ t("anlamlı", "significant") }}</span>{% endif %}</td></tr>
     {% endfor %}</tbody>
   </table></div>
@@ -112,9 +112,28 @@
     <tbody>{% for ad, o in olcum.ciftler.ozet.items() %}
       <tr><td>{{ yol_adi(ad) }}</td><td class="sayi">{{ o.n }}</td><td class="sayi">{{ o.tavan }}</td>
         <td class="sayi">{{ o['@10']|yuzde }}</td><td class="sayi">{{ o['@50']|yuzde }}</td>
-        <td class="sayi">{{ '%.3f'|format(o.ndcg or 0) }}</td><td class="sayi">{{ o['negatif_@50']|yuzde }}</td></tr>
+        <td class="sayi">{{ (o.ndcg or 0)|sayi(3) }}</td><td class="sayi">{{ o['negatif_@50']|yuzde }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
+</section>
+{% endif %}
+
+{% if olcum.kararlar %}
+{% set ks = olcum.kararlar.sayim %}
+<section class="bolum">
+  <h2>{{ t("Kendi kararlarınla sınama", "Tested against your own decisions") }}</h2>
+  <p class="aciklama">{{ t("Kaydırdığın kartlardan: yöntemin, beğendiğin sanatçıyı geçtiğin sanatçının üstüne koyma olasılığı (AUC). 0,50 rastgele, 1,00 kusursuz. Erişimi değil beğeniyi ölçer. " ~ ks.begendim ~ " beğendim, " ~ ks.tutmadi ~ " geç kararı.",
+                           "From the cards you swiped: how likely each method is to rank an artist you saved above one you passed on (AUC). 0.50 is chance, 1.00 is perfect. This measures liking, not reach. " ~ ks.begendim ~ " saves, " ~ ks.tutmadi ~ " passes.") }}</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>{{ t("yol", "route") }}</th><th class="sayi">AUC</th><th class="sayi">{{ t("%95 aralık", "95% interval") }}</th>
+      <th class="sayi" title="{{ t('kararlı sanatçıların o yolun listesinde bulunma payı', 'share of decided artists that appear in the route at all') }}">{{ t("kapsam", "coverage") }}</th></tr></thead>
+    <tbody>{% for ad, o in olcum.kararlar.ozet.items() %}
+      <tr{% if ad == 'motor' %} class="secili"{% endif %}><td>{{ yol_adi(ad) }}</td><td class="sayi">{{ (o.auc)|sayi(3) }}</td>
+        <td class="sayi">[{{ (o.alt)|sayi(3) }}, {{ (o.ust)|sayi(3) }}]</td><td class="sayi">{{ o.kapsam|yuzde }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="aciklama soluk">{{ t("Sınır: kartlar o günün yöntemlerinden geldi; o yöntemlerin bulmadığı sanatçılar hiç kaydırılmadı.",
+                                 "Limit: the cards came from that day's methods, so artists those methods never found were never swiped.") }}</p>
 </section>
 {% endif %}
 

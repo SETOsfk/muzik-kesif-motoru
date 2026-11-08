@@ -327,3 +327,38 @@ def test_sizinti_bulucu_ad_icerirse_gizlenenin_aramasi():
         L.liste_ara = eski
     assert harita["allan holdsworth"] == {2}          # 1'i Gojira da buldu
     assert harita["gojira"] == {3}
+
+
+def test_karar_sinamasi_begenileni_yukari_koyani_odullendirir(tmp_path, monkeypatch):
+    """Gerçek kararlarla sınama: beğenilen (Vildhjarta, üç ortak liste) geçilenin
+    (Car Bomb, tek liste) üstünde → motor AUC 1; «zaten biliyorum» sayılmaz."""
+    import python.etiket_clap as C
+    from python import degerlendirme as D
+
+    monkeypatch.setattr(C, "GOMU_KLASOR", tmp_path / "clap")
+    monkeypatch.setattr(C, "PARCA_GOMU", tmp_path / "clap_parca")
+    monkeypatch.setattr(M, "AYAR_DOSYASI", tmp_path / "yok.json")
+    M._GRAFIK.clear()
+    conn = _grafik({1: ["Meshuggah", "Vildhjarta"], 2: ["Meshuggah", "Vildhjarta"],
+                    3: ["Gojira", "Vildhjarta"], 4: ["Gojira", "Car Bomb"],
+                    5: ["Duman", "Sezen Aksu"]})
+    cal = "c1"
+    with conn:
+        for i, ad in enumerate(("Meshuggah", "Gojira")):
+            conn.execute("INSERT INTO albums (album_id, artist, title) VALUES (?,?,?)", (f"a{i}", ad, "x"))
+            conn.execute("INSERT INTO memberships (album_id, calisma_id, kume_id, uyelik)"
+                         " VALUES (?,?,0,0.9)", (f"a{i}", cal))
+        conn.execute("INSERT INTO clusters (kume_id, calisma_id, stabil_mi) VALUES (0, ?, 1)", (cal,))
+        for aday, ad, karar in (("d1", "Vildhjarta", "begendim"), ("d2", "Car Bomb", "tutmadi"),
+                                ("d3", "Sezen Aksu", "zaten_biliyorum")):
+            conn.execute("INSERT INTO adaylar (aday_id, calisma_id, eksen, strateji, artist, title,"
+                         " skor, gerekce) VALUES (?,?,0,'melez',?,'x',1,'')", (aday, cal, ad))
+            conn.execute("INSERT INTO feedback (aday_id, eksen, karar, tarih, calisma_id)"
+                         " VALUES (?,0,?,'2026-11-07',?)", (aday, karar, cal))
+    theta = [1.0 if o == "rr_rp3" else 0.0 for o in M.OZNITELIKLER]   # öğrenilmiş ayar yerine
+    s = D.karar_sinamasi(conn, ayar={**M.ayar_oku(conn), "theta": theta}, dis={}, tekrar=50)
+    assert s["sayim"] == {"sorgu": 1, "begendim": 1, "tutmadi": 1}
+    assert s["ozet"]["motor"]["auc"] == 1.0 and s["ozet"]["rp3"]["auc"] == 1.0
+    assert s["ozet"]["kadro"]["auc"] == 0.5              # yolda ikisi de yok: eşitlik
+    assert s["ozet"]["melez"]["auc"] == 0.5              # liste/ses kanıtı yok
+    assert "motor − melez" in s["kiyas"]

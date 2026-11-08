@@ -645,8 +645,9 @@ ul.madde strong { color: var(--metin); }
 
 /* Deste ekrana SIĞMALI: karar düğmeleri katlamanın altında kalırsa klavyesiz
  * kullanıcı kaydırmak zorunda kalıyor (ölçüldü: 1440×900'de düğmeler taşıyordu).
- * 22rem = üst çubuk + alt sekmeler + günlük satırı + çipler + düğmeler + kısayol. */
-.deste { position: relative; height: clamp(420px, calc(100dvh - 24rem), 760px);
+ * 26rem = üst çubuk + alt sekmeler + günlük satırı + tarz sorusu + çipler +
+ * düğmeler (2026-11-07: 24rem'de düğmeler 17px taşıyordu, ölçüldü). */
+.deste { position: relative; height: clamp(420px, calc(100dvh - 26rem), 760px);
          /* Arkadaki kartlar 28px aşağı iniyor; pay bırakılmazsa karar
           * düğmeleri onların üstüne biniyordu (ekran görüntüsü, 2026-09-28). */
          margin-bottom: 30px;
@@ -1433,7 +1434,14 @@ kbd { font-family: var(--font-etiket); font-size: .78em; }
 .egitim .yon.sol { color: var(--kirmizi); border-color: var(--kenar); }
 .egitim .yon.yukari { color: var(--ikincil); border-color: var(--kenar); }
 /* «Başla» her zaman görünür: metin uzarsa panel kayar, düğme altta yapışık kalır. */
-.egitim .birincil { align-self: flex-start; flex: none; position: sticky; bottom: 0; }
+.egitim .birincil { align-self: flex-start; flex: none; position: sticky; bottom: 0;
+                    /* Yapışkan düğme altındaki metni örter: kart renginde tam genişlik bant
+                     * (metin düğmenin yanından okunuyordu — 1440×900, ölçüldü). */
+                    box-shadow: 0 0 0 100vmax var(--kart); clip-path: inset(-.75rem -100vmax -2rem -100vmax); }
+@media (max-height: 1000px) and (min-width: 701px) {
+  .egitim .cizim { aspect-ratio: 16 / 4; }
+  .egitim .aciklama { display: none; }
+}
 .egitim .aciklama { font-style: italic; font-size: .92rem; }
 
 /* ================================================= giriş: kitabın kapağı */

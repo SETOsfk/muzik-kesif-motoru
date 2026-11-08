@@ -167,7 +167,7 @@ def _motor_cumlesi(d: dict, eksen: str, benzedigi: str | None) -> str:
     if kalabalik:
         adlar = _bagla(kalabalik, t("ve", "and"))
         parcalar.append(t(
-            f"Dinleyici kalabalığı: {adlar} dinleyenler bunu da dinliyor (Deezer, ListenBrainz).",
+            f"Dinleyici kalabalığı: dinleyicileri {adlar} ile örtüşüyor (Deezer, ListenBrainz).",
             f"Listener crowd: people who play {adlar} also play this (Deezer, ListenBrainz)."))
     if benzedigi:
         parcalar.append(_ses_cumlesi(benzedigi, d))
