@@ -139,8 +139,8 @@
   {% set bedel = (olcum.motor or {}).kesif_loao or {} %}
   {% set g_uretim = kk.kesif_cezasi or 0 %}
   <h3>{{ t("Keşif cezası", "Discovery penalty") }}</h3>
-  <p class="aciklama">{{ t("Beğendiğin sanatçılar genelde az bilinenler. Bu yüzden motor skorundan γ · log(1 + liste sayısı) düşülür. γ değerleri küçükten büyüğe sınandı; beğeni kazancının ilk anlamlı olduğu değer üretime girer: γ = " ~ (g_uretim|sayi(2)) ~ ".",
-                           "The artists you save tend to be lesser-known, so the engine's score is reduced by γ · log(1 + playlist count). γ values were tested from small to large, and the first one with a significant gain in liking goes into production: γ = " ~ (g_uretim|sayi(2)) ~ ".") }}</p>
+  <p class="aciklama">{{ t("Beğendiğin sanatçılar genelde az bilinenler. Bu yüzden motor skorundan γ · log(1 + liste sayısı) düşülür. γ değerleri küçükten büyüğe sınandı; erişimi en çok %10 düşüren değerler arasında beğeni kazancının ilk anlamlı olduğu değer üretime girer: γ = " ~ (g_uretim|sayi(2)) ~ ".",
+                           "The artists you save tend to be lesser-known, so the engine's score is reduced by γ · log(1 + playlist count). γ values were tested from small to large; among those that cut reach by at most 10%, the first one with a significant gain in liking goes into production: γ = " ~ (g_uretim|sayi(2)) ~ ".") }}</p>
   <div class="tablo-sarmal"><table>
     <thead><tr><th>γ</th><th class="sayi">{{ t("beğeni AUC", "liking AUC") }}</th><th class="sayi">{{ t("kazanç [%95]", "gain [95%]") }}</th>
       <th class="sayi">{{ t("gizleme MRR", "hide-test MRR") }}</th><th class="sayi">{{ t("gizleme @50", "hide-test @50") }}</th></tr></thead>

@@ -77,8 +77,7 @@ YOL_DERINLIGI = 1000
 #: ListenBrainz kalabalığı, MusicBrainz kadrosu.
 YOL_ADLARI = ("rp3", "ease", "liste", "ses", "deezer_benzer", "listenbrainz", "kadro")
 #: Öznitelikler — sıra eğitimde ve puanlamada aynı olmalı.
-OZNITELIKLER = tuple(f"rr_{y}" for y in YOL_ADLARI) + ("ortak_liste", "tohum_payi", "eksen_uyumu")
-UYUM_SUTUNU = len(OZNITELIKLER) - 1          # kümeleme girdisi; taban modelde düşer
+OZNITELIKLER = tuple(f"rr_{y}" for y in YOL_ADLARI) + ("ortak_liste", "tohum_payi")
 #: Öncül = üretimdeki melez (RRF, liste 1 : ses 2). λ → ∞ iken motor melezin
 #: sıralamasını verir; λ iç katlarda NDCG ile seçilir (`lambda_sec`).
 ONCUL = {"rr_liste": 1.0, "rr_ses": 2.0}
@@ -334,12 +333,15 @@ def oznitelikler(
     F = np.zeros((len(havuz), len(OZNITELIKLER)), dtype="float64")
     for k, a in enumerate(havuz):
         F[k] = ([rr.get(y, {}).get(a, 0.0) for y in YOL_ADLARI]
-                + [np.log1p(ortak.get(a, 0.0)), tohum_payi.get(a, 0.0), 0.0])
+                + [np.log1p(ortak.get(a, 0.0)), tohum_payi.get(a, 0.0)])
     return havuz, F
 
 
 # --------------------------------------------------------------------------- #
-# Kümeleme girdisi — eksen uyumu (K3: üyelik dereceleri motorun girdisi)
+# Kümeleme girdisi — eksen uyumu (K3: üyelik dereceleri motorun girdisi).
+# ÜRETİMDE YOK: gerçek veride (2026-11-08) gizleme MRR'sini düşürdü
+# (0,155 → 0,131, eşli fark aralığı sıfırın altında), kararlarda kazancı
+# anlamsızdı. `--egit` onu her seferinde «motor_uyumlu» olarak yeniden ölçer.
 # --------------------------------------------------------------------------- #
 
 def sanatci_uyelikleri(conn: sqlite3.Connection, calisma_id: str | None = None
@@ -385,11 +387,10 @@ def uyum_vektoru(G: Grafik, uyelik: dict[str, np.ndarray], tohum: dict[str, floa
     return np.where(nV > 0, (V @ t) / np.maximum(nV * np.linalg.norm(t), 1e-12), 0.0)
 
 
-def uyum_sutunu(F: np.ndarray, havuz: list[str], G: Grafik, vektor: np.ndarray) -> np.ndarray:
-    """Öznitelik matrisinin eksen uyumu sütununu doldur (yerinde) ve döndür."""
-    if len(havuz):
-        F[:, UYUM_SUTUNU] = [float(vektor[G.sira[a]]) if a in G.sira else 0.0 for a in havuz]
-    return F
+def uyum_ekle(F: np.ndarray, havuz: list[str], G: Grafik, vektor: np.ndarray) -> np.ndarray:
+    """Öznitelik matrisine eksen uyumu sütununu ekle (yalnız ölçüm için)."""
+    sutun = [float(vektor[G.sira[a]]) if a in G.sira else 0.0 for a in havuz]
+    return np.column_stack([F, np.asarray(sutun, dtype=F.dtype).reshape(len(havuz))])
 
 
 def oncul() -> np.ndarray:
@@ -493,6 +494,10 @@ def puanla(F: np.ndarray, theta: np.ndarray) -> np.ndarray:
 # (2026-11-07, 393 karar); popülerlik tek başına AUC 0,71. γ kararlardan,
 # sorgu dışarıda bırakılarak seçilir (`degerlendirme.karar_sinamasi`).
 KESIF_IZGARASI = (0.0, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0)
+#: Ceza erişimi (gizleme MRR'si) en çok bu kadar düşürebilir. Yoksa beğeni
+#: kazancı, sıralamayı popülerliğe teslim ederek alınır: γ=2'de MRR 0,131 → 0,050
+#: (2026-11-08, ölçüldü).
+ERISIM_BEDELI_TAVANI = 0.10
 
 
 def populerlik(havuz: list[str], sayim: dict[str, float]) -> np.ndarray:
@@ -635,7 +640,8 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     sanatcilar = eksen_sanatcilari(conn, calisma_id, eksen, adet=40)
     if sanatcilar.empty:
         return ({"havuz": [], "F": np.zeros((0, len(OZNITELIKLER))), "yollar": {},
-                 "pop": np.zeros(0)} if ham else [])
+                 "pop": np.zeros(0), "sayim": {},
+                 "F_uyumlu": np.zeros((0, len(OZNITELIKLER) + 1))} if ham else [])
     # Gerekçede kütüphanedeki yazım («Mötley Crüe»), Deezer'ınki değil.
     okunur = {normalize_esleme(a): a for a in sanatcilar.index}
     tohum = {a: 1.0 for a in okunur}
@@ -685,10 +691,11 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     toplam_ortak, pay = ortak_ozeti(G, ortak)
     populer = dict(zip(G.anahtar, G.B.sum(axis=0).tolist()))
     havuz, F = oznitelikler(yollar, ortak=toplam_ortak, tohum_payi=pay)
-    uyum_sutunu(F, havuz, G, uyum_vektoru(G, sanatci_uyelikleri(conn, calisma_id), tohum))
     pop = populerlik(havuz, populer)
     if ham:
-        return {"havuz": havuz, "F": F, "yollar": yollar, "pop": pop, "sayim": populer}
+        uyum = uyum_vektoru(G, sanatci_uyelikleri(conn, calisma_id), tohum)
+        return {"havuz": havuz, "F": F, "yollar": yollar, "pop": pop, "sayim": populer,
+                "F_uyumlu": uyum_ekle(F, havuz, G, uyum)}
     if not havuz:
         return []
     skor = puanla(F, np.asarray(ayar["theta"])) - float(ayar.get("kesif_cezasi", 0.0)) * pop
@@ -782,8 +789,12 @@ def main(argv: list[str] | None = None) -> int:
             print(D.cift_raporu(cift))
         karar = None
         if "_motor_ayar" in sonuc:
+            bedel = sonuc["_motor_ayar"].get("kesif_loao") or {}
+            mrr0 = (bedel.get("0.0") or {}).get("mrr", 0.0)
+            izinli = ({float(g) for g, o in bedel.items()
+                       if o["mrr"] >= (1 - ERISIM_BEDELI_TAVANI) * mrr0} if bedel else None)
             karar = D.karar_sinamasi(conn, ayar={**ayar_oku(conn), **sonuc["_motor_ayar"],
-                                                 "kesif_cezasi": 0.0}, dis=dis)
+                                                 "kesif_cezasi": 0.0}, dis=dis, izinli=izinli)
             if karar["ozet"]:
                 print(D.karar_raporu(karar))
                 sonuc["_motor_ayar"]["kesif_cezasi"] = karar["kesif_cezasi"]

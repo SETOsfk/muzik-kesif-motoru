@@ -3038,3 +3038,31 @@ sınamasında da en iyi ya da en iyiyle aynı (gerçek kütüphane MRR 0,152 vs 
 Drive adları 0,079 vs 0,056; insan çiftlerinde öğrenilmiş birleşim NDCG 0,159).
 Beğeni tarafını deste yönetiyor: kaynaklar arası Thompson örneklemesi gerçek
 kararlardan (K21), motor bir kaynak olarak yarışıyor.
+
+### 2026-11-08 (25) — Kümeleme girdisi ölçüldü, üretime girmedi; keşif cezasına erişim tavanı
+
+Kullanıcının sorusu: «Kümeleme bazlı öneri kalktı mı? O verileri modele girdi yapsak?»
+Kümeleme kalkmadı, sistemin iskeleti: eksenler (Keşfet'teki tarz çipleri) ve her
+eksenin sorgusu (tohum sanatçılar) ondan geliyor. Motor yalnız eksen içi sıralamayı yapıyor.
+
+**Denenen girdi: eksen uyumu** (`motor.uyum_vektoru`, K3). Aday, kütüphanedeki
+çalma listesi komşularının bulanık eksen üyeliklerini (ortak liste sayısı ağırlıklı)
+devralıyor; bunun tohumların ortalama üyeliğiyle kosinüsü öznitelik. Beklenti: her
+eksenin listesinde geçen popüler ama yayvan sanatçı geri düşer.
+
+Gerçek veride, aynı koşuda eşli (iç içe CV):
+- Gizleme: girdili MRR 0,131, girdisiz 0,155; fark −0,024 [−0,044, −0,008], p = 0,008.
+  @50 ikisinde de %51; kayıp üst sıralarda (@1: 0,05'e karşı 0,10).
+- Kararlar: AUC 0,401'e karşı 0,387; +0,015 [−0,013, +0,053], anlamlı değil.
+- **Karar: üretime girmedi** (K19). `--egit` onu her seferinde «motor_uyumlu» adıyla
+  yeniden ölçer; Mac'te taze veriyle (yeni CLAP gömüleri) kazandırırsa yeniden bakılır.
+
+**Yan bulgu ve düzeltme.** Girdili modelde «en küçük etkili doz» kuralı γ = 2'yi seçti;
+gizleme MRR'si 0,131 → 0,050'ye, @50 %51 → %33'e düştü. Beğeni kazancı sıralamayı
+popülerliğe teslim ederek alınıyordu. Kural: erişimi (gizleme MRR'si) %10'dan fazla
+düşüren γ aday olamaz (`motor.ERISIM_BEDELI_TAVANI`). Girdisiz modelde seçim değişmiyor
+(γ = 0,5: MRR 0,152 → 0,140, %8).
+
+**Test hijyeni.** İki web testi oturum ara katmanı üzerinden depo kökünde
+`data/db/ortak.sqlite` yaratıyordu (Mac'te gerçek ortak veritabanı). `tests/conftest.py`
+ortak ve kullanıcı yollarını her testte geçici dizine yönlendiriyor.

@@ -473,8 +473,13 @@ koşullu logitle birleştiriyor.
   (`eksen_sirasi(ham=True)`). Gerçek veride bütün yollar 0,5'in altında; popülerlik
   tek başına 0,71 (beğendim medyanı 2 liste, tutmadı 4, zaten biliyorum 25).
 - **Keşif cezası (2026-11-07):** motor skoru − γ·log(1 + liste sayısı). γ kararlardan:
-  küçükten büyüğe, beğeni kazancının ilk anlamlı olduğu değer (gerçek veride 0,5;
-  gizleme MRR'si 0,152 → 0,140). Erişim bedeli `kesif_loao`'da. Karar günlüğü (24).
+  küçükten büyüğe, erişimi en çok %10 düşürenler (`ERISIM_BEDELI_TAVANI`) arasında
+  beğeni kazancının ilk anlamlı olduğu değer (gerçek veride 0,5; gizleme MRR'si
+  0,152 → 0,140). Erişim bedeli `kesif_loao`'da. Karar günlüğü (24), (25).
+- **Kümeleme girdisi (eksen uyumu) ölçüldü, üretimde YOK (2026-11-08):** gizleme MRR'sini
+  düşürdü (0,155 → 0,131, eşli aralık sıfırın altında), kararlarda kazancı anlamsız.
+  `--egit` «motor_uyumlu» olarak her seferinde yeniden ölçer. Kümeleme yine iskelet:
+  eksenler ve tohumlar ondan.
 - Sonuçlar uygulamada: `/olcumler` (`{id}.olcum.json`, `--egit` yazar): gizleme,
   insan çiftleri, gerçek kararlar, keşif cezası eğrisi.
 
@@ -517,7 +522,7 @@ sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız
   başlayabiliyor (`/basla` → sanatçı listesi), `/gizlilik` + hesap silme var, dağıtım
   paketi hazır (`Dockerfile`, `docker-compose.yml` + Caddy, `docs/yayin.md`).
-- **Testler:** `.venv/bin/python -m pytest` — 352 test; bulutta `librosa` ve `sklearn`
+- **Testler:** `.venv/bin/python -m pytest` — 353 test; bulutta `librosa` ve `sklearn`
   olmadığı için 2'si düşer. Temiz kurulumda
   `python-multipart` ve `httpx` gerekiyor (requirements'ta). Test gerçek
   `data/`ya YAZMAMALI; yeni testler (`tests/test_kesif.py`) geçici dizin ve
