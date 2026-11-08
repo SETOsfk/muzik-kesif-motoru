@@ -362,3 +362,16 @@ def test_karar_sinamasi_begenileni_yukari_koyani_odullendirir(tmp_path, monkeypa
     assert s["ozet"]["kadro"]["auc"] == 0.5              # yolda ikisi de yok: eşitlik
     assert s["ozet"]["melez"]["auc"] == 0.5              # liste/ses kanıtı yok
     assert "motor − melez" in s["kiyas"]
+
+
+def test_kesif_cezasi_gamma_secimi_sorgu_disarida():
+    """γ, sorgu dışarıda bırakılarak: iki sorgu cezayı istiyor, biri istemiyor."""
+    import numpy as np
+    from python.degerlendirme import _gamma_sec
+    # [sorgu × γ(0, 1) × (kazanç, çift)]
+    tablo = np.array([[[1, 4], [4, 4]], [[2, 4], [4, 4]], [[4, 4], [3, 4]]], dtype=float)
+    assert _gamma_sec(tablo, [0, 1, 2]) == 1                 # toplamda ceza kazanıyor
+    assert _gamma_sec(tablo, [0, 1]) == 1 and _gamma_sec(tablo, [2]) == 0
+    assert _gamma_sec(np.zeros((1, 2, 2)), []) == 0          # veri yok: cezasız
+    pop = M.populerlik(["a", "b", "yok"], {"a": 1.0, "b": 7.0})
+    assert pop[2] == np.median(pop[:2])                      # grafikte yok: nötr

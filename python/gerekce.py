@@ -267,6 +267,8 @@ YOL_ADI = {
     "listenbrainz": ("ListenBrainz kalabalığı", "ListenBrainz crowd"),
     "kadro": ("MusicBrainz kadrosu", "MusicBrainz lineups"),
     "motor": ("motor: öğrenilmiş birleşim", "engine: learned blend"),
+    "motor_kesif": ("motor + keşif cezası", "engine + discovery penalty"),
+    "populerlik": ("yalnız popülerlik (az bilinen önde)", "popularity only (lesser-known first)"),
     "rrf_tum": ("eşit ağırlıklı birleşim", "equal-weight blend"),
     "birlesim": ("öğrenilmiş birleşim", "learned blend"),
     "kredi_sicramasi": ("kadrondaki müzisyenler", "musicians you know"),

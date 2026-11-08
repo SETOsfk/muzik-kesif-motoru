@@ -433,16 +433,32 @@ def puanla(F: np.ndarray, theta: np.ndarray) -> np.ndarray:
     return F @ theta
 
 
+# Keşif cezası: skor − γ·log(1 + liste sayısı). Gerçek kararlarda beğenilen
+# sanatçının medyanı 2 listeydi, geçilenin 4, «zaten biliyorum»un 25
+# (2026-11-07, 393 karar); popülerlik tek başına AUC 0,71. γ kararlardan,
+# sorgu dışarıda bırakılarak seçilir (`degerlendirme.karar_sinamasi`).
+KESIF_IZGARASI = (0.0, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0)
+
+
+def populerlik(havuz: list[str], sayim: dict[str, float]) -> np.ndarray:
+    """log(1 + liste sayısı); grafikte olmayan aday havuzun medyanını alır —
+    yalnız dış yoldan gelen sanatçı ne ödüllendirilir ne cezalandırılır."""
+    v = np.array([np.log1p(sayim[a]) if sayim.get(a) else np.nan for a in havuz], dtype="float64")
+    if len(v) and np.isnan(v).any():
+        v[np.isnan(v)] = np.nanmedian(v) if (~np.isnan(v)).any() else 0.0
+    return v
+
+
 def _ornek(r: dict):
     if r["hedef"] not in r["havuz"] or not len(r["havuz"]):
         return None
     return r["F"], r["havuz"].index(r["hedef"])
 
 
-def _hedef_sirasi(r: dict, theta: np.ndarray) -> int | None:
+def _hedef_sirasi(r: dict, theta: np.ndarray, gamma: float = 0.0) -> int | None:
     if r["hedef"] not in r["havuz"]:
         return None
-    s = puanla(r["F"], theta)
+    s = puanla(r["F"], theta) - gamma * r.get("pop", 0.0)
     sira = np.argsort(-s, kind="stable")
     return int(np.flatnonzero(sira == r["havuz"].index(r["hedef"]))[0]) + 1
 
@@ -563,7 +579,8 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     G = _grafik(conn, ayar["baglam_agirligi"])
     sanatcilar = eksen_sanatcilari(conn, calisma_id, eksen, adet=40)
     if sanatcilar.empty:
-        return {"havuz": [], "F": np.zeros((0, len(OZNITELIKLER))), "yollar": {}} if ham else []
+        return ({"havuz": [], "F": np.zeros((0, len(OZNITELIKLER))), "yollar": {},
+                 "pop": np.zeros(0)} if ham else [])
     # Gerekçede kütüphanedeki yazım («Mötley Crüe»), Deezer'ınki değil.
     okunur = {normalize_esleme(a): a for a in sanatcilar.index}
     tohum = {a: 1.0 for a in okunur}
@@ -613,11 +630,12 @@ def eksen_sirasi(conn: sqlite3.Connection, calisma_id: str, eksen: int, *,
     toplam_ortak, pay = ortak_ozeti(G, ortak)
     populer = dict(zip(G.anahtar, G.B.sum(axis=0).tolist()))
     havuz, F = oznitelikler(yollar, ortak=toplam_ortak, tohum_payi=pay)
+    pop = populerlik(havuz, populer)
     if ham:
-        return {"havuz": havuz, "F": F, "yollar": yollar}
+        return {"havuz": havuz, "F": F, "yollar": yollar, "pop": pop, "sayim": populer}
     if not havuz:
         return []
-    skor = puanla(F, np.asarray(ayar["theta"]))
+    skor = puanla(F, np.asarray(ayar["theta"])) - float(ayar.get("kesif_cezasi", 0.0)) * pop
     sira = {ad: {a: r for r, a in enumerate(liste, 1)} for ad, liste in yollar.items()}
     sonuc = []
     for k in np.argsort(-skor, kind="stable"):
@@ -708,9 +726,16 @@ def main(argv: list[str] | None = None) -> int:
             print(D.cift_raporu(cift))
         karar = None
         if "_motor_ayar" in sonuc:
-            karar = D.karar_sinamasi(conn, ayar={**ayar_oku(conn), **sonuc["_motor_ayar"]}, dis=dis)
+            karar = D.karar_sinamasi(conn, ayar={**ayar_oku(conn), **sonuc["_motor_ayar"],
+                                                 "kesif_cezasi": 0.0}, dis=dis)
             if karar["ozet"]:
                 print(D.karar_raporu(karar))
+                sonuc["_motor_ayar"]["kesif_cezasi"] = karar["kesif_cezasi"]
+                bedel = sonuc["_motor_ayar"].get("kesif_loao", {})
+                if bedel:
+                    print("keşif cezasının erişim bedeli (gizleme sınaması, motor):")
+                    for g, o in bedel.items():
+                        print(f"  γ={g:>5}  MRR {o['mrr']:.3f}  @10 {o['recall@10']:.2f}  @50 {o['recall@50']:.2f}")
         if not args.yazma and "_motor_ayar" in sonuc:
             yol = ayar_yolu(conn)
             ayar_yaz(sonuc["_motor_ayar"], yol)

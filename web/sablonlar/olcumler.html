@@ -134,6 +134,25 @@
   </table></div>
   <p class="aciklama soluk">{{ t("Sınır: kartlar o günün yöntemlerinden geldi; o yöntemlerin bulmadığı sanatçılar hiç kaydırılmadı.",
                                  "Limit: the cards came from that day's methods, so artists those methods never found were never swiped.") }}</p>
+  {% set kk = olcum.kararlar %}
+  {% if kk.kesif_olculen is defined %}
+  {% set uygulandi = (kk.kesif_cezasi or 0) > 0 %}
+  <h3>{{ t("Keşif cezası", "Discovery penalty") }}</h3>
+  <p class="aciklama">{{ t("Motor skorundan γ · log(1 + liste sayısı) düşülür; az bilinen sanatçı öne geçer. γ her sorgu dışarıda bırakılarak seçildi (tümünde " ~ (kk.kesif_olculen|sayi(2)) ~ "). " ~ ("Kazanç anlamlı: üretimde γ = " ~ (kk.kesif_cezasi|sayi(2)) ~ "." if uygulandi else "Kazanç anlamlı değil: üretimde uygulanmıyor."),
+                           "The engine's score is reduced by γ · log(1 + playlist count), so lesser-known artists move up. γ was chosen with each query held out (" ~ (kk.kesif_olculen|sayi(2)) ~ " on all of them). " ~ ("The gain is significant, so production uses γ = " ~ (kk.kesif_cezasi|sayi(2)) ~ "." if uygulandi else "The gain isn't significant, so production doesn't use it.")) }}</p>
+  {% set bedel = (olcum.motor or {}).kesif_loao %}
+  {% if bedel %}
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>γ</th><th class="sayi">{{ t("gizleme: MRR", "hide test: MRR") }}</th><th class="sayi">@10</th><th class="sayi">@50</th></tr></thead>
+    <tbody>{% for g, o in bedel.items() %}
+      <tr{% if (g|float) == (kk.kesif_cezasi or 0) %} class="secili"{% endif %}><td>{{ (g|float)|sayi(2) }}</td>
+        <td class="sayi">{{ (o.mrr)|sayi(3) }}</td><td class="sayi">{{ o['recall@10']|yuzde }}</td><td class="sayi">{{ o['recall@50']|yuzde }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="aciklama soluk">{{ t("Bedel: ceza büyüdükçe sahip olduğun (genelde daha bilinen) sanatçıları geri bulmak zorlaşır. Gizleme sınaması bilineni, kararlar beğeniyi ölçer.",
+                                 "The cost: the larger the penalty, the harder it is to find artists you already own, which tend to be better known. The hide test measures reach for known artists; your decisions measure liking.") }}</p>
+  {% endif %}
+  {% endif %}
 </section>
 {% endif %}
 

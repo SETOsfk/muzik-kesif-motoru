@@ -885,8 +885,10 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
     rp3_t: list[list[tuple]] = []          # [sorgu][ızgara] → (tam sıra, destek)
     ease_t: list[list[tuple]] = []
     ozellik: list[tuple[dict, dict]] = []
+    sayim_q: list[np.ndarray] = []          # [sorgu] → liste sayısı (sızan listeler hariç)
     for q, k in enumerate(kayitlar):
         satir = G.satir_maskesi(k["haric"])
+        sayim_q.append(G.B[satir].sum(axis=0))
         tohum = {a: 1.0 for a in k["tohumlar"]}
         sahip_idx = np.array([G.sira[a] for a in k["sahip"] if a in G.sira], dtype=int)
         satirlar, tamlar = [], []
@@ -927,13 +929,15 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
              "liste": kayitlar[q]["liste"], "ses": kayitlar[q]["ses"],
              **kayitlar[q].get("dis", {})},
             ortak=toplam, tohum_payi=pay)
-        return {"havuz": havuz, "F": F, "hedef": hedef[q]}
+        sayim = {a: float(sayim_q[q][G.sira[a]]) for a in havuz if a in G.sira}
+        return {"havuz": havuz, "F": F, "hedef": hedef[q], "pop": M.populerlik(havuz, sayim)}
 
     rng = np.random.default_rng(0)
     katman = rng.permutation(n_q) % DIS_KAT
     s_rp3: list[int | None] = [None] * n_q
     s_ease: list[int | None] = [None] * n_q
     s_motor: list[int | None] = [None] * n_q
+    s_kesif = {g: [None] * n_q for g in M.KESIF_IZGARASI}   # keşif cezasının erişim bedeli
     destek = {"rp3": [0] * n_q, "ease": [0] * n_q, "motor": [0] * n_q}
     tavan = {"rp3": [False] * n_q, "ease": [False] * n_q, "motor": [False] * n_q}
     gorunur = {"rp3": [], "ease": [], "motor": []}
@@ -958,6 +962,8 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
             s_ease[q], destek["ease"][q] = ease_t[q][g_e]
             r = kayit(q, g_r, g_e)
             s_motor[q] = M._hedef_sirasi(r, theta)
+            for g in M.KESIF_IZGARASI:
+                s_kesif[g][q] = M._hedef_sirasi(r, theta, g)
             destek["motor"][q] = len(r["havuz"])
             tavan["rp3"][q] = s_rp3[q] is not None
             tavan["ease"][q] = s_ease[q] is not None
@@ -1002,6 +1008,10 @@ def motor_olc(conn: sqlite3.Connection, sonuc: dict, kayitlar: list[dict],
         "baglam_agirligi": bw, "baglam_agirligi_ease": bw_e,
         "theta": theta.round(4).tolist(), "lam_logit": lam,
         "katlar": katlar, "kiyas": kiyas, "sorgu": n_q,
+        "kesif_loao": {str(g): {"mrr": float(np.mean(_rr_listesi(v))) if n_q else 0.0,
+                                "recall@10": float(np.mean([bool(x and x <= 10) for x in v])) if n_q else 0.0,
+                                "recall@50": float(np.mean([bool(x and x <= 50) for x in v])) if n_q else 0.0}
+                       for g, v in s_kesif.items()},
     }
 
 
@@ -1031,7 +1041,7 @@ def olcum_ozeti(sonuc: dict, *, cift: dict | None = None, karar: dict | None = N
             "kiyas": ayar.get("kiyas", {}),
             "motor": {k: ayar.get(k) for k in ("alfa", "beta", "lam_ease", "baglam_agirligi",
                                                "baglam_agirligi_ease", "theta", "lam_logit",
-                                               "sorgu")} if ayar else None,
+                                               "sorgu", "kesif_cezasi", "kesif_loao")} if ayar else None,
             "secilen": "motor" if ayar else "melez"}
     if ayar:
         from python.motor import OZNITELIKLER
@@ -1296,6 +1306,14 @@ def cift_raporu(s: dict) -> str:
     return "\n".join(satirlar)
 
 
+def _gamma_sec(tablo: np.ndarray, satirlar: list[int]) -> int:
+    """[sorgu × γ × (kazanç, çift)] tablosunda verilen sorgularda AUC'si en
+    yüksek γ'nın sırası; eşitlikte küçük γ (cezasız olana yakın)."""
+    top = tablo[satirlar].sum(0)
+    auc_g = top[:, 0] / np.maximum(top[:, 1], 1)
+    return int(np.flatnonzero(auc_g >= auc_g.max() - 1e-12)[0])
+
+
 def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
                    dis: dict | None = None, tekrar: int = 2000, tohum: int = 0) -> dict:
     """Gerçek kaydırma kararlarıyla sınama: beğenilen sanatçı geçilenden yukarıda mı?
@@ -1308,7 +1326,8 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
     hiç olmayan sanatçı o yolda en düşük skoru alır. Aralık: sorgu düzeyinde
     bootstrap.
     """
-    from python.motor import OZNITELIKLER, YOL_ADLARI, ayar_oku, eksen_sirasi, oncul, puanla
+    from python.motor import (KESIF_IZGARASI, OZNITELIKLER, YOL_ADLARI, ayar_oku,
+                              eksen_sirasi, oncul, puanla)
 
     ayar = ayar or ayar_oku(conn)
     son: dict[tuple[str, int], dict[str, bool]] = defaultdict(dict)
@@ -1318,9 +1337,15 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
                 WHERE f.karar IN ('begendim', 'tutmadi') ORDER BY f.tarih"""):
         if eksen is not None and artist:
             son[(cal, int(eksen))][normalize_esleme(artist)] = karar == "begendim"
-    yollar = list(YOL_ADLARI) + ["melez", "motor"]
+    yollar = list(YOL_ADLARI) + ["melez", "populerlik", "motor", "motor_kesif"]
     sutun = {y: OZNITELIKLER.index(f"rr_{y}") for y in YOL_ADLARI}
     gruplar, kapsam, n = [], Counter(), Counter()
+    ham_gruplar = []                                   # (beğendi, motor skoru, log pop)
+
+    def kazanc(b, x):
+        L, P = x[b], x[~b]
+        return (float((L[:, None] > P[None, :]).sum() + 0.5 * (L[:, None] == P[None, :]).sum()),
+                L.size * P.size)
     for (cal, eksen), karar in sorted(son.items()):
         if len(set(karar.values())) < 2:
             continue                                   # çift kurulamıyor
@@ -1330,20 +1355,37 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
         skor = {y: F[:, sutun[y]] for y in YOL_ADLARI}
         skor["melez"] = puanla(F, oncul())
         skor["motor"] = puanla(F, np.asarray(ayar["theta"]))
+        b = np.array(list(karar.values()))
+        pop = np.array([np.log1p(r["sayim"].get(a, 0.0)) for a in karar])
         grup = {}
         for y in yollar:
-            ic = [(b, float(skor[y][idx[a]]) if a in idx else -np.inf) for a, b in karar.items()]
-            L = np.array([x for b, x in ic if b])
-            P = np.array([x for b, x in ic if not b])
-            kazanc = float((L[:, None] > P[None, :]).sum() + 0.5 * (L[:, None] == P[None, :]).sum())
-            grup[y] = (kazanc, L.size * P.size)
-            kapsam[y] += sum(1 for b, x in ic if x > 0 and np.isfinite(x))
+            if y == "populerlik":
+                x = -pop
+            elif y == "motor_kesif":
+                continue                               # γ sorgu dışarıda bırakılarak, aşağıda
+            else:
+                x = np.array([float(skor[y][idx[a]]) if a in idx else -np.inf for a in karar])
+            grup[y] = kazanc(b, x)
+            kapsam[y] += int(np.sum(np.isfinite(x) & (x > 0))) if y != "populerlik" else int(np.sum(pop > 0))
+        ham_gruplar.append((b, np.array([float(skor["motor"][idx[a]]) if a in idx else -np.inf
+                                         for a in karar]), pop))
         n["sorgu"] += 1
         n["begendim"] += sum(karar.values())
-        n["tutmadi"] += sum(not b for b in karar.values())
+        n["tutmadi"] += sum(not v for v in karar.values())
         gruplar.append(grup)
     if not gruplar:
         return {"ozet": {}, "kiyas": {}, "sayim": dict(n)}
+    # Keşif cezası γ: her sorgu için KALAN sorgularda en iyi γ (eşitlikte küçük),
+    # o sorgu onunla puanlanır. Üretim γ'sı tüm sorgularda seçilir.
+    tablo = np.array([[kazanc(b, m - g * pp) for g in KESIF_IZGARASI]
+                      for b, m, pp in ham_gruplar])     # [sorgu × γ × (kazanç, çift)]
+    secim = Counter()
+    for q, grup in enumerate(gruplar):
+        j = _gamma_sec(tablo, [k for k in range(len(gruplar)) if k != q])
+        secim[KESIF_IZGARASI[j]] += 1
+        grup["motor_kesif"] = tuple(tablo[q, j])
+        kapsam["motor_kesif"] += int(np.sum(np.isfinite(ham_gruplar[q][1])))
+    gamma = KESIF_IZGARASI[_gamma_sec(tablo, list(range(len(gruplar))))]
     W = np.array([[g[y][0] for y in yollar] for g in gruplar])
     T = np.array([[g[y][1] for y in yollar] for g in gruplar])
     rng = np.random.default_rng(tohum)
@@ -1365,7 +1407,13 @@ def karar_sinamasi(conn: sqlite3.Connection, *, ayar: dict | None = None,
                                  "alt": float(np.quantile(fark, .025)),
                                  "ust": float(np.quantile(fark, .975)),
                                  "p": float(min(1.0, 2 * min((fark <= 0).mean(), (fark >= 0).mean())))}
-    return {"ozet": ozet, "kiyas": kiyas, "sayim": dict(n)}
+    kesif = kiyas.get("motor − motor_kesif")
+    # Önceden yazılı kural: ceza ancak sorgu dışarıda bırakılarak ölçülen kazanç
+    # anlamlıysa (fark aralığı sıfırı dışlıyor) üretime girer.
+    uygula = bool(kesif and kesif["ust"] < 0)
+    return {"ozet": ozet, "kiyas": kiyas, "sayim": dict(n),
+            "kesif_cezasi": gamma if uygula else 0.0, "kesif_secimi": dict(secim),
+            "kesif_olculen": gamma}
 
 
 def karar_raporu(s: dict) -> str:
@@ -1380,7 +1428,11 @@ def karar_raporu(s: dict) -> str:
     satirlar += ["", f"{'eşli kıyas (AUC farkı)':<34}{'fark':>8}{'%95 aralık':>20}{'p':>8}"]
     for ad, k in s["kiyas"].items():
         satirlar.append(f"{ad:<34}{k['fark']:>+8.3f}{'[%+.3f, %+.3f]' % (k['alt'], k['ust']):>20}{k['p']:>8.3f}")
+    if "kesif_olculen" in s:
+        satirlar.append(f"keşif cezası γ: tüm sorgularda {s['kesif_olculen']} · sorgu başına seçim "
+                        f"{s['kesif_secimi']} · üretime giren {s['kesif_cezasi']}")
     satirlar += ["kapsam: kararlı sanatçıların o yolun listesinde bulunma payı.",
+                 "motor_kesif: motor − γ·log(1+liste sayısı), γ sorgu dışarıda bırakılarak.",
                  "Sınır: kartlar o günün stratejilerinden geldi (seçim yanlılığı).", ""]
     return "\n".join(satirlar)
 
