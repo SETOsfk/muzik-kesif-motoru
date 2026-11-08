@@ -582,3 +582,26 @@ def test_pano_grafik_tanimlari_gecerli_json():
             assert "tur" in json.loads(govde), k
         for yol in ("/statik/vendor/chart.umd.js", "/statik/grafikler.js"):
             assert istemci.get(yol).status_code == 200, yol
+
+
+def test_olcumler_sayfasi(tmp_path):
+    """Ölçüm yokken yönlendirir; `{id}.olcum.json` varken yolları, kazananı ve
+    anlamlılığı gösterir (2026-11-07)."""
+    import json as _json
+
+    import python.db as D
+
+    istemci = _oturumlu_istemci(str(tmp_path))
+    yanit = istemci.get("/olcumler")
+    assert yanit.status_code == 200 and "motor --egit" in yanit.text
+    dosya = next(D.KULLANICI_KOK.glob("*.sqlite")).with_suffix(".olcum.json") \
+        if list(D.KULLANICI_KOK.glob("*.sqlite")) else D.KULLANICI_KOK / "1.olcum.json"
+    dosya.write_text(_json.dumps({
+        "tarih": "2026-11-07", "loao": {
+            "motor": {"gizlenen": 10, "erisilebilir": 8, "recall@10": .2, "recall@50": .4,
+                      "mrr": .05, "ndcg": .16, "medyan_yuzdelik": .05, "gorunurluk": 7},
+            "melez": {"gizlenen": 10, "erisilebilir": 7, "recall@10": .1, "recall@50": .3,
+                      "mrr": .04, "ndcg": .12, "medyan_yuzdelik": .08, "gorunurluk": 9}},
+        "kiyas": {"motor − melez": {"fark": .01, "alt": .001, "ust": .02, "p": .03}}}))
+    yanit = istemci.get("/olcumler")
+    assert yanit.status_code == 200 and "anlamlı üstünlük" in yanit.text

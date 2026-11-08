@@ -139,17 +139,46 @@ def _yukle():
     return _MODEL, _ISLEMCI
 
 
+#: CLAP'ın girdi penceresi (sn). Model 10 sn görüyor.
+PENCERE_SN = 10
+
+
+def pencereler(y: np.ndarray, sr: int = CLAP_ORNEKLEME) -> list[np.ndarray]:
+    """Sabit, örtüşmeyen PENCERE_SN pencereler (30 sn → 0–10, 10–20, 20–30).
+
+    NEDEN (2026-10-20, ses araştırması bulup kaynak kodda doğrulandı):
+    `ClapFeatureExtractor` 10 sn'den uzun girdiyi TOHUMSUZ `np.random` ile
+    rastgele bir yerden kesiyor (`rand_trunc` / `fusion`). Aynı klip her
+    gömmede farklı vektör alıyordu (K2 ihlali) ve 30 sn'nin yalnız 10'u
+    görülüyordu. Tam 10 sn'lik pencere kesilmez; ortalama üçünü de görür.
+    """
+    n = PENCERE_SN * sr
+    if len(y) < n:
+        return [y]
+    parcalar = [y[i:i + n] for i in range(0, len(y) - n + 1, n)]
+    # 29,99 sn'lik klip son ~10 sn'yi atmasın: kalan ≥ 2 sn ise sona hizalı
+    # bir pencere daha (yine belirlenimci).
+    if len(y) % n >= 2 * sr:
+        parcalar.append(y[-n:])
+    return parcalar
+
+
 def klip_gomusu(y: np.ndarray) -> np.ndarray:
-    """48 kHz tek kanal sesten birim uzunluklu 512 boyutlu CLAP gömüsü.
+    """48 kHz tek kanal sesten birim uzunluklu 512 boyutlu CLAP gömüsü:
+    sabit pencerelerin birim gömülerinin ortalaması, yeniden birimlenmiş.
 
     `get_audio_features(...).pooler_output` ZATEN yansıtılmış 512 boyutlu
     gömü — üstüne `audio_projection` uygulamak (768→512) boyut hatası veriyor.
     """
     model, islemci = _yukle()
-    girdi = islemci(audio=y, sampling_rate=CLAP_ORNEKLEME, return_tensors="pt")
-    e = model.get_audio_features(**girdi).pooler_output
-    e = (e / e.norm(dim=-1, keepdim=True)).squeeze(0)
-    return e.cpu().numpy().astype("float32")
+    toplam = None
+    for parca in pencereler(y):
+        girdi = islemci(audio=parca, sampling_rate=CLAP_ORNEKLEME, return_tensors="pt")
+        e = model.get_audio_features(**girdi).pooler_output
+        e = (e / e.norm(dim=-1, keepdim=True)).squeeze(0)
+        toplam = e if toplam is None else toplam + e
+    toplam = toplam / toplam.norm()
+    return toplam.cpu().numpy().astype("float32")
 
 
 def onizleme_gomusu(url: str) -> np.ndarray | None:
@@ -211,15 +240,15 @@ def klip_miksi(onizleme_url: str) -> np.ndarray | None:
     return librosa.resample(miks / tepe, orig_sr=22050, target_sr=CLAP_ORNEKLEME)
 
 
-def gomu_cikar(conn: sqlite3.Connection, *, limit: int | None = None) -> int:
+def gomu_cikar(conn: sqlite3.Connection, *, limit: int | None = None,
+               yeniden: bool = False) -> int:
     """Ses gömülerini hesapla ve diske al.
 
     Pahalı adım bu; sözlük değiştikçe TEKRARLANMAMASI için saklanıyor.
+    `yeniden`: var olanların üstüne yaz (pencere düzeltmesinden sonra bir kez;
+    kütüphane ve havuz BİRLİKTE yenilenmeli, yoksa iki yöntem karışır).
     """
-    import torch
-
     GOMU_KLASOR.mkdir(parents=True, exist_ok=True)
-    model, islemci = _yukle()
 
     hedefler = conn.execute(
         """SELECT DISTINCT album_id, tur, onizleme_url FROM stem_profili
@@ -231,20 +260,12 @@ def gomu_cikar(conn: sqlite3.Connection, *, limit: int | None = None) -> int:
     sayac = 0
     for sira, (album_id, tur, url) in enumerate(hedefler, 1):
         dosya = GOMU_KLASOR / f"{album_id}.npy"
-        if dosya.exists():
+        if dosya.exists() and not yeniden:
             continue
         ses = klip_miksi(url)
         if ses is None:
             continue
-        girdi = islemci(audio=ses, sampling_rate=CLAP_ORNEKLEME,
-                        return_tensors="pt")
-        # `get_audio_features(...).pooler_output` ZATEN yansıtılmış 512
-        # boyutlu gömü — üstüne `audio_projection` uygulamak (768→512)
-        # boyut hatası veriyor.
-        cikti = model.get_audio_features(**girdi)
-        gomu = cikti.pooler_output
-        gomu = (gomu / gomu.norm(dim=-1, keepdim=True)).squeeze(0)
-        np.save(dosya, gomu.cpu().numpy().astype("float32"))
+        np.save(dosya, klip_gomusu(ses))
         sayac += 1
         if sira % 25 == 0:
             print(f"  {sira}/{len(hedefler)} · {sayac} yeni", file=sys.stderr)
@@ -315,19 +336,21 @@ def main(argv: list[str] | None = None) -> int:
     #: (1.384 sanatçı). Düşürmek uzun kuyruğu açar: ses benzerliği PMI'a
     #: ihtiyaç duymaz, tek listede geçen sanatçıyı da bulabilir — ve
     #: "hiç duymadığım sanatçı" hedefi tam orada yaşıyor.
-    ayristirici.add_argument("--asgari-liste", type=int, default=3)
+    ayristirici.add_argument("--asgari-liste", type=int, default=PARCA_ASGARI_LISTE)
+    ayristirici.add_argument("--yeniden", action="store_true",
+                             help="var olan gömülerin üstüne yaz (pencere düzeltmesi)")
     args = ayristirici.parse_args(argv)
 
     conn = baglan(args.db)
     try:
         if args.parca_gomu:
             s = parca_gomule(conn, limit=args.limit,
-                             asgari_liste=args.asgari_liste)
+                             asgari_liste=args.asgari_liste, yeniden=args.yeniden)
             print(f"denenen {s['denenen']} · gömülen {s['gomulen']} · "
                   f"atlanan {s['atlanan']}")
             return 0
         if args.gomu:
-            print(f"{gomu_cikar(conn, limit=args.limit)} yeni gömü")
+            print(f"{gomu_cikar(conn, limit=args.limit, yeniden=args.yeniden)} yeni gömü")
         if args.etiketle or not args.gomu:
             satirlar = etiketle(conn)
             print(f"{yaz(conn, satirlar)} CLAP etiketi, "
@@ -443,9 +466,14 @@ def benzer_adaylar(
 PARCA_GOMU = Path("data/cache/clap_parca")
 
 
+#: Bir sanatçının parçaları ancak bu kadar AYRI listede geçiyorsa gömülür.
+#: Değerlendirme aynı eşiği sızıntı katmanında yeniden uygular.
+PARCA_ASGARI_LISTE = 3
+
+
 def parca_gomule(
-    conn: sqlite3.Connection, *, asgari_liste: int = 3, kisi_basi: int = 2,
-    limit: int | None = None,
+    conn: sqlite3.Connection, *, asgari_liste: int = PARCA_ASGARI_LISTE, kisi_basi: int = 2,
+    limit: int | None = None, yeniden: bool = False,
 ) -> dict[str, int]:
     """Çalma listesi parçalarını göm — sanatçı başına birkaç parça.
 
@@ -483,7 +511,7 @@ def parca_gomule(
     sayac = {"denenen": 0, "gomulen": 0, "atlanan": 0}
     for sira, (parca_id, sanatci, parca) in enumerate(secilen, 1):
         dosya = PARCA_GOMU / f"{parca_id}.npy"
-        if dosya.exists():
+        if dosya.exists() and not yeniden:
             continue
         sayac["denenen"] += 1
         try:
@@ -531,6 +559,41 @@ SES_KURALI = "cok_sesli"
 KOMSU_K = 3
 KOMSU_COGUNLUK = 2
 ASGARI_PARCA = 2
+
+
+#: Ses benzerliğinin ölçeği. "merkez" (varsayılan): kosinüsten iki tarafın
+#: ortalama benzerliği çıkarılır — cebirsel olarak (a−m)·(u−m) − ‖m‖², yani
+#: ortalama MERKEZLEME. "mp": Mutual Proximity (Schnitzer ve ark. 2012, Gauss
+#: yaklaşımı) — iki tarafın da kendi benzerlik dağılımında komşuyu ne kadar
+#: «yakın» bulduğu. Feldbauer & Flexer 2019 kıyasında ölçekleme yöntemleri
+#: tutarlı kazandı, merkezleme karışıktı (`docs/arastirma/3-*`). ÖLÇÜLMEDİ:
+#: `degerlendirme --ses-olcek mp` ile kıyaslanmadan varsayılan olmaz (K19).
+SES_OLCEGI = "merkez"
+
+
+def _phi(z: np.ndarray) -> np.ndarray:
+    """Standart normal dağılım fonksiyonu — Abramowitz & Stegun 7.1.26 erf
+    yaklaşımı (en büyük hata 1,5e-7); scipy bağımlılığı yok."""
+    x = np.abs(z) / np.sqrt(2.0)
+    t = 1.0 / (1.0 + 0.3275911 * x)
+    y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+                - 0.284496736) * t + 0.254829592) * t * np.exp(-x * x)
+    return 0.5 * (1.0 + np.sign(z) * y)
+
+
+def mutual_proximity(S: np.ndarray) -> np.ndarray:
+    """(havuz × kütüphane) ham kosinüsten Gauss MP: Φ(z_satır) · Φ(z_sütun)."""
+    z_s = (S - S.mean(axis=1, keepdims=True)) / (S.std(axis=1, keepdims=True) + 1e-9)
+    z_u = (S - S.mean(axis=0, keepdims=True)) / (S.std(axis=0, keepdims=True) + 1e-9)
+    return _phi(z_s) * _phi(z_u)
+
+
+def ses_olcegi(S: np.ndarray, taban_satir, taban_sutun, yontem: str | None = None
+               ) -> np.ndarray:
+    """Üretim ve değerlendirmenin ORTAK ölçekleme işlevi (K19)."""
+    if (yontem or SES_OLCEGI) == "mp":
+        return mutual_proximity(S)
+    return S - taban_satir - taban_sutun
 
 
 def komsu_cogunlugu(tum: np.ndarray, eksende: np.ndarray, k: int = KOMSU_K
@@ -645,7 +708,7 @@ def acik_havuz_adaylari(
     # 0,10→0,09); yinelenme tanım gereği sıfır.
     if len(k_tum) >= 10:
         taban_tum = (A_tum @ A_tum.T).mean(axis=1, keepdims=True)
-        S_tum = A_havuz @ A_tum.T - taban_havuz - taban_tum.T
+        S_tum = ses_olcegi(A_havuz @ A_tum.T, taban_havuz, taban_tum.T)
         uye_kume = set(k_uye)
         eksende = np.array([k in uye_kume for k in k_tum])
         skor = np.where(eksende[S_tum.argmax(axis=1)], skor, -np.inf)

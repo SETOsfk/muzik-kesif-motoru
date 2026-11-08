@@ -63,11 +63,13 @@ from urllib.parse import quote, quote_plus
 
 from python.ceviri import etiket_adi
 from python.dil import t
-from python.gerekce import gerekce as gerekce_yaz, strateji_adi
+from python.gerekce import gerekce as gerekce_yaz, strateji_adi, uzlasma_cumlesi
 from python.metin import normalize_esleme
 
-#: Ölçülmüş sıra (README, leave-one-artist-out @50). Değişirse önce ölçülür.
-ANA_SIRA = ("melez", "liste_birlikteligi", "ses_benzerligi")
+#: Ana kaynaklar. Aralarındaki pay Thompson örneklemesiyle gerçek kararlardan
+#: (K21); sıra yalnız eşitlik bozar. `motor` 2026-10-20: `python -m python.motor
+#: --egit` ile ayarlanır, iç içe CV ile ölçülür (`degerlendirme --motor`).
+ANA_SIRA = ("motor", "melez", "liste_birlikteligi", "ses_benzerligi")
 
 #: Kadro grafiği yolları. Ölçütü tam onların işini ölçmüyor (bkz.
 #: `web/sunucu.py:NIS_STRATEJILER`); destede yalnız istenirse ("cesur" kaynak).
@@ -84,6 +86,29 @@ DURUMLAR = ("yeni", "dinlendi", "edinildi")
 #: ötesi ölçülmemiş bölge (K19). Tavan ölçüm genişletilmeden artırılmaz.
 BUYUTME_TAVANI = 50
 BUYUTME_ADIMI = 20
+
+#: Kanıt aileleri: aynı veriden türeyen yollar tek aile sayılır (melez, liste
+#: ve sesin kaynaşması; kendi ailesi `dayanak.kaynaklar`'dan okunur).
+KANIT_AILESI = {
+    "liste_birlikteligi": "liste", "ses_benzerligi": "ses",
+    # Motorun yolları (`dayanak.kaynaklar`): üç liste yolu aynı veriden;
+    # kalabalık benzerliği (Deezer, ListenBrainz) «sahne», kadro bağı «kredi».
+    "rp3": "liste", "ease": "liste", "liste": "liste", "ses": "ses",
+    "deezer_benzer": "sahne", "listenbrainz": "sahne", "kadro": "kredi",
+    "kredi_sicramasi": "kredi", "sahne_komsulugu": "sahne",
+    "bilincli_uzaklik": "uzaklik",
+}
+
+#: Uzlaşma ödülü: satırın KENDİ ailesi dışında aynı sanatçıyı gösteren her
+#: bağımsız aile için strateji içi sırada UZLASMA_BASAMAK basamak yukarı; en çok
+#: UZLASMA_AZAMI aile sayılır (en çok 4 basamak). ÖLÇÜLMEDİ (2026-10-20,
+#: kullanıcının «tutarlı ve güçlü öneri» isteğiyle varsayılan) —
+#: `uzlasma_isabeti` gerçek kararlardan «ödül almadı» ↔ «ödül aldı» zevk
+#: isabetini kıyaslar. Sıra uzayında, σ'da DEĞİL: melez/motor skorları
+#: 1/basamak ve σ'yı birinci sıra belirliyor; σ'lı ödül 12. adayı 3. sıraya
+#: sıçratıyordu (2026-10-20 incelemesi). Sıralamayı devirmez, kaydırır.
+UZLASMA_BASAMAK = 2
+UZLASMA_AZAMI = 2
 
 
 def _simdi() -> str:
@@ -151,6 +176,44 @@ class _Satir:
     gerekce: str
     skor: float
     dayanak: str | None = None
+    kendi: frozenset | None = None      # satırın kendi kanıt aileleri (önbellek)
+
+
+def _kendi_aileler(s: "_Satir") -> frozenset:
+    """Satırın kendi aileleri bir kez ayrıştırılır (sıralama anahtarında
+    her karşılaştırmada JSON çözülmesin)."""
+    if s.kendi is None:
+        s.kendi = frozenset(_aileler(s.strateji, s.dayanak))
+    return s.kendi
+
+
+def _aileler(strateji: str, dayanak) -> set[str]:
+    """Satırın kanıt aileleri. Melez kendi kaynaklarını taşır."""
+    if strateji in ("melez", "motor"):
+        try:
+            d = json.loads(dayanak) if isinstance(dayanak, str) else (dayanak or {})
+        except ValueError:
+            d = {}
+        return {KANIT_AILESI[k] for k in d.get("kaynaklar") or [] if k in KANIT_AILESI}
+    return {KANIT_AILESI[strateji]} if strateji in KANIT_AILESI else set()
+
+
+def sanatci_aileleri(conn: sqlite3.Connection, calisma_id: str) -> dict[str, set[str]]:
+    """{sanatçı anahtarı: o sanatçıyı gösteren kanıt aileleri} — tüm eksenler,
+    tüm stratejiler. Bir sanatçıya farklı verilerden (kadro, liste, ses)
+    birbirinden habersiz varılıyorsa bu, tek bir yolun skorundan güçlü kanıt."""
+    sonuc: dict[str, set[str]] = {}
+    for strateji, artist, dayanak in conn.execute(
+            "SELECT strateji, artist, dayanak FROM adaylar WHERE calisma_id = ?",
+            (calisma_id,)):
+        sonuc.setdefault(normalize_esleme(artist), set()).update(
+            _aileler(strateji, dayanak))
+    return sonuc
+
+
+def _ek_aileler(s: _Satir, aileler: dict[str, set[str]]) -> set[str]:
+    """Satırın kendi ailesi DIŞINDA sanatçıyı gösteren aileler."""
+    return aileler.get(normalize_esleme(s.artist), set()) - _kendi_aileler(s)
 
 
 def strateji_sonsallari(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
@@ -174,26 +237,66 @@ def strateji_sonsallari(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
     return {st: (b, t) for st, (b, t) in sayim.items()}
 
 
+def uzlasma_isabeti(conn: sqlite3.Connection) -> list[dict]:
+    """Zevk isabeti, kararın verildiği satır uzlaşma ÖDÜLÜ almış mı (kendi
+    ailesi DIŞINDA en az bir aile — destedeki ödülün tanımıyla aynı) diye.
+    UZLASMA_BASAMAK'ın ölçümü budur: «cok» isabeti «tek»inkinden yüksek
+    değilse ödül kaldırılır. Sanatçı düzeyinde, son karar; «zaten biliyorum»
+    paydaya girmez. Sınır: aileler BUGÜNKÜ adaylardan; sonradan eklenen
+    stratejiler eski kararın grubunu değiştirebilir."""
+    from python.geri_bildirim import wilson
+
+    son: dict[tuple[str, str], tuple] = {}
+    for calisma_id, artist, strateji, dayanak, karar in conn.execute(
+        """SELECT f.calisma_id, a.artist, a.strateji, a.dayanak, f.karar FROM feedback f
+             JOIN adaylar a ON a.aday_id = f.aday_id AND a.calisma_id = f.calisma_id
+            WHERE f.karar IN ('begendim', 'tutmadi') ORDER BY f.tarih"""):
+        son[(calisma_id, normalize_esleme(artist))] = (strateji, dayanak, karar)
+    aile_onbellek: dict[str, dict[str, set[str]]] = {}
+    sayim = {"tek": [0, 0], "cok": [0, 0]}
+    for (calisma_id, anahtar), (strateji, dayanak, karar) in son.items():
+        if calisma_id not in aile_onbellek:
+            aile_onbellek[calisma_id] = sanatci_aileleri(conn, calisma_id)
+        ek = aile_onbellek[calisma_id].get(anahtar, set()) - _aileler(strateji, dayanak)
+        grup = "cok" if ek else "tek"
+        sayim[grup][0 if karar == "begendim" else 1] += 1
+    sonuc = []
+    for grup, (b, tt) in sayim.items():
+        oran, alt, ust = wilson(b, b + tt)
+        sonuc.append({"grup": grup, "begendim": b, "tutmadi": tt,
+                      "isabet": oran, "alt": alt, "ust": ust})
+    return sonuc
+
+
 def _strateji_sirasi(satirlar: list[_Satir], etki: dict[str, tuple[float, str]],
-                     tavan: float) -> list[_Satir]:
+                     tavan: float, aileler: dict[str, set[str]] | None = None,
+                     ) -> list[_Satir]:
     """Bir stratejinin kendi sırası — skor + geri bildirim kayması (σ, o
-    stratejinin kendi skorlarından). Eşitlikte çalınabilir olan öne geçer."""
+    stratejinin kendi skorlarından), sonra uzlaşma ödülü SIRA uzayında
+    (aile başına UZLASMA_BASAMAK basamak). Eşitlikte önce uzlaşma, sonra
+    çalınabilir olan öne geçer."""
     if not satirlar:
         return []
     skorlar = [s.skor for s in satirlar]
     ort = sum(skorlar) / len(skorlar)
     sigma = (sum((x - ort) ** 2 for x in skorlar) / len(skorlar)) ** 0.5
+    ek = {id(s): min(len(_ek_aileler(s, aileler)), UZLASMA_AZAMI) if aileler else 0
+          for s in satirlar}
 
     def ayarli(s: _Satir) -> float:
         pay = etki.get(normalize_esleme(s.artist), (0.0, ""))[0]
         return s.skor + tavan * pay * sigma
 
-    return sorted(satirlar, key=lambda s: (-ayarli(s), s.parca_id is None))
+    temel = sorted(satirlar, key=lambda s: (-ayarli(s), -ek[id(s)], s.parca_id is None))
+    yer = {id(s): k for k, s in enumerate(temel)}
+    return sorted(temel, key=lambda s: (yer[id(s)] - UZLASMA_BASAMAK * ek[id(s)],
+                                        -ek[id(s)], yer[id(s)]))
 
 
 def _eksen_sirasi(satirlar: list[_Satir], stratejiler: tuple[str, ...],
                   etki: dict[str, tuple[float, str]], tavan: float,
-                  sonsal: dict[str, tuple[int, int]], rng) -> list[_Satir]:
+                  sonsal: dict[str, tuple[int, int]], rng,
+                  aileler: dict[str, set[str]] | None = None) -> list[_Satir]:
     """Bir eksenin sanatçı sırası — her sanatçı bir kez.
 
     Her adımda kaynak strateji Thompson örneklemesiyle seçilir: her yolun
@@ -201,7 +304,8 @@ def _eksen_sirasi(satirlar: list[_Satir], stratejiler: tuple[str, ...],
     Seçilen yolun sıradaki (henüz görülmemiş) sanatçısı alınır.
     """
     kuyruklar = {
-        st: _strateji_sirasi([s for s in satirlar if s.strateji == st], etki, tavan)
+        st: _strateji_sirasi([s for s in satirlar if s.strateji == st], etki, tavan,
+                             aileler)
         for st in stratejiler
     }
     imlec = {st: 0 for st in kuyruklar}
@@ -287,8 +391,9 @@ def deste(
     sonsal = strateji_sonsallari(conn)
     karar_sayisi = conn.execute("SELECT COUNT(*) FROM feedback").fetchone()[0]
     rng = random.Random(f"{calisma_id}:{karar_sayisi}")
+    aileler = sanatci_aileleri(conn, calisma_id)
     siralar = {
-        e: _eksen_sirasi(g, stratejiler, etki, ETKI_TAVANI, sonsal, rng)
+        e: _eksen_sirasi(g, stratejiler, etki, ETKI_TAVANI, sonsal, rng, aileler)
         for e, g in sorted(eksene_gore.items())
     }
 
@@ -320,13 +425,14 @@ def deste(
     kalan = len(tum_sanatci) - len(gorulen)
 
     adlar = kutuphane_adlari(conn)
-    kartlar = [_kart(conn, calisma_id, s, etki, baglam, olcum, eksen_adlari, adlar)
+    kartlar = [_kart(conn, calisma_id, s, etki, baglam, olcum, eksen_adlari, adlar,
+                     _ek_aileler(s, aileler))
                for s in secilen]
     return {"kartlar": kartlar, "kalan": max(0, kalan), "toplam": toplam}
 
 
 def _kart(conn, calisma_id: str, s: _Satir, etki, baglam, olcum,
-          eksen_adlari, adlar) -> dict:
+          eksen_adlari, adlar, ek_aile: set[str] = frozenset()) -> dict:
     anahtar = normalize_esleme(s.artist)
     kimlikler = [r[0] for r in conn.execute(
         "SELECT DISTINCT aday_id FROM adaylar WHERE calisma_id = ? AND artist = ?",
@@ -347,8 +453,11 @@ def _kart(conn, calisma_id: str, s: _Satir, etki, baglam, olcum,
         "medya_hazir": m is not None,
         "eksen": s.eksen, "eksen_ad": eksen_ad,
         "strateji": s.strateji, "strateji_ad": strateji_adi(s.strateji),
-        "gerekce": gerekce_yaz(s.strateji, s.dayanak, eksen=eksen_ad,
-                               saklanan=s.gerekce, adlar=adlar),
+        "gerekce": " ".join(filter(None, (
+            gerekce_yaz(s.strateji, s.dayanak, eksen=eksen_ad,
+                        saklanan=s.gerekce, adlar=adlar),
+            uzlasma_cumlesi(ek_aile)))),
+        "uzlasma": sorted(ek_aile),
         "geri_bildirim": etki_gerekce if abs(etki_pay) > 0 else "",
         "geri_bildirim_yon": "arti" if etki_pay > 0 else ("eksi" if etki_pay < 0 else ""),
         "baglam": [etiket_adi(e) for e in baglam.get(anahtar, [])[:3]],

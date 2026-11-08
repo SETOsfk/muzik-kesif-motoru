@@ -120,7 +120,7 @@ ASGARI_ALBUM = 20
 
 #: Ana akışın stratejileri (`web/sunucu.py:ANA_STRATEJILER`). Kredi/kalabalık
 #: grafiği stratejileri Spotify albümünde çalışmaz — kredisi yok.
-STRATEJILER = ("liste_birlikteligi", "ses_benzerligi", "melez")
+STRATEJILER = ("liste_birlikteligi", "ses_benzerligi", "melez", "motor")
 
 #: Listeyle gelen albümsüz sanatçı başına alınan albüm. Bir albüm sanatçıyı
 #: tek bir döneme bağlıyor; üç ve fazlası kümeleri sanatçı sınırına

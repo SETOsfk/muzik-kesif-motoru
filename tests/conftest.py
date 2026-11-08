@@ -47,3 +47,15 @@ def _aktarim_sureci_baslatilmaz(monkeypatch):
         return gercek(arg, *a, **k)
 
     monkeypatch.setattr(subprocess, "Popen", _koruma)
+
+
+@pytest.fixture(autouse=True)
+def _veri_kokleri_gecici(tmp_path, monkeypatch):
+    """Hiçbir test depo kökündeki `data/`ya yazmaz: ortak ve kullanıcı
+    veritabanı yolları her testte geçici dizine yönlenir. Ölçüldü (2026-11-08):
+    iki web testi oturum ara katmanı üzerinden `data/db/ortak.sqlite` yaratıyordu;
+    Mac'te bu, gerçek ortak veritabanıydı."""
+    import python.db as D
+
+    monkeypatch.setattr(D, "VARSAYILAN_ORTAK", tmp_path / "veri" / "ortak.sqlite")
+    monkeypatch.setattr(D, "KULLANICI_KOK", tmp_path / "veri" / "kullanici")

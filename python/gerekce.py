@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import re
 
+from python.metin import normalize_esleme
 from python.dil import dil, sayi, t
 
 #: Bu sayıdan az ortak listeye dayanan bağ "zayıf kanıt" olarak işaretlenir.
@@ -121,6 +122,8 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
         return _ses_cumlesi(benzedigi, d) + " " + t(
             "Her şeye benzeyen kayıtlar öne çıkmasın diye skor düzeltildi.",
             "The score is corrected so that tracks resembling everything don't float up.")
+    if strateji == "motor" and ("tohumlar" in d or d.get("kadro") or d.get("kalabalik")):
+        return _motor_cumlesi(d, eksen, benzedigi)
     if strateji == "melez":
         parcalar = []
         if "pmi" in d:
@@ -133,6 +136,58 @@ def gerekce(strateji: str, dayanak, *, eksen: str, saklanan: str = "",
     if dil() == "tr" and saklanan:
         return saklanan
     return _genel(strateji, d, eksen, saklanan)
+
+
+def _motor_cumlesi(d: dict, eksen: str, benzedigi: str | None) -> str:
+    """Motor kartı: en çok katkı veren kütüphane sanatçıları, ortak liste
+    sayıları ve varsa ses kanıtı. Sayılar `motor.eksen_sirasi`'ndan."""
+    parcalar = []
+    tohumlar = [(ad, int(n)) for ad, n in (d.get("tohumlar") or []) if n][:3]
+    if tohumlar:
+        liste = ", ".join(f"{ad} ({n})" for ad, n in tohumlar)
+        parcalar.append(t(
+            f"Çalma listelerinde «{eksen}» ekseninden şu sanatçılarla yan yana: "
+            f"{liste} — parantezde ortak liste sayısı.",
+            f"In playlists it sits next to these «{eksen}» artists: {liste} "
+            f"(shared playlists in brackets)."))
+        # Eşik AYRI liste sayısıyla: tohum başına sayılar toplanırsa aynı
+        # liste birden çok kez sayılır ve uyarı tam Sezen Aksu tipi vakada kaybolur.
+        tekil = int(d.get("tekil_ortak_liste") or max(n for _, n in tohumlar))
+        if tekil <= ZAYIF_LISTE:
+            parcalar.append(t(
+                f"Zayıf kanıt: yalnız {tekil} ayrı listeye dayanıyor.",
+                f"Weak evidence: it rests on only {tekil} separate "
+                f"playlist{'s' if tekil != 1 else ''}."))
+    kadro = d.get("kadro") or {}
+    if kadro.get("tohum") and kadro.get("kisiler"):
+        tohum = kadro["tohum"]
+        digerleri = [k for k in list(kadro["kisiler"])[:3]
+                     if normalize_esleme(k) != normalize_esleme(tohum)]
+        kisiler = _bagla(digerleri, t("ve", "and")) if digerleri else ""
+        if len(digerleri) < len(list(kadro["kisiler"])[:3]):
+            # Ortak kişi tohumun kendisi (Dave Weckl → Chick Corea Elektric Band).
+            parcalar.append(t(
+                f"Kadro bağı: kütüphanendeki «{tohum}» bu kadroda çalıyor"
+                + (f"; ortak müzisyen — {kisiler}." if kisiler else "."),
+                f"Lineup link: «{tohum}» from your library plays in this lineup"
+                + (f"; shared musicians: {kisiler}." if kisiler else ".")))
+        else:
+            parcalar.append(t(
+                f"Kadro bağı: kütüphanendeki «{tohum}» ile ortak müzisyen — {kisiler}.",
+                f"Lineup link: shares musicians with «{tohum}» from your library: {kisiler}."))
+    kalabalik = list(d.get("kalabalik") or [])[:3]
+    if kalabalik:
+        adlar = _bagla(kalabalik, t("ve", "and"))
+        parcalar.append(t(
+            f"Dinleyici kalabalığı: dinleyicileri {adlar} ile örtüşüyor (Deezer, ListenBrainz).",
+            f"Listener crowd: people who play {adlar} also play this (Deezer, ListenBrainz)."))
+    if benzedigi:
+        parcalar.append(_ses_cumlesi(benzedigi, d))
+    n = int(d.get("liste_sayisi") or 0)
+    if n:
+        parcalar.append(t(f"Toplam {sayi(n, 0)} listede geçiyor.",
+                          f"Appears in {sayi(n, 0)} playlists overall."))
+    return " ".join(parcalar)
 
 
 def _genel(strateji: str, d: dict, eksen: str, saklanan: str) -> str:
@@ -165,6 +220,7 @@ def geri_bildirim_cumlesi(yon: str, sanatci: str) -> str:
 
 
 STRATEJI_ADI = {
+    "motor": ("motor", "engine"),
     "melez": ("liste + ses", "playlists + sound"),
     "liste_birlikteligi": ("çalma listelerinden", "from playlists"),
     "ses_benzerligi": ("sesi benziyor", "similar sound"),
@@ -172,6 +228,71 @@ STRATEJI_ADI = {
     "sahne_komsulugu": ("1 adım: komşular", "1 step: neighbours"),
     "bilincli_uzaklik": ("2 adım: bilinçli uzaklık", "2 steps: deliberate distance"),
 }
+
+
+#: Kanıt ailesi adları (`kesif.KANIT_AILESI`), cümle içinde.
+#: Kanıt ailesi adları (`kesif.KANIT_AILESI`): (Türkçe, İngilizce, İngilizcede çoğul mu).
+AILE_ADI = {
+    "liste": ("çalma listeleri", "playlists", True),
+    "ses": ("ses benzerliği", "sound similarity", False),
+    "kredi": ("ortak müzisyenler", "shared musicians", True),
+    "sahne": ("kalabalık komşuluğu", "listener neighbourhood", False),
+    "uzaklik": ("iki adımlı kalabalık yolu", "two-step listener path", False),
+}
+
+
+def _bagla(ogeler: list[str], ve: str) -> str:
+    return ogeler[0] if len(ogeler) == 1 else ", ".join(ogeler[:-1]) + f" {ve} " + ogeler[-1]
+
+
+def _de_da(sozcuk: str) -> str:
+    """Türkçe «de/da» bağlacı, son ünlüye göre (kalın → da, ince → de)."""
+    for harf in reversed(sozcuk.lower()):
+        if harf in "aıou":
+            return "da"
+        if harf in "eiöü":
+            return "de"
+    return "de"
+
+
+def uzlasma_cumlesi(aileler) -> str:
+    """Başka bağımsız yollar da aynı sanatçıyı gösteriyorsa onu söyler."""
+    secili = [AILE_ADI[a] for a in sorted(aileler or ()) if a in AILE_ADI]
+    if not secili:
+        return ""
+    tr = _bagla([a[0] for a in secili], "ve")
+    en = _bagla([a[1] for a in secili], "and")
+    fiil = "point" if len(secili) > 1 or secili[0][2] else "points"
+    return t(f"Ayrıca bağımsız olarak {tr} {_de_da(tr)} bu sanatçıyı gösteriyor.",
+             f"Independently, {en} also {fiil} to this artist.")
+
+
+#: Ölçüm yollarının adları (Ölçümler sayfası, raporlar). Kart stratejileri
+#: STRATEJI_ADI'nda; burada değerlendirmenin bütün erişim yolları.
+YOL_ADI = {
+    "liste_birlikteligi": ("çalma listesi bağı (npmi)", "playlist link (npmi)"),
+    "ses_benzerligi": ("ses benzerliği", "sound similarity"),
+    "melez": ("melez: liste + ses", "hybrid: playlists + sound"),
+    "rp3": ("liste grafiği: RP3β", "playlist graph: RP3β"),
+    "ease": ("liste grafiği: EASE", "playlist graph: EASE"),
+    "deezer_benzer": ("Deezer benzerleri", "Deezer related artists"),
+    "listenbrainz": ("ListenBrainz kalabalığı", "ListenBrainz crowd"),
+    "kadro": ("MusicBrainz kadrosu", "MusicBrainz lineups"),
+    "motor": ("motor: öğrenilmiş birleşim", "engine: learned blend"),
+    "motor_kesif": ("motor + keşif cezası", "engine + discovery penalty"),
+    "motor_uyumlu": ("motor + kümeleme girdisi (eksen uyumu)", "engine + clustering input (axis fit)"),
+    "populerlik": ("yalnız popülerlik (az bilinen önde)", "popularity only (lesser-known first)"),
+    "rrf_tum": ("eşit ağırlıklı birleşim", "equal-weight blend"),
+    "birlesim": ("öğrenilmiş birleşim", "learned blend"),
+    "kredi_sicramasi": ("kadrondaki müzisyenler", "musicians you know"),
+    "sahne_komsulugu": ("1 adım: komşular", "1 step: neighbours"),
+    "bilincli_uzaklik": ("2 adım: bilinçli uzaklık", "2 steps: deliberate distance"),
+}
+
+
+def yol_adi(yol: str) -> str:
+    tr, en = YOL_ADI.get(yol, (yol, yol))
+    return t(tr, en)
 
 
 def strateji_adi(strateji: str) -> str:

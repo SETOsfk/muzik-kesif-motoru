@@ -2794,3 +2794,276 @@ sınırı: sahiplik tercihtir, ama tarihi vardır).
   kaynaklı albümler kütüphaneden çıkar; elle liste ve yerel taramaya dokunulmaz.
 - Eski bağlantının yetkisinde liste kapsamı yok: listeler atlanır, sayfa
   yeniden bağlanmayı önerir. Etkisi ÖLÇÜLMEDİ (Spotify'lı kullanıcı verisi yok).
+
+### 2026-10-20 (21) — Destede kaynak uzlaşması; geri bildirim ölçeği aykırı değere dayanıklı
+
+**İstek:** «Öneriler çok tutarlı ve güçlü olsun; daha stabil, daha iyi seçim.»
+
+- **Uzlaşma ödülü** (`kesif.UZLASMA_AGIRLIGI`, `sanatci_aileleri`): bir sanatçıya
+  birbirinden habersiz kanıt aileleri (liste, ses, kredi, sahne, uzaklık) varıyorsa
+  strateji içi sırada her ek aile için +0,5 σ, en çok 2 aile (tavan 1 σ). Satırın
+  KENDİ ailesi sayılmaz: melez zaten liste+sesi kaynaştırıyor, iki kez ödüllenmez.
+  σ = 0 iken uzlaşma eşitlik bozucu. Kart gerekçesi ek aileleri söylüyor
+  (`gerekce.uzlasma_cumlesi`).
+- **ÖLÇÜLMEDİ** — kullanıcının açık isteğiyle varsayılan (2026-09-28 (18) ile aynı
+  istisna). Ölçümü gerçek kararlardan: `kesif.uzlasma_isabeti` «tek yol» ↔
+  «birden çok yol» zevk isabeti, Wilson aralığıyla; Sayılarla sayfasında yollar
+  grafiğine ekleniyor (grup başına ≥ 4 karar). Birden çok yolun isabeti tek
+  yolunkinden yüksek değilse ödül kaldırılır.
+- **Geri bildirim ölçeği** (`geri_bildirim.yakinlik_etkisi`): [-1, +1] ölçeği en büyük
+  |fark| yerine 90. yüzdelikten, kırpılarak. Tek aykırı aday eskiden tüm kaymaları
+  sıfıra eziyordu; her yeni kararla sıra sıçrıyordu.
+
+### 2026-10-20 (22) — Araştırma, sınama sızıntısı, motor
+
+**İstek:** «Bütün öneri sistemleri makalelerini oku, forumları oku, güçlü bir
+motor inşa et, o motor üzerinden ilerleyelim.» Altı araştırma ajanı
+(`docs/arastirma/`), ~210 arama. Tam metin okunamadı (WebFetch DNS, ağ
+politikası); bulgular özet düzeyinde ve raporlarda işaretli.
+
+- **Sınama SIZINTISI (iki ajan bağımsız buldu, kodda doğrulandı).** Listeler
+  kütüphane sanatçılarının adıyla aranarak toplandı; gizlenen sanatçının
+  aramasıyla bulunmuş listeler katmanda kalıyordu. `sizinti_listeleri`:
+  liste ancak gizlenen DIŞINDA bir sanatçının araması da bulduysa kalır
+  (önbellekteki arama yanıtlarından; yoksa `tohum_sanatci`). Ses havuzunda
+  yalnız o listelerden gelen parçalar da düşer. **Varsayılan açık.** Bu tarihten
+  önceki bütün K19 sayıları eski protokolle; kıyas için `--eski-protokol`.
+- **Motor** (`python/motor.py`).
+  - Erişim yolları: RP3β (α liste boyutu cezası, β popülerlik cezası) ve EASE
+    (Woodbury formu, 482×482 ters alma). Dil ve ruh hâli listelerinin ağırlığı
+    kısılıyor; başlıkta tarz sözcüğü varsa liste bağlam sayılmaz.
+  - Füzyon: koşullu logit. Öznitelikler dört yolun sıra puanı, ortak liste
+    sayısı, bağlı tohum payı ve popülerlik.
+  - Öncül şimdiki melez (liste 1 : ses 2) ve λ iç CV'yle seçiliyor. λ → ∞
+    iken motor melezle aynı.
+  - Popülerlik öznitelik değil. PDA (eğitimde kullan, puanlamada kapat) yapılı
+    yapay veride motoru çökertti (MRR 0,031 → 0,003): ortak liste sayısı
+    popülerlikle ilişkili, biri kapatılınca öteki popüler sanatçıyı öne itti.
+    Popülerlik cezası RP3β'nın β'sında.
+  - Bütün ayarlar (α, β, bağlam ağırlığı, λ, θ) 10 katlı dış CV'nin her katında
+    yalnız eğitim sorgularında seçiliyor; rapor edilen sayılar dışarıdaki sorgularda.
+  - Kıyas eşli: işaret çevirmeli permütasyon ve eşli bootstrap.
+- **ÖLÇÜLMEDİ** (bulutta veri yok). Destede `motor` kaynağı eklendi; payını
+  Thompson gerçek kararlardan belirliyor. Mac'te sırayla:
+  1. `python -m python.degerlendirme --motor --olcut npmi --buzulme 1 --melez-agirlik 1,2`
+  2. `python -m python.motor --egit` (ayar `data/cache/motor.json`'a yazılır)
+  3. `python -m python.discover.adaylar --tum-eksenler --strateji motor`
+- **CLAP tekrarlanabilir değildi.** HF `ClapFeatureExtractor` 10 sn'den uzun
+  girdiyi tohumsuz `np.random` ile kesiyor (kaynak kodda doğrulandı). Artık sabit
+  10 sn pencereler alınıp ortalanıyor. Kütüphane ve havuz BİRLİKTE yeniden
+  gömülmeli (`--gomu --yeniden`, `--parca-gomu --yeniden`). Ardından ses yolu
+  yeniden ölçülmeli.
+- **Kaynak notları (doğrulanmadı, `docs/arastirma/5-*`):**
+  - Discogs API koşulları saklama süresini sınırlıyor olabilir; K5 bununla çelişebilir.
+    CC0 aylık dökümler bu soruyu ortadan kaldırıyor.
+  - ListenBrainz popülerlik ve radyo uçlarının bir kısmı artık jeton istiyor.
+  - AcousticBrainz API'si «şimdilik» açık; döküm yedeklenmeli.
+
+### 2026-11-06 (23) — Motor kod incelemesi, insan çifti sınama kümesi
+
+**Kod incelemesi.** Motor kodu dört boyutta (matematik, ölçüm geçerliliği, üretim,
+proje kuralları) incelendi; 31 bulgu çıktı. Çürütme turu harcama sınırına takıldı,
+yalnız biri üç bağımsız sınamadan geçti. Kalanlar elle, kodda tek tek doğrulandı.
+Gerçek olanlar düzeltildi:
+
+- **Ölçüm.**
+  - Ses yolunda sızan listeden gelen parça NaN yapılıp sanatçının parça sayısında
+    kalıyordu; tek parça kuralı gizlenene hiç uygulanamıyordu (üç sınamadan geçen).
+    Düşen parça artık hiç verilmiyor.
+  - CLAP havuzuna girme eşiği (≥ 3 liste, `PARCA_ASGARI_LISTE`) katmanda yeniden
+    uygulanıyor.
+  - Adında gizlenenin adı geçen aramalar («Allan Holdsworth & Gordon Beck») da
+    gizlenenin araması sayılıyor.
+  - RP3β/EASE'de sıra, tavan ve yüzdelik kesilmemiş skor desteğinden
+    (`motor.tam_sira`) ve sıranın geldiği katın ızgarasıyla hesaplanıyor.
+  - Permütasyon p-değeri Phipson & Smyth'e göre hiç 0 olmuyor; boş kıyas p=1.
+  - Raporun iç içe CV iddiası daraltıldı: öncülün yönü ve liste ayarları önceki
+    çalışmalarda tüm sorgularda seçilmişti.
+- **Öğrenme.**
+  - Öncül cezası ‖θ−μ‖² ölçeği yönle karıştırıyordu: yön doğru olsa bile CV
+    μ'yü seçmiyordu. Ceza artık yalnız μ'ya dik bileşende.
+  - λ iç katlarda MRR ile seçiliyor; eşitlikte büyük λ, yani öncüle yakın olan.
+- **Üretim.**
+  - EASE artık kendi ölçülen bağlam ağırlığıyla koşuyor.
+  - Bir yol ancak ilk 48 sırada (melezin derinliği) ve liste grafiği yolları için
+    en az 2 ayrı ortak listeyle karta «kaynak» sayılıyor. Önceden 1000 derinlikteki
+    tek liste sahte uzlaşma üretiyordu; Sezen Aksu vakası tekrar ediyordu.
+  - Kanıtı olmayan aday kart olmuyor.
+  - Çalınabilirlik süzgeci adet kesiminden önce uygulanıyor.
+  - **Ayar kullanıcıya özgü** (`{id}.motor.json`, K20).
+  - **Motor ancak o kütüphanede ölçülüp ayarlandıktan sonra aday yazıyor (K19).**
+    Önceden aktarım ve «büyüt» onu ölçülmeden üretime sokuyordu.
+- **Deste.**
+  - Uzlaşma ödülü σ yerine sıra uzayında: aile başına 2 basamak, en çok 4.
+    σ'lı ödül 1/basamak skorlarında 12. kartı 3. sıraya sıçratıyordu.
+  - `uzlasma_isabeti` artık ödülün uygulandığı grubu ölçüyor.
+  - Satırın kendi kanıt ailesi bir kez ayrıştırılıyor.
+- **Metin (K22).**
+  - «2,00 listede» düzeltildi.
+  - Zayıf kanıt eşiği AYRI ortak liste sayısıyla (`tekil_ortak_liste`).
+  - Uzlaşma cümlesi: da/de ünlü uyumu, ve/and, points/point.
+  - Sayıya dayanmayan popülerlik cümlesi kaldırıldı.
+  - Tohum adları kütüphanedeki yazımla.
+- **CLAP.** Pencereler sona hizalı kuyruk penceresi alıyor (kalan ≥ 2 sn).
+
+Düzeltilmeyen: yoğun matris belleği (ortak havuz 5 kullanıcıda ~3000 liste ×
+50 bin sanatçıya çıkarsa EASE ~3 GB). Şimdilik m = 482; büyüyünce seyrek matrise geçilir.
+
+**İnsan çifti sınama kümesi** (`docs/arastirma/insan-ciftleri.csv`,
+`degerlendirme --ciftler`).
+- Kaynak: forumlardaki «X'i seven Y'yi dener» önerileri. 41 iplik (Metal-Archives,
+  Ultimate-Guitar, DonanımHaber, MusicBanter, Physics Forums) tam okundu. Reddit
+  giriş duvarı yüzünden okunamadı; aşılmaya çalışılmadı.
+- 306 çift ayrıştırıldı. 130 çekirdek çiftin her biri kaynak ipliği yeniden okuyan
+  ayrı bir ajanla, çürütmeye yönelik doğrulandı:
+
+  | sonuç | çift |
+  |---|---:|
+  | doğrulandı | 86 |
+  | onay sayısı daha az | 20 |
+  | OP kararı farklı | 21 |
+  | bulunamadı | 3 |
+
+- Bir tohum hatası düzeltildi: t=990479'da Shawn Lane öneri, tohum değil.
+- Sınamaya 127 çift giriyor (21 olumsuz).
+- Ölçüt kütüphaneden bağımsız: sorgu çiftin tohumları, ölçülen yöntemin benzerlik
+  bilgisi. Olumsuzlar için «olumsuz @50» kullanılıyor (küçük iyi, havuz boyundan
+  bağımsız).
+- Sınır: metal ağırlıklı, 2009–2018 forumları; J-füzyon (5) ve hip-hop (2) çok az.
+
+### 2026-11-07 (24) — Dış komşuluk yolları; iki sınamada en iyi yapı
+
+**Yeni yollar** (`python/discover/komsuluk.py`). Üçü de motorun özniteliği oldu:
+- Deezer `artist/{id}/related` (sıralı benzer sanatçılar), kanıt ailesi «sahne».
+- ListenBrainz labs similar-artists, «sahne».
+- MusicBrainz kadro grafiği (`member of band` 1,0; `supporting musician` 0,5), «kredi».
+  İlişkiler CC0.
+- Tohumlar arası birleşim RRF (k = 60). Hata veren kaynak o sanatçı için boş geçer;
+  MusicBrainz'in yük altında verdiği 503 «search-shed» önbelleğe yazılmaz.
+- User-Agent'ta e-posta yok: `onbellek.ajan()` ortam değişkeni ya da depo adresi.
+
+**Sınama 1 — insan çiftleri** (gerçek açık veri, kütüphaneden bağımsız).
+- 127 çiftin 106'sı ölçülebildi; kalanının önerisi hiçbir grafikte yok.
+- Birleşim her tohum grubu dışarıda bırakılarak öğrenildi (iç içe).
+
+| yol | tavan | @10 | @50 | NDCG | olumsuz @50 |
+|---|---:|---:|---:|---:|---:|
+| çalma listesi (npmi) | 6 | %6 | %6 | 0,038 | %0 |
+| RP3β | 16 | %5 | %13 | 0,053 | %10 |
+| EASE | 20 | %7 | %13 | 0,063 | %10 |
+| Deezer benzerleri | 26 | %13 | %25 | 0,091 | %19 |
+| ListenBrainz | 55 | %11 | %34 | 0,138 | %33 |
+| MusicBrainz kadrosu | 13 | %5 | %10 | 0,035 | %10 |
+| eşit ağırlıklı RRF | 66 | %13 | %37 | 0,151 | %24 |
+| **öğrenilmiş birleşim** | **66** | **%14** | **%40** | **0,159** | %33 |
+
+- Birleşim − liste: MRR +0,030, %95 [−0,006, +0,066], p = 0,10. Yön tutarlı,
+  n = 106'da anlamlı değil.
+- Ağırlıklar: ListenBrainz 2,18 · Deezer 1,43 · kadro 1,17 · RP3β 0,78 · liste 0,74 · EASE 0,50.
+- Bedel: kalabalık yolları forumun reddettiği önerileri de yukarı taşıyor
+  (olumsuz @50 %33). Kalabalık «benzer» ile «popüler komşu»yu ayırmıyor.
+
+**Sınama 2 — kütüphane gizleme sınaması, Drive klasör adlarından** (103 sanatçı,
+yalnız adlar: ses yolu YOK, melez = liste). `scripts/kutuphane_kiyasi.py`.
+
+| yol | tavan | @10 | @50 | MRR | yüzdelik |
+|---|---:|---:|---:|---:|---:|
+| çalma listesi (npmi) | 48 | %14 | %24 | 0,056 | 0,032 |
+| RP3β | 61 | %17 | %26 | 0,054 | 0,039 |
+| EASE | 63 | %17 | %27 | 0,065 | 0,021 |
+| Deezer benzerleri | 49 | %13 | %34 | 0,061 | 0,168 |
+| ListenBrainz | 68 | %19 | %35 | 0,058 | 0,084 |
+| MusicBrainz kadrosu | 18 | %4 | %9 | 0,016 | 0,137 |
+| **motor** | **76** | **%22** | **%42** | **0,079** | 0,023 |
+
+- motor − melez: MRR +0,024, %95 [−0,009, +0,059], p = 0,19.
+- motor − RP3β: +0,025 [+0,004, +0,051], p = 0,03.
+- kadro − liste: −0,039 [−0,077, −0,005], p = 0,03. Kadro tek başına zayıf; motorda
+  küçük ağırlıkla kalıyor (0,61).
+- Ağırlıklar: ListenBrainz 2,46 · Deezer 1,67 · liste 0,97 · kadro 0,61 · RP3β 0,36 ·
+  EASE 0,03. Ses ağırlığı (2,00) öncülde kaldı, çünkü bu sınamada ses verisi yok.
+
+**Sınama 3 — gerçek kütüphane, gizleme sınaması** (Drive'daki 2026-10-02 veri kopyası:
+147 sanatçı, 302 albüm, 793 çalma listesi, CLAP gömüleri dahil; bulutta).
+
+| yol | tavan | @10 | @50 | MRR | yüzdelik |
+|---|---:|---:|---:|---:|---:|
+| çalma listesi (npmi) | 100 | %14 | %29 | 0,075 | 0,029 |
+| ses benzerliği | 69 | %0 | %1 | 0,001 | 0,104 |
+| melez (eski ana yol) | 101 | %3 | %15 | 0,012 | 0,036 |
+| RP3β | 111 | %24 | %35 | 0,144 | 0,012 |
+| EASE | 108 | %22 | %39 | 0,140 | 0,007 |
+| Deezer benzerleri | 90 | %21 | %41 | 0,126 | 0,136 |
+| ListenBrainz | 106 | %18 | %37 | 0,089 | 0,085 |
+| MusicBrainz kadrosu | 40 | %7 | %14 | 0,044 | 0,125 |
+| **motor** | **121** | **%25** | **%51** | **0,152** | 0,010 |
+
+- motor − melez: MRR +0,140 [+0,097, +0,187], p < 0,001. motor − RP3β: +0,008 (belirsiz).
+- Ağırlıklar: ListenBrainz 2,65 · Deezer 2,59 · EASE 2,06 · kadro 1,94 · RP3β 0,89 ·
+  liste −0,76 · ses −1,20. Ses yolu erişimde işe yaramıyor; eski CLAP gömüleri
+  rastgele kesimle üretilmişti (K24), Mac'te `--yeniden` ile tazelenmeli.
+
+**Sınama 4 — gerçek kararlar** (`degerlendirme.karar_sinamasi`; 23 sorgu, 61 beğendim,
+86 tutmadı; aynı sorguda beğenileni geçilenin üstüne koyma AUC'si).
+- Bütün yollar 0,5'in altında: RP3β 0,356 · EASE 0,345 · liste 0,363 · ses 0,429 ·
+  Deezer 0,451 · melez 0,396 · motor 0,387. Gösterilmiş kartlar arasında daha güçlü
+  bağlı (daha popüler) sanatçı daha sık geçiliyor.
+- Popülerlik tek başına (az bilinen önde): **AUC 0,706 [0,579, 0,808]**. Liste sayısı
+  medyanı: beğendim 2 · tutmadı 4 · zaten biliyorum 25.
+- Kaynak başına beğeni (sanatçı düzeyi): ses %49 [38–60] · melez %40 [31–50] · liste
+  %33 [21–48]. Uzlaşma ödülü: tek %38, çok %39 (n = 31), fark yok; yeni aileler
+  (sahne, kredi) karar biriktikçe yeniden ölçülecek.
+
+**Karar: keşif cezası.** Motor skoru − γ·log(1 + liste sayısı) (`motor.populerlik`;
+grafikte olmayan aday havuz medyanını alır). γ küçükten büyüğe sınanıyor, beğeni
+kazancının aralığının sıfırı ilk dışladığı değer üretime giriyor (en küçük etkili doz;
+çoklu sınama düzeltmesi yok, bu yüzden örnek dışı yön de raporlanıyor).
+
+| γ | beğeni AUC | kazanç [%95] | gizleme MRR | gizleme @50 |
+|---|---:|---:|---:|---:|
+| 0 | 0,387 | — | 0,152 | %51 |
+| 0,25 | 0,401 | +0,015 [−0,011, +0,044] | 0,153 | %52 |
+| **0,5** | **0,420** | **+0,033 [+0,003, +0,067]** | 0,140 | %53 |
+| 1 | 0,423 | +0,036 [−0,014, +0,082] | 0,103 | %50 |
+| 4 | 0,471 | +0,084 [+0,000, +0,158] | 0,028 | %14 |
+
+- Üretimde γ = 0,5: beğeni kazancı anlamlı, erişim bedeli küçük (MRR −0,012, @50 +2 puan).
+- Sorgu dışarıda bırakılarak seçilen γ 23 sorgunun 23'ünde 4 (yön sağlam; büyüklük
+  erişim bedeli yüzünden küçük tutuldu).
+- Sınır: kartlar o günün stratejilerinden geldi (seçim yanlılığı). Motorun kendi
+  kartları kaydırıldıkça yeniden ölçülecek.
+
+**Seçilen yapı:** motor (7 yolun öğrenilmiş birleşimi) + keşif cezası. Üç erişim
+sınamasında da en iyi ya da en iyiyle aynı (gerçek kütüphane MRR 0,152 vs melez 0,012;
+Drive adları 0,079 vs 0,056; insan çiftlerinde öğrenilmiş birleşim NDCG 0,159).
+Beğeni tarafını deste yönetiyor: kaynaklar arası Thompson örneklemesi gerçek
+kararlardan (K21), motor bir kaynak olarak yarışıyor.
+
+### 2026-11-08 (25) — Kümeleme girdisi ölçüldü, üretime girmedi; keşif cezasına erişim tavanı
+
+Kullanıcının sorusu: «Kümeleme bazlı öneri kalktı mı? O verileri modele girdi yapsak?»
+Kümeleme kalkmadı, sistemin iskeleti: eksenler (Keşfet'teki tarz çipleri) ve her
+eksenin sorgusu (tohum sanatçılar) ondan geliyor. Motor yalnız eksen içi sıralamayı yapıyor.
+
+**Denenen girdi: eksen uyumu** (`motor.uyum_vektoru`, K3). Aday, kütüphanedeki
+çalma listesi komşularının bulanık eksen üyeliklerini (ortak liste sayısı ağırlıklı)
+devralıyor; bunun tohumların ortalama üyeliğiyle kosinüsü öznitelik. Beklenti: her
+eksenin listesinde geçen popüler ama yayvan sanatçı geri düşer.
+
+Gerçek veride, aynı koşuda eşli (iç içe CV):
+- Gizleme: girdili MRR 0,135, girdisiz 0,155; fark −0,021 [−0,039, −0,005], p = 0,015
+  (son koşu; ilk denemede −0,024, p = 0,008). @50 ikisinde de %51; kayıp üst
+  sıralarda (@1: 0,05'e karşı 0,10).
+- Kararlar: AUC 0,401'e karşı 0,387; +0,015 [−0,013, +0,053], anlamlı değil.
+- **Karar: üretime girmedi** (K19). `--egit` onu her seferinde «motor_uyumlu» adıyla
+  yeniden ölçer; Mac'te taze veriyle (yeni CLAP gömüleri) kazandırırsa yeniden bakılır.
+
+**Yan bulgu ve düzeltme.** İlk denemede girdili model üretimdeydi ve «en küçük etkili
+doz» kuralı γ = 2'yi seçti; gizleme MRR'si 0,131 → 0,050'ye, @50 %51 → %33'e düştü. Beğeni kazancı sıralamayı
+popülerliğe teslim ederek alınıyordu. Kural: erişimi (gizleme MRR'si) %10'dan fazla
+düşüren γ aday olamaz (`motor.ERISIM_BEDELI_TAVANI`). Girdisiz modelde seçim değişmiyor
+(γ = 0,5: MRR 0,152 → 0,140, %8).
+
+**Test hijyeni.** İki web testi oturum ara katmanı üzerinden depo kökünde
+`data/db/ortak.sqlite` yaratıyordu (Mac'te gerçek ortak veritabanı). `tests/conftest.py`
+ortak ve kullanıcı yollarını her testte geçici dizine yönlendiriyor.

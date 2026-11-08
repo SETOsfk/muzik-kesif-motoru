@@ -24,7 +24,7 @@ from pathlib import Path
 
 from python.db import VARSAYILAN_DB, baglan
 from python.metin import normalize_esleme
-from python.onbellek import AgYok, ApiIstemci, musicbrainz
+from python.onbellek import AgYok, ApiIstemci, ajan, musicbrainz
 
 #: ListenBrainz'in yayımladığı hazır benzerlik veri kümesi. Ad uzun ama bir
 #: parametre demeti: oturum tabanlı, 7500 günlük pencere, 300 sn oturum aralığı.
@@ -38,8 +38,9 @@ def listenbrainz(**kwargs) -> ApiIstemci:
     return ApiIstemci(
         servis="listenbrainz",
         temel_url="https://labs.api.listenbrainz.org",
-        istek_araligi=0.6,
-        basliklar={"User-Agent": "muzik-kesif-motoru/0.1 (kisisel arastirma)"},
+        # MetaBrainz koşulu: «never make more than ONE call per second».
+        istek_araligi=1.05,
+        basliklar={"User-Agent": ajan()},
         **kwargs,
     )
 

@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from python.metin import normalize_esleme
-from python.onbellek import AgYok, ApiIstemci, IstekBasarisiz
+from python.onbellek import AgYok, ApiIstemci, IstekBasarisiz, ajan
 
 YENIDEN_DENE_GUN = 7
 GENISLIK = 400
@@ -53,7 +53,7 @@ def _istemci(ad: str) -> ApiIstemci:
                 _ISTEMCILER[ad] = ApiIstemci(
                     servis="wikidata", temel_url="https://www.wikidata.org",
                     istek_araligi=0.2, zaman_asimi=10.0, azami_deneme=2,
-                    basliklar={"User-Agent": "muzik-kesif-motoru/0.1"})
+                    basliklar={"User-Agent": ajan()})
             else:
                 from python.medya import deezer_medya
                 _ISTEMCILER[ad] = deezer_medya()

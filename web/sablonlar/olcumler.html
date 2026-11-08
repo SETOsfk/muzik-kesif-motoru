@@ -1,0 +1,177 @@
+{% extends "taban.html" %}
+{% from "_grafik.html" import grafik, betikler %}
+{% block baslik %}{{ t("Ölçümler", "Measurements") }} — {{ t("Keşif Motoru", "Discovery Engine") }}{% endblock %}
+{% block govde %}
+{% set kiyas = olcum.kiyas or {} %}
+{% set loao = olcum.loao or {} %}
+{% set n = (loao.values()|list|first or {}).gizlenen or 0 %}
+
+<div class="sayfa-basi">
+  <p class="etiket-ust">{{ t("motorun karnesi", "the engine's report card") }}</p>
+  <h1>{{ t("Ölçümler", "Measurements") }}</h1>
+  <p>{{ t("Her yöntem senin kütüphanende sınandı: bir sanatçının bütün albümleri gizlendi ve motorun onu hiç görmeden geri bulup bulamadığına bakıldı. " ~ n ~ " sanatçı, " ~ olcum.tarih ~ ". Mutlak sayılar küçük görünür; anlamlı olan yöntemlerin birbirine göre durumu.",
+          "Every method was tested on your library: all albums by one artist were hidden, and we checked whether the engine could find that artist again without ever seeing them. " ~ n ~ " artists, " ~ olcum.tarih ~ ". The absolute numbers look small; what matters is how the methods compare.") }}</p>
+</div>
+
+{% set m = loao.get('motor') %}
+{% set mel = loao.get('melez') %}
+{% set mk = kiyas.get('motor − melez') %}
+{% if m %}
+<section class="kart olcum-kazanan">
+  <p class="etiket-ust">{{ t("üretimde kullanılan yapı", "structure in production") }}</p>
+  <h2>{{ yol_adi('motor') }}</h2>
+  <div class="olcum-sayilar">
+    <div><b>{{ (m.ndcg or 0)|sayi(3) }}</b><span>NDCG</span></div>
+    <div><b>{{ (m['recall@50'] or 0)|yuzde }}</b><span>{{ t("ilk 50'de bulunan", "found in top 50") }}</span></div>
+    <div><b>{{ m.erisilebilir }}/{{ m.gizlenen }}</b><span>{{ t("erişilebilen", "reachable") }}</span></div>
+    {% if mel %}<div><b>{{ (mel.ndcg or 0)|sayi(3) }}</b><span>{{ t("melez (önceki ana yol)", "hybrid (previous main route)") }}</span></div>{% endif %}
+  </div>
+  {% if mk %}
+  <p class="aciklama">{{ t("Motor ile melez arasındaki MRR farkı " ~ ((mk.fark)|sayi(3, isaret=true)) ~ ", %95 aralık [" ~ ((mk.alt)|sayi(3, isaret=true)) ~ ", " ~ ((mk.ust)|sayi(3, isaret=true)) ~ "], p = " ~ ((mk.p)|sayi(3)) ~ ".",
+                           "MRR difference between engine and hybrid " ~ ((mk.fark)|sayi(3, isaret=true)) ~ ", 95% interval [" ~ ((mk.alt)|sayi(3, isaret=true)) ~ ", " ~ ((mk.ust)|sayi(3, isaret=true)) ~ "], p = " ~ ((mk.p)|sayi(3)) ~ ".") }}
+    {% if mk.p < 0.05 and mk.fark > 0 %}<span class="rozet yesil">{{ t("anlamlı üstünlük", "significant gain") }}</span>
+    {% elif mk.p < 0.05 %}<span class="rozet gri">{{ t("anlamlı geride", "significantly behind") }}</span>
+    {% else %}<span class="rozet gri">{{ t("fark belirsiz", "no clear difference") }}</span>{% endif %}
+  </p>
+  {% endif %}
+  <p class="aciklama">{{ t("Motor, öğrenmeye melezin ağırlıklarından başlar; veri göstermedikçe ondan ayrılmaz. Bu yüzden melezden kötü seçilemez.",
+                           "The engine starts learning from the hybrid's weights and only moves away when the data says so, so it can't end up worse than the hybrid.") }}</p>
+</section>
+{% endif %}
+
+<section class="bolum">
+  <h2>{{ t("Yollar", "Routes") }}</h2>
+  <p class="aciklama">{{ t("NDCG hem üst sıraları hem orta sıraları sayar (1/log₂(1+sıra)); büyük iyi.",
+                           "NDCG rewards both top and middle positions (1/log₂(1+rank)); higher is better.") }}</p>
+  {{ grafik("yollar", g_yollar, "orta", t("Yollara göre NDCG", "NDCG by route")) }}
+  <div class="tablo-sarmal">
+    <table>
+      <thead><tr>
+        <th>{{ t("yol", "route") }}</th>
+        <th class="sayi" title="{{ t('gizlenen sanatçının o yolun havuzunda bulunduğu durum', 'how often the hidden artist was in the route\'s pool at all') }}">{{ t("tavan", "ceiling") }}</th>
+        <th class="sayi">@10</th><th class="sayi">@50</th><th class="sayi">MRR</th><th class="sayi">NDCG</th>
+        <th class="sayi" title="{{ t('medyan sıra / havuz; küçük iyi, rastgele 0,5', 'median rank / pool; lower is better, random is 0.5') }}">{{ t("yüzdelik", "percentile") }}</th>
+        <th class="sayi" title="{{ t('ilk 10 önerinin medyan çalma listesi sayısı — popülerlik', 'median playlist count of the top 10 — popularity') }}">{{ t("görünür", "visible") }}</th>
+      </tr></thead>
+      <tbody>
+      {% for ad, o in satirlar %}
+        <tr{% if ad == 'motor' %} class="secili"{% endif %}>
+          <td>{{ yol_adi(ad) }}</td>
+          <td class="sayi">{{ o.erisilebilir }}/{{ o.gizlenen }}</td>
+          {% for k in ('recall@10', 'recall@50') %}
+          <td class="sayi{% if (o[k] or 0) == en_iyi[k] and en_iyi[k] > 0 %} en-iyi{% endif %}">{{ (o[k] or 0)|yuzde }}</td>
+          {% endfor %}
+          <td class="sayi{% if (o.mrr or 0) == en_iyi.mrr and en_iyi.mrr > 0 %} en-iyi{% endif %}">{{ (o.mrr or 0)|sayi(3) }}</td>
+          <td class="sayi{% if (o.ndcg or 0) == en_iyi.ndcg and en_iyi.ndcg > 0 %} en-iyi{% endif %}">{{ (o.ndcg or 0)|sayi(3) }}</td>
+          <td class="sayi">{{ (o.medyan_yuzdelik)|sayi(3) if o.medyan_yuzdelik is not none else '—' }}</td>
+          <td class="sayi">{{ o.gorunurluk|int if o.gorunurluk is not none else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if kiyas %}
+<section class="bolum">
+  <h2>{{ t("Eşli kıyaslar", "Paired comparisons") }}</h2>
+  <p class="aciklama">{{ t("Aynı gizlenen sanatçılar üzerinde iki yolun farkı. p: işaret çevirmeli permütasyon testi; aralık: eşli bootstrap.",
+                           "The difference between two routes on the same hidden artists. p: sign-flip permutation test; interval: paired bootstrap.") }}</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>{{ t("kıyas", "comparison") }}</th><th class="sayi">{{ t("MRR farkı", "MRR diff.") }}</th>
+      <th class="sayi">{{ t("%95 aralık", "95% interval") }}</th><th class="sayi">p</th><th></th></tr></thead>
+    <tbody>{% for ad, k in kiyas.items() %}
+      {% set parca = ad.split(' − ') %}
+      <tr><td>{{ yol_adi(parca[0]) }} <span class="soluk">−</span> {{ yol_adi(parca[1]) }}</td>
+        <td class="sayi">{{ (k.fark)|sayi(3, isaret=true) }}</td>
+        <td class="sayi">[{{ (k.alt)|sayi(3, isaret=true) }}, {{ (k.ust)|sayi(3, isaret=true) }}]</td>
+        <td class="sayi">{{ (k.p)|sayi(3) }}</td>
+        <td>{% if k.p < 0.05 %}<span class="rozet {{ 'yesil' if k.fark > 0 else 'gri' }}">{{ t("anlamlı", "significant") }}</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+{% if g_agirlik %}
+<section class="bolum">
+  <h2>{{ t("Motor neye ne kadar güveniyor?", "What does the engine trust?") }}</h2>
+  <p class="aciklama">{{ t("Öğrenilmiş ağırlıklar: bir yolda üst sıralarda olmak önerinin skorunu ne kadar artırıyor. Kiremit artırıyor, gece mavisi azaltıyor.",
+                           "Learned weights: how much being high on a route raises a pick's score. Terracotta raises it, night blue lowers it.") }}</p>
+  {{ grafik("agirlik", g_agirlik, "orta", t("Motorun ağırlıkları", "The engine's weights")) }}
+</section>
+{% endif %}
+
+{% if olcum.ciftler %}
+<section class="bolum">
+  <h2>{{ t("İnsanların önerileriyle sınama", "Tested against people's recommendations") }}</h2>
+  <p class="aciklama">{{ t("Forumlarda doğrulanmış «X'i seven Y'yi de dener» önerileri. Sorgu forumdaki tohum sanatçılar; ölçülen, yöntemin insan önerisini ne kadar yukarıda bulduğu. «Olumsuz @50»: forumda reddedilenlerin ilk 50'ye girme oranı, küçük iyi.",
+                           "Recommendations verified on forums: 'if you like X, try Y'. The query is the forum's seed artists; we measure how high each method ranks the human pick. 'Negative @50': how often picks the forum rejected land in the top 50 — lower is better.") }}</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>{{ t("yol", "route") }}</th><th class="sayi">n</th><th class="sayi">{{ t("tavan", "ceiling") }}</th>
+      <th class="sayi">@10</th><th class="sayi">@50</th><th class="sayi">NDCG</th><th class="sayi">{{ t("olumsuz @50", "negative @50") }}</th></tr></thead>
+    <tbody>{% for ad, o in olcum.ciftler.ozet.items() %}
+      <tr><td>{{ yol_adi(ad) }}</td><td class="sayi">{{ o.n }}</td><td class="sayi">{{ o.tavan }}</td>
+        <td class="sayi">{{ o['@10']|yuzde }}</td><td class="sayi">{{ o['@50']|yuzde }}</td>
+        <td class="sayi">{{ (o.ndcg or 0)|sayi(3) }}</td><td class="sayi">{{ o['negatif_@50']|yuzde }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+{% if olcum.kararlar %}
+{% set ks = olcum.kararlar.sayim %}
+<section class="bolum">
+  <h2>{{ t("Kendi kararlarınla sınama", "Tested against your own decisions") }}</h2>
+  <p class="aciklama">{{ t("Kaydırdığın kartlardan: yöntemin, beğendiğin sanatçıyı geçtiğin sanatçının üstüne koyma olasılığı (AUC). 0,50 rastgele, 1,00 kusursuz. Erişimi değil beğeniyi ölçer. " ~ ks.begendim ~ " beğendim, " ~ ks.tutmadi ~ " geç kararı.",
+                           "From the cards you swiped: how likely each method is to rank an artist you saved above one you passed on (AUC). 0.50 is chance, 1.00 is perfect. This measures liking, not reach. " ~ ks.begendim ~ " saves, " ~ ks.tutmadi ~ " passes.") }}</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>{{ t("yol", "route") }}</th><th class="sayi">AUC</th><th class="sayi">{{ t("%95 aralık", "95% interval") }}</th>
+      <th class="sayi" title="{{ t('kararlı sanatçıların o yolun listesinde bulunma payı', 'share of decided artists that appear in the route at all') }}">{{ t("kapsam", "coverage") }}</th></tr></thead>
+    <tbody>{% for ad, o in olcum.kararlar.ozet.items() %}
+      <tr{% if ad == 'motor' %} class="secili"{% endif %}><td>{{ yol_adi(ad) }}</td><td class="sayi">{{ (o.auc)|sayi(3) }}</td>
+        <td class="sayi">[{{ (o.alt)|sayi(3) }}, {{ (o.ust)|sayi(3) }}]</td><td class="sayi">{{ o.kapsam|yuzde }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="aciklama soluk">{{ t("Sınır: kartlar o günün yöntemlerinden geldi; o yöntemlerin bulmadığı sanatçılar hiç kaydırılmadı.",
+                                 "Limit: the cards came from that day's methods, so artists those methods never found were never swiped.") }}</p>
+  {% set kk = olcum.kararlar %}
+  {% if kk.kesif_egrisi %}
+  {% set bedel = (olcum.motor or {}).kesif_loao or {} %}
+  {% set g_uretim = kk.kesif_cezasi or 0 %}
+  <h3>{{ t("Keşif cezası", "Discovery penalty") }}</h3>
+  <p class="aciklama">{{ t("Beğendiğin sanatçılar genelde az bilinenler. Bu yüzden motor skorundan γ · log(1 + liste sayısı) düşülür. γ değerleri küçükten büyüğe sınandı; erişimi en çok %10 düşüren değerler arasında beğeni kazancının ilk anlamlı olduğu değer üretime girer: γ = " ~ (g_uretim|sayi(2)) ~ ".",
+                           "The artists you save tend to be lesser-known, so the engine's score is reduced by γ · log(1 + playlist count). γ values were tested from small to large; among those that cut reach by at most 10%, the first one with a significant gain in liking goes into production: γ = " ~ (g_uretim|sayi(2)) ~ ".") }}</p>
+  <div class="tablo-sarmal"><table>
+    <thead><tr><th>γ</th><th class="sayi">{{ t("beğeni AUC", "liking AUC") }}</th><th class="sayi">{{ t("kazanç [%95]", "gain [95%]") }}</th>
+      <th class="sayi">{{ t("gizleme MRR", "hide-test MRR") }}</th><th class="sayi">{{ t("gizleme @50", "hide-test @50") }}</th></tr></thead>
+    <tbody>
+      {% set b0 = bedel.get('0.0') %}
+      <tr{% if g_uretim == 0 %} class="secili"{% endif %}><td>{{ 0|sayi(2) }}</td><td class="sayi">{{ (kk.ozet.motor.auc)|sayi(3) }}</td><td class="sayi">—</td>
+        <td class="sayi">{{ (b0.mrr if b0 else none)|sayi(3) }}</td><td class="sayi">{{ b0['recall@50']|yuzde if b0 else '—' }}</td></tr>
+      {% for g, o in kk.kesif_egrisi.items() %}{% set bg = bedel.get(g) %}
+      <tr{% if (g|float) == g_uretim %} class="secili"{% endif %}><td>{{ (g|float)|sayi(2) }}</td><td class="sayi">{{ (o.auc)|sayi(3) }}</td>
+        <td class="sayi">{{ (o.fark)|sayi(3, isaret=true) }} [{{ (o.alt)|sayi(3, isaret=true) }}, {{ (o.ust)|sayi(3, isaret=true) }}]</td>
+        <td class="sayi">{{ (bg.mrr if bg else none)|sayi(3) }}</td><td class="sayi">{{ bg['recall@50']|yuzde if bg else '—' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="aciklama soluk">{{ t("Bedel: ceza büyüdükçe sahip olduğun (genelde daha bilinen) sanatçıları geri bulmak zorlaşır. Gizleme sınaması bilineni bulmayı, kararların beğeniyi ölçer.",
+                                 "The cost: the larger the penalty, the harder it is to find artists you already own, which tend to be better known. The hide test measures finding the known; your decisions measure liking.") }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<details class="ist-yontem bolum">
+  <summary>{{ t("Yöntem: nasıl ölçüldü, sınırı ne?", "Method: how it was measured, and its limits") }}</summary>
+  <ul class="madde">
+    <li>{{ t("Sızıntısız: gizlenen sanatçının adıyla bulunmuş çalma listeleri o sınamada yok sayılır — gerçek kullanımda tanımadığın birinin adı aranmaz.",
+             "Leak-free: playlists that were found by searching the hidden artist's name are ignored in that test — in real use nobody searches for an artist you don't know.") }}</li>
+    <li>{{ t("İç içe çapraz doğrulama: motorun ayarları ve ağırlıkları, sıraladığı sanatçılar hiç görülmeden seçilir.",
+             "Nested cross-validation: the engine's settings and weights are chosen without ever seeing the artists it ranks.") }}</li>
+    <li>{{ t("Sınır: sahip olduğun sanatçıları geri bulmak erişimi ölçer, beğeniyi değil. Beğeniyi kaydırdığın kartlar ölçer (Ne tuttu?).",
+             "Limit: finding artists you already own measures reach, not liking. Liking is measured by the cards you swipe (What worked?).") }}</li>
+    {% if olcum.kaynak %}<li>{{ t("Kaynak: ", "Source: ") }}{{ olcum.kaynak }}</li>{% endif %}
+  </ul>
+</details>
+{% endblock %}
+{% block betik %}{{ betikler() }}{% endblock %}

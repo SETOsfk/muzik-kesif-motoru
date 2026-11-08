@@ -217,6 +217,7 @@ def kesif(conn: sqlite3.Connection) -> dict | None:
     veri = sanatci_duzeyi(kararlar(conn))
     if veri.empty:
         return None
+    from python.kesif import uzlasma_isabeti
     from python.metin import normalize_esleme
     tekil = veri.assign(_a=veri["artist"].map(lambda a: normalize_esleme(str(a)))) \
         .sort_values("tarih").drop_duplicates("_a", keep="last")
@@ -249,6 +250,8 @@ def kesif(conn: sqlite3.Connection) -> dict | None:
         "bilinen": bilinen, "yeni_pay": 1 - bilinen / len(tekil),
         "oran": oran if begendim + tutmadi else None, "alt": alt, "ust": ust,
         "kaynaklar": sorted(kaynaklar, key=lambda k: -k["oran"]),
+        "uzlasma": [u for u in uzlasma_isabeti(conn)
+                    if u["begendim"] + u["tutmadi"] >= ASGARI_N],
         "asgari_n": ASGARI_N,
     }
 
