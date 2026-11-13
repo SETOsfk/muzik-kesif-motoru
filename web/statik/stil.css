@@ -1982,3 +1982,20 @@ html { -webkit-tap-highlight-color: transparent; }
                 font: 500 .74rem/1.4 var(--font-etiket); letter-spacing: .04em; color: var(--metin-2); }
 .evren-lejant i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px;
                   background: var(--renk); }
+
+/* ---- Listem: raftaki plak. Kapağın arkasından plak ucu görünür; üstüne
+ * gelince (ya da çalarken) biraz daha çıkar. Boş raf: çizim + tek eylem. */
+.lo-kapak { overflow: visible; isolation: isolate; }
+.lo-kapak img, .lo-kapak svg { border-radius: var(--r-m); z-index: 1; }
+.lo-kapak .lo-cal { z-index: 2; }
+.lo-kapak::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; z-index: 0;
+  background:
+    radial-gradient(circle, var(--ay) 0 16%, var(--plak) 16.5% 18%, transparent 18.5%),
+    repeating-radial-gradient(circle, var(--plak) 0 1.2px, var(--plak-2) 1.2px 2.6px);
+  transform: translateX(11%); transition: transform .5s var(--hareket); }
+.lo:hover .lo-kapak::before, .lo-kapak:has(.lo-cal.caliyor)::before { transform: translateX(22%); }
+.bos:has(.cizim) { display: flex; flex-direction: column; align-items: center; gap: var(--b3);
+                   text-align: center; padding: var(--b7) var(--b5); }
+.bos .cizim { width: min(260px, 70%); }
+.bos h2 { font-weight: 400; font-size: 1.5rem; color: var(--metin); }
+.bos p { margin: 0; max-width: 34ch; }

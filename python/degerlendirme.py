@@ -143,7 +143,7 @@ def eksen_haritasi(
 
 def pmi_tablosu(
     conn: sqlite3.Connection, tohumlar: set[str], *, olcut: str = "pmi",
-    buzulme: float = 0.0, agirlik: str = "esit",
+    buzulme: float = 0.0, agirlik: str = "esit", baglam_disi: str | None = None,
 ) -> dict[str, dict[str, float]]:
     """{tohum: {aday: pmi}} — kütüphane kısıtı OLMADAN.
 
@@ -155,19 +155,14 @@ def pmi_tablosu(
     tohum, hangi b'nin aday sayılacağını kütüphane belirler, sayının kendisini
     değil. Bu yüzden bir kez hesaplanıp her gizlemede yeniden kullanılıyor.
     """
-    listeler: dict[int, set[str]] = defaultdict(set)
-    for liste_id, anahtar in conn.execute(
-        "SELECT liste_id, sanatci_anahtar FROM liste_parca "
-        "WHERE sanatci_anahtar != ''"
-    ):
-        listeler[liste_id].add(anahtar)
+    # Liste okuma ve ağırlık ÜRETİMİN işlevleriyle (K19: değerlendirme üretimi
+    # çağırır, kopyalamaz). Eşik ve büzülme ham liste sayısıyla — üretimle aynı.
+    from python.discover.calma_listesi import liste_agirligi, sanatci_kumeleri
+    listeler = sanatci_kumeleri(conn, baglam_disi)
 
     if len(listeler) < 5:
         return {}
 
-    # Liste ağırlığı ÜRETİMİN işleviyle (K19: değerlendirme üretimi çağırır,
-    # kopyalamaz). Eşik ve büzülme ham liste sayısıyla — üretimle aynı.
-    from python.discover.calma_listesi import liste_agirligi
     w = {lid: liste_agirligi(len(u), agirlik) for lid, u in listeler.items()}
     toplam = sum(w.values())
 
@@ -530,7 +525,7 @@ def calistir(
     liste_agirlik: str = "esit",
     calisma: str | None = None,
     melez_agirlik: tuple[float, float] = (1.0, 1.0), ag: bool = False,
-    ag_genis: bool = False,
+    ag_genis: bool = False, baglam_disi: str | None = None,
 ) -> dict[str, dict]:
     """Her kütüphane sanatçısını sırayla gizle, her erişimin sırasını topla.
 
@@ -604,7 +599,7 @@ def calistir(
 
     print("PMI tablosu hesaplanıyor…", file=sys.stderr)
     tablo = pmi_tablosu(conn, sahip_tam, olcut=olcut, buzulme=buzulme,
-                        agirlik=liste_agirlik)
+                        agirlik=liste_agirlik, baglam_disi=baglam_disi)
 
     print("CLAP gömüleri okunuyor…", file=sys.stderr)
     kutup_gomu, havuz_gomu = gomu_haritalari(conn)
@@ -783,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
     ayristirici.add_argument("--ses-kural", choices=("cok_sesli", "en_yakin_eksen", "eksen"),
                              default=SES_KURALI,
                              help="ses erişiminde eksen kuralı (kıyas için)")
+    ayristirici.add_argument("--baglam-disi", choices=("dil", "ruh", "hepsi"),
+                             help="başlığı dil/ruh hâli söyleyen listeleri sayma (kıyas için)")
     ayristirici.add_argument("--en-kotu", type=int, default=0,
                              help="hiç bulunamayan ilk N sanatçıyı listele")
     args = ayristirici.parse_args(argv)
@@ -806,7 +803,7 @@ def main(argv: list[str] | None = None) -> int:
                          melez_agirlik=tuple(
                              float(x) for x in args.melez_agirlik.split(",")),
                          buzulme=args.buzulme, calisma=args.calisma,
-                         liste_agirlik=args.liste_agirlik,
+                         liste_agirlik=args.liste_agirlik, baglam_disi=args.baglam_disi,
                          ag=args.ag or args.ag_genis, ag_genis=args.ag_genis)
         print(rapor(sonuc))
         if args.en_kotu:

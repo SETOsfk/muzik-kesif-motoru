@@ -523,6 +523,9 @@ başka kökten, örnekler okunamıyor — okuyormuş gibi kıpırdayan çubuk uy
   parolayı değiştir, dosyanın iznini daralt.
 
 ### Sıradaki işler (öncelik sırasıyla)
+-2. Bulut oturumunda gerçek veri: kullanıcı `scripts/bulut_paketi.sh` çalıştırınca Drive'daki
+   `Kesif-bulut/kesif-veri-parca-*` parçalarını indir, birleştir, sonra `degerlendirme
+   --baglam-disi dil|ruh|hepsi` ile temel ölçümü kıyasla (karar günlüğü 2026-11-13 (22)).
 -1. Spektral çalışma ölçüldü ve etkin (karar günlüğü (17)): liste yolu belirgin
    iyi, ses yolu kötü, melez karışık. Açık soru: ses yolunun kaybı eksen
    tanımından mı (tarzlar artık kalabalığa yakın) — gerekirse melez ağırlığını

@@ -50,6 +50,7 @@ import argparse
 import sqlite3
 import sys
 from collections import Counter, defaultdict
+import re
 from math import log, log2
 from pathlib import Path
 
@@ -85,6 +86,51 @@ ASGARI_PARCA = 8
 #: Yöntemler: "esit" (eski davranış, w=1), "log" (w=1/log2(1+n)), "ters"
 #: (w=1/n). Seçim `python/degerlendirme.py` ile yapılır; bkz. karar günlüğü.
 LISTE_AGIRLIGI = "esit"
+
+
+#: BAĞLAM LİSTELERİ (K16; «Sıradaki işler» 2, Sezen Aksu vakası). Başlığı bir
+#: dil ya da ruh hâli/etkinlik söyleyen listede iki sanatçıyı yan yana koyan
+#: şey müzikal yakınlık olmayabilir. Burada yalnız SINIFLANDIRMA var; bu
+#: listeleri saymamak ayrı bir karar ve VARSAYILAN DEĞİL — önce ölçülür:
+#:     python -m python.degerlendirme --olcut npmi --buzulme 1 --baglam-disi dil
+#: Sözcükler bilinçli olarak dar (yanlış pozitif, sinyal atmak demek); tür
+#: adları («rock», «metal») burada YOK — onlar tam da aranan sinyal.
+BAGLAM_SOZCUKLERI = {
+    "dil": ("türkçe", "turkce", "turkish", "türk", "turk", "deutsch", "german", "français",
+            "francais", "french", "español", "espanol", "spanish", "italiano", "japanese",
+            "korean", "arabic", "yabancı", "yabanci", "yerli"),
+    "ruh": ("workout", "gym", "spor", "antrenman", "koşu", "kosu", "running", "chill", "relax",
+            "sleep", "uyku", "study", "ders", "focus", "odak", "party", "parti", "road trip",
+            "yolculuk", "araba", "mood", "sad", "hüzün", "huzun", "happy", "summer", "yaz",
+            "karışık", "karisik", "nostalji", "70s", "80s", "90s", "00s", "70'ler", "80'ler",
+            "90'lar", "2000'ler"),
+}
+_BAGLAM_DESENI = {
+    tur: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, sozcukler)) + r")(?!\w)")
+    for tur, sozcukler in BAGLAM_SOZCUKLERI.items()
+}
+
+
+def baglam_turu(baslik: str | None) -> str | None:
+    """Liste başlığı bağlam söylüyorsa türü ('dil' / 'ruh'), yoksa None."""
+    metin = (baslik or "").replace("İ", "i").replace("I", "ı").lower()
+    return next((tur for tur, desen in _BAGLAM_DESENI.items() if desen.search(metin)), None)
+
+
+def sanatci_kumeleri(conn: sqlite3.Connection, baglam_disi: str | None = None) -> dict[int, set[str]]:
+    """{liste: sanatçı anahtarları}. `baglam_disi`: 'dil', 'ruh' ya da 'hepsi'
+    verilirse o türden başlıklı listeler ATILIR (yalnız ölçüm için; bkz. üstte)."""
+    atilan: set[int] = set()
+    if baglam_disi:
+        atilan = {lid for lid, baslik in conn.execute("SELECT liste_id, baslik FROM calma_listesi")
+                  if (tur := baglam_turu(baslik)) and baglam_disi in (tur, "hepsi")}
+    listeler: dict[int, set[str]] = defaultdict(set)
+    for liste_id, anahtar in conn.execute(
+        "SELECT liste_id, sanatci_anahtar FROM liste_parca WHERE sanatci_anahtar != ''"
+    ):
+        if liste_id not in atilan:
+            listeler[liste_id].add(anahtar)
+    return listeler
 
 
 def liste_agirligi(sanatci_sayisi: int, yontem: str = LISTE_AGIRLIGI) -> float:
@@ -218,6 +264,7 @@ def hasat(
 def birliktelik(
     conn: sqlite3.Connection, *, asgari_liste: int = 2, olcut: str = "npmi",
     buzulme: float = KANIT_BUZULMESI, agirlik: str | None = None,
+    baglam_disi: str | None = None,
 ) -> list[tuple[str, str, int, float]]:
     """Kütüphane sanatçısı × dışarıdaki sanatçı için normalize edilmiş PMI.
 
@@ -277,11 +324,7 @@ def birliktelik(
             "SELECT DISTINCT artist FROM albums"
         ) if r[0]
     }
-    listeler: dict[int, set[str]] = defaultdict(set)
-    for liste_id, anahtar in conn.execute(
-        "SELECT liste_id, sanatci_anahtar FROM liste_parca WHERE sanatci_anahtar != ''"
-    ):
-        listeler[liste_id].add(anahtar)
+    listeler = sanatci_kumeleri(conn, baglam_disi)
 
     if len(listeler) < 5:
         return []

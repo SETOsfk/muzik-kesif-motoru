@@ -36,7 +36,12 @@
 {% if not ogeler %}
   <div class="bos">
     {% if tumu_sayi %}{{ t("Bu süzgeçte bir şey yok.", "Nothing matches this filter.") }}
-    {% else %}{{ t("Listen boş.", "Your list is empty.") }} <a href="/kesfet">{{ t("Keşfet", "Discover") }}</a>{{ t("'te sağa kaydırdığın her şey buraya düşer.", ": anything you swipe right on lands here.") }}{% endif %}
+    {% else %}
+    <img class="cizim" src="{{ statik('cizim/iki-ay.svg') }}" alt="" width="320" height="200">
+    <h2>{{ t("Raf henüz boş", "The shelf is still empty") }}</h2>
+    <p>{{ t("Keşfet'te sağa kaydırdığın her albüm buraya dizilir.", "Every album you swipe right on in Discover lines up here.") }}</p>
+    <a class="dugme birincil" href="/kesfet">{{ t("Kaydırmaya başla →", "Start swiping →") }}</a>
+    {% endif %}
   </div>
 {% else %}
 <div class="liste-izgara">

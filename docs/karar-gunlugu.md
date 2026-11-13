@@ -2818,3 +2818,22 @@ güzel olsun, 3D bile olabilir.»
   sentetik 43 albümle bakıldı) ve gerçek cihazda çalarken dönüş (başsız
   tarayıcı önizlemeyi çalmadı; sınıf elle verilerek görüntülendi).
 
+### 2026-11-13 (22) — Tek komut, bağlam listesi ölçümü, bulut için veri paketi
+
+- **`./calistir.sh`**: sanal ortamı gerekirse kurar, sunucuyu kullanıcının
+  kendi `data/`sıyla açar, hazır olunca tarayıcıyı açar. Örnek verili bir demo
+  modu yazılıp aynı gün SİLİNDİ (kullanıcı: «zaten verimiz var»); ayrıca
+  sunucu demo sırasında depo kökünde `data/cache` açıyordu.
+- **Bağlam listeleri** (`calma_listesi.baglam_turu`, `sanatci_kumeleri`):
+  başlığı dil ya da ruh hâli/etkinlik söyleyen listeler sınıflanıyor;
+  `degerlendirme --baglam-disi dil|ruh|hepsi` onları saymadan ölçer.
+  VARSAYILAN DEĞİŞMEDİ (K19) — «Sıradaki işler» 2'nin ölçüm aracı. Üretim
+  (`birliktelik`) aynı parametreyi alıyor ama kimse geçirmiyor. Yan kazanç:
+  `pmi_tablosu` listeleri artık üretimin işleviyle okuyor (kopya azaldı).
+  **ÖLÇÜLMEDİ:** bulut oturumunda gerçek veri yok.
+- **Neden ölçülemedi:** `data/db` Drive'da duruyor ama bağlayıcı dosya başına
+  10 MB'ı geçirmiyor (ortak.sqlite 28 MB, 1.sqlite 12 MB). `scripts/bulut_paketi.sh`
+  yayın paketini 9 MB'lık parçalara bölüp Drive'a koyar; sonraki oturum
+  parçaları indirip birleştirir ve K19 ölçümlerini gerçek veride koşar.
+- **Listem:** kapağın arkasında plak ucu; boş raf çizimli ve tek eylemli.
+

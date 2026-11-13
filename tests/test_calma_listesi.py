@@ -140,3 +140,17 @@ if __name__ == "__main__":
         print(f"{len(_kalan)} test kaldı")
         raise SystemExit(1)
     print("tüm testler geçti")
+
+
+def test_baglam_listeleri_yalniz_istenirse_atilir():
+    """Başlığı dil/ruh hâli söyleyen liste sınıflanır; varsayılan davranış değişmez."""
+    assert C.baglam_turu("TÜRKÇE Rock") == "dil" and C.baglam_turu("Gym Workout 2024") == "ruh"
+    assert C.baglam_turu("Progressive Metal Essentials") is None
+    assert C.baglam_turu("Turkuaz") is None and C.baglam_turu("Yazılım") is None   # sözcük sınırı
+    conn = _db({i: ["Sahip", "Yabanci", f"X{i}"] for i in range(1, 7)})
+    with conn:
+        conn.execute("UPDATE calma_listesi SET baslik = 'türkçe' WHERE liste_id <= 4")
+    assert len(C.sanatci_kumeleri(conn)) == 6
+    assert set(C.sanatci_kumeleri(conn, "dil")) == {5, 6} == set(C.sanatci_kumeleri(conn, "hepsi"))
+    assert len(C.sanatci_kumeleri(conn, "ruh")) == 6
+    assert C.birliktelik(conn) and C.birliktelik(conn, baglam_disi="dil") == []   # 5 listenin altı

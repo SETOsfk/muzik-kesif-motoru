@@ -147,6 +147,8 @@ Yeni kullanıcı dosya yüklemez: `/basla`da sevdiği sanatçıları yazar (ya d
 motor her birinin 30 sn önizlemesini dinleyip eksenleri çıkarır ve Keşfet destesini hazırlar.
 Hesabını ve verisini `/gizlilik` sayfasından tek adımda silebilir.
 
+**Kendi bilgisayarında, tek komut:** `./calistir.sh` — ortamı gerekirse kurar, sunucuyu açar, tarayıcıyı getirir.
+
 ## Kurulum (geliştirme)
 
 ```bash
