@@ -1307,12 +1307,14 @@ async def tarz_otomatik(istek):
 
 def sen_sayfasi(istek):
     """«Sen»: düz dille portre (bkz. python/sen.py)."""
-    from python.sen import eksen_adi, onyil_adi, ozet_cumlesi, portre
+    from python.sen import eksen_adi, evren, onyil_adi, ozet_cumlesi, portre
+    from web.grafik import DIGER, TARZ_RENKLERI
 
     calisma_id = _calisma_sec(istek)
     conn = _baglanti()
     try:
         p = portre(conn, calisma_id)
+        harita = evren(conn, calisma_id, p["eksenler"])
     finally:
         conn.close()
     if not p["album"]:
@@ -1328,6 +1330,7 @@ def sen_sayfasi(istek):
                  if not (e["ad"].casefold() in gorulen or gorulen.add(e["ad"].casefold()))]
     return SABLONLAR.TemplateResponse(istek, "sen.html", _ortam(
         istek, p=p, ozet=ozet_cumlesi(p), etiketler=etiketler,
+        evren=harita and {**harita, "renkler": TARZ_RENKLERI, "diger": DIGER},
         eksen_adi=eksen_adi, onyil_adi=onyil_adi))
 
 

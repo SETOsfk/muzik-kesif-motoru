@@ -119,6 +119,11 @@
   --golge: 0 1px 2px rgb(32 35 44 / .08), 0 18px 40px -22px rgb(32 35 44 / .45);
   --golge-nesne: 0 2px 4px rgb(0 0 0 / .14), 0 22px 36px -18px rgb(0 0 0 / .5);
 
+  /* plak — Keşfet kartındaki nesne («4. PLAK»). Vinil siyahı ve ışık. */
+  --plak: #16171c;
+  --plak-2: #25272e;
+  --isik: rgb(255 255 255 / .16);
+
   /* biçim — kitap köşesi: neredeyse keskin */
   --r-s: 2px; --r-m: 3px; --r-l: 4px; --r-xl: 6px;
   --cam: blur(10px);
@@ -1902,3 +1907,78 @@ html { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 900px) {
   .zaman-form #zaman-dugme { bottom: calc(3.4rem + env(safe-area-inset-bottom, 0px) + 10px); justify-self: stretch; }
 }
+
+/* ============================================================ 4. PLAK ===
+ * Derinlik katmanı (2026-11-13). İKİ AY'ın kuralı duruyor — düz renk alanı,
+ * ortada tek nesne — ama nesne artık bir PLAK KILIFI: kapağın arkasında plak
+ * bekler, önizleme çalınca dışarı kayar ve 33⅓ devirle (tur = 1,8 sn) döner.
+ * Kart perspektifte durur; fareyle ışığa döner, sürüklenirken derinlikte de
+ * çevrilir. Hepsi CSS 3D: kütüphane yok, WebGL yok.
+ *
+ * Süs DURUM TAŞIMAZ: `.caliyor` yalnız `<audio>` olaylarının yansıması
+ * (kesfet.js:calDugmesi). Ses sinyaline tepki veren görsel YOK — önizlemeler
+ * başka kökten geliyor, tarayıcı örneklerini okutmuyor; okuyormuş gibi
+ * kıpırdayan çubuk uydurma olurdu. */
+
+.deste { perspective: 1400px; }
+.deste-kart[data-sira="0"]:not(.surukleniyor):not(.giden) {
+  transform: rotateX(calc(var(--ey, 0) * -3.5deg)) rotateY(calc(var(--ex, 0) * 5deg)); }
+/* Işık: kartın üstünde fareyi izleyen yumuşak parlama. */
+.deste-kart::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4;
+  background: radial-gradient(circle at calc(50% + var(--ex, 0) * 45%) calc(35% + var(--ey, 0) * 35%),
+              var(--isik), transparent 58%);
+  mix-blend-mode: soft-light; }
+.deste-kart[data-sira="1"]::after, .deste-kart[data-sira="2"]::after { content: none; }
+
+/* Kılıf (kapak) plağın önünde; fare eğimiyle birkaç piksel kayar — sahte
+ * paralaks. (`preserve-3d` kullanılamıyor: kart `overflow: hidden`.) */
+.dk-gorsel > svg, .dk-gorsel > img.dk-ana { z-index: 1;
+  transform: translate(calc(var(--kilif, -9%) + var(--ex, 0) * -5px), calc(var(--ey, 0) * -4px));
+  transition: transform .8s var(--hareket), opacity .35s var(--hareket); }
+.deste-kart.caliyor .dk-gorsel { --kilif: -20%; }
+
+.dk-plak { position: absolute; z-index: 0; left: 50%; top: calc(50% + 10px); translate: -50% -50%;
+  width: calc(100cqmin - 80px); aspect-ratio: 1; border-radius: 50%;
+  /* oluklar: iç içe ince halkalar; ortada etiket yatağı */
+  background:
+    radial-gradient(circle, transparent 0 34%, var(--plak) 34.5% 36%, transparent 36.5%),
+    repeating-radial-gradient(circle, var(--plak) 0 1.2px, var(--plak-2) 1.2px 2.6px);
+  box-shadow: var(--golge-nesne);
+  transform: translateX(calc(16% + var(--ex, 0) * 4px));
+  transition: transform .8s var(--hareket); }
+/* Işık plakla DÖNMEZ (oda sabit): iki karşılıklı parlama dilimi. */
+.dk-plak::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 20deg, transparent 0 8%, var(--isik) 14%, transparent 22% 58%,
+              var(--isik) 64%, transparent 72%);
+  mask: radial-gradient(circle, transparent 0 35%, #000 36%); }
+/* Göbek etiketi: kapağın kendisi (yoksa ay sarısı). Dönen tek parça bu —
+ * oluklar dönel simetrik, dönseler de aynı görünür. */
+.dk-plak i { position: absolute; inset: 33%; border-radius: 50%; overflow: hidden; background: var(--ay);
+  animation: plak-don 1.8s linear infinite paused; }
+.dk-plak i img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dk-plak i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 12%; aspect-ratio: 1;
+  translate: -50% -50%; border-radius: 50%; background: var(--kapak); }
+.deste-kart.caliyor .dk-plak { transform: translateX(calc(46% + var(--ex, 0) * 4px)); }
+.deste-kart.caliyor .dk-plak i { animation-play-state: running; }
+@keyframes plak-don { to { rotate: 1turn; } }
+
+@media (max-width: 900px) {
+  .dk-plak { width: calc(100cqmin - 80px); }
+  .deste-kart.caliyor .dk-plak { transform: translateX(40%); }
+}
+
+/* ---- «Sen»: müzik evrenin — kâğıda basılmış gök atlası, üç boyutta döner */
+.evren { position: relative; border: 1px solid var(--kenar); border-radius: 20px; background: var(--kart);
+         overflow: hidden; }
+.evren canvas { display: block; width: 100%; height: clamp(320px, 52vw, 520px);
+                cursor: grab; touch-action: pan-y; }
+.evren canvas:active { cursor: grabbing; }
+.evren-etiket { position: absolute; left: var(--b5); top: var(--b4); margin: 0; min-height: 1.5em;
+                font-style: italic; color: var(--metin); pointer-events: none; }
+.evren-etiket small { display: block; font: 500 .66rem/1.6 var(--font-etiket); font-style: normal;
+                      letter-spacing: var(--etiket-harf); text-transform: uppercase; color: var(--metin-3); }
+.evren-lejant { list-style: none; margin: 0; padding: var(--b3) var(--b5); display: flex; flex-wrap: wrap;
+                gap: 6px 18px; border-top: 1px solid var(--kenar);
+                font: 500 .74rem/1.4 var(--font-etiket); letter-spacing: .04em; color: var(--metin-2); }
+.evren-lejant i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px;
+                  background: var(--renk); }

@@ -139,6 +139,12 @@
 
     const gorsel = el('div', 'dk-gorsel');
     gorsel.innerHTML = k.yer_tutucu || '';           // sunucuda kaçırılmış SVG
+    // Plak: kapağın arkasından çıkar, çalarken döner. Süs; durum taşımaz
+    // (çalma durumu `oynatici`da, buraya `.caliyor` sınıfıyla yansır).
+    const plak = el('div', 'dk-plak');
+    plak.setAttribute('aria-hidden', 'true');
+    plak.append(el('i'));
+    gorsel.prepend(plak);
     const ust = el('div', 'dk-ust');
     ust.append(el('span', 'rozet mavi', k.eksen_ad), el('span', 'rozet mor', k.strateji_ad));
     gorsel.append(ust,
@@ -186,6 +192,14 @@
       img.onerror = () => img.remove();          // yer tutucu görünür kalır
       img.src = ana;
       g.insertBefore(img, g.querySelector('.dk-ust'));
+    }
+    const etiket = kart.querySelector('.dk-plak i');
+    if (k.kapak && etiket && !etiket.firstChild) {  // plağın göbek etiketi: kapağın kendisi
+      const e = new Image();
+      e.alt = ''; e.decoding = 'async'; e.draggable = false;
+      e.onerror = () => e.remove();
+      e.src = k.kapak;
+      etiket.append(e);
     }
     if (k.kapak && k.sanatci_gorsel && !g.querySelector('img.dk-avatar')) {
       const av = new Image();
@@ -316,6 +330,7 @@
   function calDugmesi(caliyor) {
     const kart = ustKart();
     if (!kart) return;
+    kart.classList.toggle('caliyor', caliyor);
     const s = kart.querySelector('.dk-cal span');
     if (s) s.textContent = caliyor ? '❚❚' : '▶';
     kart.querySelector('.dk-cal')?.setAttribute('aria-label', caliyor ? t('Durdur', 'Pause') : t('Önizlemeyi çal', 'Play preview'));
@@ -488,7 +503,7 @@
       if (!s) return;
       s.dx = e.clientX - s.x0;
       s.dy = e.clientY - s.y0;
-      kart.style.transform = `translate(${s.dx}px, ${s.dy}px) rotate(${s.dx / 18}deg)`;
+      kart.style.transform = `translate(${s.dx}px, ${s.dy}px) rotate(${s.dx / 18}deg) rotateY(${s.dx / 24}deg)`;
       const w = kart.offsetWidth, h = kart.offsetHeight;
       const yatay = Math.abs(s.dx) >= Math.abs(s.dy);
       o.sag.style.opacity = yatay ? Math.max(0, Math.min(1, s.dx / (w * ESIK_X))) : 0;
@@ -526,6 +541,22 @@
     o.cal.addEventListener('click', (e) => { e.stopPropagation(); calDurdur(); });
     kart.querySelector('.dk-gerekce').addEventListener('click', (e) => {
       e.currentTarget.classList.toggle('acik');
+    });
+  }
+
+  /* Eğim: fare kartın üstünde gezerken kart ışığa döner. Yalnız iki CSS
+   * değişkeni yazar (--ex, --ey ∈ [-1, 1]); biçim stil.css'te («4. PLAK»). */
+  if (!azHareket) {
+    deste.addEventListener('pointermove', (e) => {
+      const kart = ustKart();
+      if (!kart || e.pointerType !== 'mouse') return;
+      const r = kart.getBoundingClientRect();
+      kart.style.setProperty('--ex', (((e.clientX - r.left) / r.width) * 2 - 1).toFixed(3));
+      kart.style.setProperty('--ey', (((e.clientY - r.top) / r.height) * 2 - 1).toFixed(3));
+    });
+    deste.addEventListener('pointerleave', () => {
+      const kart = ustKart();
+      if (kart) { kart.style.removeProperty('--ex'); kart.style.removeProperty('--ey'); }
     });
   }
 

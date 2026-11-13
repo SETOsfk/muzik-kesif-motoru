@@ -473,6 +473,15 @@ Sen; teknik sayfalar menüde «Gelişmiş»; telefonda alt şerit. Görsel yoksa
 Animasyon DURUMU taşımaz: kart girişi CSS, durum `data-sira`da (rAF'e bağlı
 sürüm arka plan sekmesinde desteyi görünmez bırakıyordu).
 
+**Plak katmanı (2026-11-13):** kullanıcının isteği «müzikle alakalı olsun, 3D
+bile olabilir». Tema değişmedi, derinlik eklendi (`stil.css` «4. PLAK»): Keşfet
+kartındaki nesne plak kılıfı — plak kapağın arkasında bekler, önizleme çalınca
+dışarı kayıp 33⅓ devirle döner; kart perspektifte fareyle eğilir. «Sen»de
+«Müzik evrenin»: üyelik matrisinin ilk üç ana bileşeni, dönen nokta bulutu
+(`python/sen.py:evren`, `statik/evren.js`), taşınan değişim payı yazılı. Hepsi
+CSS 3D + 2B tuval; yeni bağımlılık yok. Sese tepki veren görsel YOK (önizleme
+başka kökten, örnekler okunamıyor — okuyormuş gibi kıpırdayan çubuk uydurma olur).
+
 ## Güncel durum (son güncelleme 2026-09-28)
 
 - **Sürüm 0.2.0** (`python/__init__.py`, `CHANGELOG.md`). Yeni kullanıcı Spotify'sız

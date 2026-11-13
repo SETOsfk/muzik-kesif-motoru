@@ -57,3 +57,24 @@ def test_yil_yoksa_donem_cumlesi_yok(conn):
     _albumler(conn, [("A", None, 0, None)] * 5)
     p = sen.portre(conn, "c1")
     assert p["donem"] is None and "kalbin" not in sen.ozet_cumlesi(p)
+
+
+def test_evren_ucu_boyut_ve_tekrarlanabilir(conn):
+    """Dört ayrık tarz: aynı tarzın albümleri yakın, farklı tarzlar uzak;
+    aynı veri aynı haritayı verir; az tarzda harita kurulmaz."""
+    with conn:
+        for i in range(12):
+            conn.execute("INSERT INTO albums (album_id, artist, title) VALUES (?,?,?)", (f"e{i}", f"S{i}", "T"))
+            for k in range(4):
+                conn.execute("INSERT INTO memberships VALUES (?,?,?,?)",
+                             (f"e{i}", k, 0.85 if k == i % 4 else 0.05, "c4"))
+    eksenler = sen._eksenler(conn, "c4")
+    e = sen.evren(conn, "c4", eksenler)
+    assert e == sen.evren(conn, "c4", eksenler)
+    assert len(e["noktalar"]) == 12 and e["aciklanan"] == pytest.approx(1.0)
+    assert all(-1 <= v <= 1 for n in e["noktalar"] for v in n[:3])
+    uzak = lambda a, b: sum((p - q) ** 2 for p, q in zip(a[:3], b[:3])) ** .5
+    n = {x[4]: x for x in e["noktalar"]}
+    assert uzak(n["S0 — T"], n["S4 — T"]) < 1e-6 < uzak(n["S0 — T"], n["S1 — T"])
+    assert {x[3] for x in n.values()} == {0, 1, 2, 3}
+    assert sen.evren(conn, "yok", []) is None

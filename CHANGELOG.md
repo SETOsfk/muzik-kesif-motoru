@@ -4,6 +4,7 @@ Sürüm numarası `python/__init__.py:__version__` ile aynı tutulur.
 
 ## Yayımlanmadı
 
+- Plak katmanı: Keşfet kartında kapağın arkasından çıkan, çalarken dönen plak; kart üç boyutta eğiliyor. «Sen»de «Müzik evrenin»: albümlerinin döndürülebilir üç boyutlu haritası.
 - Spotify aktarımı önce «Ne kadar geriye gidelim?» diye soruyor: sürgü çekildikçe pencere dışındaki sanatçılar söner, çalma listeleri kaybolur; yalnız pencere içi zevke sayılır. Kendi çalma listelerin de artık okunuyor (yeniden bağlanma gerekebilir). Menüde «Kütüphaneni yeniden aktar».
 - Telefon: Keşfet ekrana tam oturuyor (karar düğmeleri alt şeridin arkasında kalmıyor); üst çubuk aşağı kaydırınca çekiliyor; alt sekmeler etkin olanı gösteriyor ve taşınca kenarı soluyor; basılma geri bildirimi; boş sayfalar çizimli.
 

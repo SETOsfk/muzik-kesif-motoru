@@ -160,6 +160,59 @@ def _vitrin(conn: sqlite3.Connection, calisma_id: str | None, adet: int = 9) -> 
     return secilen
 
 
+#: «Müzik evrenin» için alt sınırlar. Üyelik satırları 1'e toplandığı için
+#: c tarzın matrisi en çok c−1 boyutludur: üç boyut ancak dört tarzla dolar.
+EVREN_ASGARI_TARZ = 4
+EVREN_ASGARI_ALBUM = 8
+
+
+def evren(conn: sqlite3.Connection, calisma_id: str | None, eksenler: list[dict]) -> dict | None:
+    """Albümlerin üç boyutlu haritası: üyelik matrisinin ilk üç ana bileşeni.
+
+    Yeni bir yöntem değil, etkin kümelemenin (K3) kendi çıktısının izdüşümü:
+    yakın duran iki albüm tarzlarını benzer oranlarda paylaşıyor. Üç eksenin
+    taşıdığı değişim payı (`aciklanan`) arayüzde yazılır — düşükse harita
+    kabadır ve kullanıcı bunu bilmelidir. Renk ve ad `eksenler`den (portreyle
+    aynı); küçük tarzlar renksiz (−1). İşaret sabitlenir: aynı veri aynı harita.
+    """
+    import numpy as np
+
+    if not calisma_id:
+        return None
+    satirlar = conn.execute(
+        """SELECT m.album_id, m.kume_id, m.uyelik, a.artist, a.title
+             FROM memberships m JOIN albums a USING (album_id)
+            WHERE m.calisma_id = ? ORDER BY m.album_id""", (calisma_id,)).fetchall()
+    kumeler = sorted({int(r[1]) for r in satirlar})
+    albumler = list(dict.fromkeys(r[0] for r in satirlar))
+    if len(kumeler) < EVREN_ASGARI_TARZ or len(albumler) < EVREN_ASGARI_ALBUM:
+        return None
+    sutun = {k: j for j, k in enumerate(kumeler)}
+    satir = {a: i for i, a in enumerate(albumler)}
+    u = np.zeros((len(albumler), len(kumeler)))
+    ad = {}
+    for r in satirlar:
+        u[satir[r[0]], sutun[int(r[1])]] = r[2]
+        ad[r[0]] = f"{r[3]} — {r[4]}"
+    _, tekil, vt = np.linalg.svd(u - u.mean(axis=0), full_matrices=False)
+    toplam = float((tekil ** 2).sum())
+    if toplam <= 0:
+        return None
+    vt = vt[:3]
+    vt *= np.sign(vt[np.arange(len(vt)), np.abs(vt).argmax(axis=1)])[:, None]
+    konum = (u - u.mean(axis=0)) @ vt.T
+    konum /= max(float(np.abs(konum).max()), 1e-12)
+    renk = {e["kume"]: e["renk"] for e in eksenler}
+    baskin = u.argmax(axis=1)
+    return {
+        "aciklanan": float((tekil[:3] ** 2).sum()) / toplam,
+        "tarzlar": [{"ad": eksen_adi(e), "renk": e["renk"]} for e in eksenler],
+        "noktalar": [[round(float(x), 3), round(float(y), 3), round(float(z), 3),
+                      renk.get(kumeler[baskin[i]], -1), ad[a]]
+                     for i, (a, (x, y, z)) in enumerate(zip(albumler, konum))],
+    }
+
+
 def portre(conn: sqlite3.Connection, calisma_id: str | None) -> dict:
     """Sayılar ve adlar — cümleler gösterimde (`ozet_cumlesi`, şablon)."""
     return {

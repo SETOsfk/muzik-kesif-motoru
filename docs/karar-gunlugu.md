@@ -2794,3 +2794,27 @@ sınırı: sahiplik tercihtir, ama tarihi vardır).
   kaynaklı albümler kütüphaneden çıkar; elle liste ve yerel taramaya dokunulmaz.
 - Eski bağlantının yetkisinde liste kapsamı yok: listeler atlanır, sayfa
   yeniden bağlanmayı önerir. Etkisi ÖLÇÜLMEDİ (Spotify'lı kullanıcı verisi yok).
+
+### 2026-11-13 (21) — Plak katmanı: derinlik, yeni tema değil
+
+**İstek:** «Tasarım tarafını güncellemek istiyorum… müzikle alakalı olsun,
+güzel olsun, 3D bile olabilir.»
+
+- **Tema değiştirilmedi.** İKİ AY altı hafta önce seçildi, token disiplini
+  sağlam; dördüncü kez sıfırdan boyamak yerine temanın «ortada tek nesne»
+  kuralı müziğe bağlandı: nesne artık plak kılıfı.
+- **Keşfet:** kapağın arkasında plak; çalarken dışarı kayar, göbek etiketi
+  (kapağın kendisi) 1,8 sn'de bir tur döner. Kart `perspective` içinde;
+  fareyle eğilir, sürüklenirken `rotateY` alır, üstünde ışık gezer.
+  `.caliyor` yalnız `<audio>` olaylarının yansıması (K23: süs durum taşımaz).
+- **Sen → Müzik evrenin:** `sen.evren` üyelik matrisini (K3) SVD ile üç
+  boyuta indirir; işaret sabit (aynı veri aynı harita), açıklanan değişim payı
+  arayüzde yazılı. En az 4 tarz ve 8 albüm ister (c tarz → en çok c−1 boyut).
+  Renkler `TARZ_RENKLERI`; kâğıt zeminde, çünkü palet kâğıtta doğrulandı.
+- **Elenenler:** three.js/WebGL (≈600 KB, birkaç yüz nokta için gereksiz);
+  ses analizörüyle tepki veren görsel (önizlemeler çapraz kökten, CORS'suz
+  `AnalyserNode` sıfır okur — sahte hareket «tutulamayacak söz» olurdu).
+- **Sınanmayan:** gerçek 302 albümlük kütüphanede evrenin okunurluğu (bulutta
+  sentetik 43 albümle bakıldı) ve gerçek cihazda çalarken dönüş (başsız
+  tarayıcı önizlemeyi çalmadı; sınıf elle verilerek görüntülendi).
+

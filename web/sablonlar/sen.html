@@ -51,6 +51,27 @@
   </section>
   {% endif %}
 
+  {% if evren %}
+  <section class="sen3-bolum">
+    <header class="sen3-bas">
+      <h2>{{ t("Müzik evrenin", "Your music universe") }}</h2>
+      <span class="etiket-ust">{{ t("sürükle: döndür", "drag to rotate") }}</span>
+    </header>
+    <div class="evren" id="evren">
+      <canvas tabindex="0" role="img"
+              aria-label="{{ t('Albümlerinin üç boyutlu haritası: ' ~ evren.noktalar|length ~ ' nokta, renk tarzı gösterir. Ok tuşlarıyla döner. Aynı bilgi Tarzların sayfasında liste hâlinde.',
+                               'A 3D map of your albums: ' ~ evren.noktalar|length ~ ' points, coloured by style. Arrow keys rotate it. The same information is listed under Your styles.') }}"></canvas>
+      <p class="evren-etiket" aria-live="polite"></p>
+      <ul class="evren-lejant">
+        {% for z in evren.tarzlar %}<li style="--renk: {{ tarz_rengi(z.renk) }}"><i></i>{{ z.ad }}</li>{% endfor %}
+      </ul>
+    </div>
+    <p class="sen3-not">{{ t("Her nokta bir albüm; rengi en çok ait olduğu tarz. Yakın duran albümler tarzlarını benzer oranlarda paylaşıyor. Konum, tarz üyeliklerinin ilk üç ana bileşeni; bu üç eksen değişimin " ~ yuzde(evren.aciklanan) ~ " kadarını taşıyor.",
+                            "Each point is an album, coloured by the style it belongs to most. Albums that sit close share their styles in similar proportions. Positions are the first three principal components of the style memberships; together they carry " ~ yuzde(evren.aciklanan) ~ " of the variation.") }}</p>
+    <script type="application/json" id="evren-veri">{{ evren|tojson }}</script>
+  </section>
+  {% endif %}
+
   <div class="sen3-ikili">
     {% if p.donem %}
     <section class="sen3-bolum sen3-kart" id="donem">
@@ -121,3 +142,5 @@
   </section>
 </div>
 {% endblock %}
+
+{% block betik %}{% if evren %}<script src="{{ statik('evren.js') }}"></script>{% endif %}{% endblock %}
